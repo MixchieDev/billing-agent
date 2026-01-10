@@ -1,0 +1,475 @@
+// Prisma schema for AI Billing Agent System
+// YAHSHUA OUTSOURCING WORLDWIDE INC. (YOWI) & THE ABBA INITIATIVE, OPC (ABBA)
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== AUTHENTICATION ====================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?
+  image         String?
+  role          UserRole  @default(VIEWER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  auditLogs     AuditLog[]
+  approvals     Invoice[] @relation("ApprovedBy")
+  rejections    Invoice[] @relation("RejectedBy")
+  notifications Notification[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum UserRole {
+  ADMIN
+  APPROVER
+  VIEWER
+}
+
+// ==================== COMPANY ENTITIES ====================
+
+model Company {
+  id              String   @id @default(cuid())
+  code            String   @unique // "YOWI" or "ABBA"
+  name            String
+  address         String?
+  contactNumber   String?
+  tin             String?  // Tax Identification Number
+  bankName        String?
+  bankAccountName String?
+  bankAccountNo   String?
+  formReference   String?
+  logoPath        String?
+  invoicePrefix   String?  // e.g., "S" for YOWI
+  nextInvoiceNo   Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  partners        Partner[]
+  contracts       Contract[]
+  invoices        Invoice[]
+  signatories     Signatory[]
+}
+
+model Signatory {
+  id        String   @id @default(cuid())
+  companyId String
+  role      String   // "prepared_by" or "reviewed_by"
+  name      String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company  @relation(fields: [companyId], references: [id])
+}
+
+// ==================== PARTNERS ====================
+
+model Partner {
+  id            String   @id @default(cuid())
+  code          String   @unique // "Globe", "RCBC", "Direct-YOWI", "Direct-ABBA"
+  name          String
+  invoiceTo     String?  // Company name to invoice
+  attention     String?  // Contact person
+  address       String?
+  email         String?
+  billingModel  BillingModel @default(DIRECT)
+  companyId     String   // Which entity bills this partner (YOWI or ABBA)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company       Company  @relation(fields: [companyId], references: [id])
+  contracts     Contract[]
+}
+
+enum BillingModel {
+  DIRECT
+  GLOBE_INNOVE
+  RCBC_CONSOLIDATED
+}
+
+// ==================== CONTRACTS ====================
+
+model Contract {
+  id              String        @id @default(cuid())
+  customerId      String?       // External customer ID
+  companyName     String        // Client's company name
+  productType     ProductType
+  revenueModel    String?
+  partnerId       String?
+  monthlyFee      Decimal       @db.Decimal(15, 2)
+  paymentPlan     String?       // Payment frequency
+  contractStart   DateTime?
+  nextDueDate     DateTime?
+  lastPaymentDate DateTime?
+  daysOverdue     Int           @default(0)
+  status          ContractStatus @default(NOT_STARTED)
+  contactPerson   String?
+  email           String?
+  tin             String?
+  mobile          String?
+  industry        String?
+  amountDue       Decimal?      @db.Decimal(15, 2)
+  vatType         VatType       @default(VAT)
+  vatAmount       Decimal?      @db.Decimal(15, 2)
+  totalWithVat    Decimal?      @db.Decimal(15, 2)
+  withholdingTax  Decimal?      @db.Decimal(15, 2)
+  netReceivable   Decimal?      @db.Decimal(15, 2)
+  clientSince     DateTime?
+  lifetimeValue   Decimal?      @db.Decimal(15, 2)
+  renewalRisk     String?
+  remarks         String?       @db.Text
+  billingAmount   Decimal?      @db.Decimal(15, 2)
+  billingType     BillingType   @default(RECURRING)
+  billingEntityId String        // YOWI or ABBA
+
+  // For RCBC end-clients
+  employeeCount   Int?
+  ratePerEmployee Decimal?      @db.Decimal(10, 2)
+
+  // Auto-send control
+  autoSendEnabled Boolean       @default(true)  // Per-contract auto-send toggle
+  contractEndDate DateTime?     // Stop generating invoices after this date
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  sheetRowIndex   Int?          // Track the row in Google Sheets
+
+  partner         Partner?      @relation(fields: [partnerId], references: [id])
+  billingEntity   Company       @relation(fields: [billingEntityId], references: [id])
+  invoices        Invoice[]
+  lineItems       InvoiceLineItem[]
+}
+
+enum ProductType {
+  ACCOUNTING
+  PAYROLL
+  COMPLIANCE
+  HR
+}
+
+enum ContractStatus {
+  ACTIVE
+  INACTIVE
+  STOPPED
+  NOT_STARTED
+}
+
+enum VatType {
+  VAT
+  NON_VAT
+}
+
+enum BillingType {
+  RECURRING
+  ONE_TIME
+}
+
+enum BillingFrequency {
+  MONTHLY
+  QUARTERLY
+  ANNUALLY
+}
+
+// ==================== INVOICES ====================
+
+model Invoice {
+  id                String        @id @default(cuid())
+  invoiceNo         String?       @unique // Auto-generated or from YTO
+  billingNo         String?       // Internal billing reference
+  companyId         String        // Billing entity (YOWI or ABBA)
+
+  // Invoice recipient
+  customerName      String        // Who to bill (could be partner like Innove/RCBC)
+  attention         String?
+  customerAddress   String?
+  customerEmail     String?
+  customerTin       String?
+
+  // Dates
+  statementDate     DateTime
+  dueDate           DateTime
+  periodStart       DateTime?
+  periodEnd         DateTime?
+  periodDescription String?       // e.g., "the month of January 2026"
+
+  // Amounts (calculated)
+  serviceFee        Decimal       @db.Decimal(15, 2) // Base amount before VAT
+  vatAmount         Decimal       @db.Decimal(15, 2) @default(0)
+  grossAmount       Decimal       @db.Decimal(15, 2) // Service Fee + VAT
+  withholdingTax    Decimal       @db.Decimal(15, 2) @default(0)
+  netAmount         Decimal       @db.Decimal(15, 2) // Gross - Withholding
+
+  // Tax settings
+  vatType           VatType       @default(VAT)
+  hasWithholding    Boolean       @default(false)
+  withholdingCode   String?       // "WC160" or "WC061"
+
+  // Billing frequency (for quarterly/annual invoices)
+  billingFrequency  BillingFrequency @default(MONTHLY)
+  monthlyFee        Decimal?      @db.Decimal(15, 2) // Original monthly fee for breakdown display
+
+  // Status & workflow
+  status            InvoiceStatus @default(PENDING)
+  approvedById      String?
+  approvedAt        DateTime?
+  rejectedById      String?
+  rejectedAt        DateTime?
+  rejectionReason   String?
+  rescheduleDate    DateTime?
+
+  // Output files
+  pdfPath           String?
+  csvPath           String?
+
+  // Email status
+  emailStatus       EmailStatus   @default(NOT_SENT)
+  emailSentAt       DateTime?
+  emailError        String?
+
+  // Payment tracking
+  paidAt            DateTime?
+  paidAmount        Decimal?      @db.Decimal(15, 2)
+  paymentMethod     String?       // "CASH", "BANK_TRANSFER", "CHECK"
+  paymentReference  String?       // Optional reference/confirmation number
+
+  // Metadata
+  billingModel      BillingModel  @default(DIRECT)
+  isConsolidated    Boolean       @default(false) // For RCBC
+  remarks           String?       @db.Text
+  preparedBy        String?
+  reviewedBy        String?
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  company           Company       @relation(fields: [companyId], references: [id])
+  approvedBy        User?         @relation("ApprovedBy", fields: [approvedById], references: [id])
+  rejectedBy        User?         @relation("RejectedBy", fields: [rejectedById], references: [id])
+  lineItems         InvoiceLineItem[]
+  emailLogs         EmailLog[]
+  contracts         Contract[]    // For direct invoices
+}
+
+model InvoiceLineItem {
+  id              String   @id @default(cuid())
+  invoiceId       String
+  contractId      String?
+
+  // Line item details
+  date            DateTime?
+  reference       String?
+  description     String
+  poNumber        String?
+  quantity        Int      @default(1)
+  unitPrice       Decimal  @db.Decimal(15, 2)
+  serviceFee      Decimal  @db.Decimal(15, 2)
+  vatAmount       Decimal  @db.Decimal(15, 2) @default(0)
+  withholdingTax  Decimal  @db.Decimal(15, 2) @default(0)
+  amount          Decimal  @db.Decimal(15, 2) // Net line total
+
+  // For RCBC: end-client details
+  endClientName   String?
+  employeeCount   Int?
+
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  contract        Contract? @relation(fields: [contractId], references: [id])
+}
+
+enum InvoiceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SENT
+  PAID
+  CANCELLED
+}
+
+enum EmailStatus {
+  NOT_SENT
+  QUEUED
+  SENT
+  FAILED
+}
+
+// ==================== RCBC END-CLIENTS ====================
+
+model RcbcEndClient {
+  id            String   @id @default(cuid())
+  name          String
+  employeeCount Int
+  month         DateTime // Which month this data is for
+  isActive      Boolean  @default(true)
+  sheetRowIndex Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([name, month])
+}
+
+// ==================== EMAIL LOGS ====================
+
+model EmailLog {
+  id          String      @id @default(cuid())
+  invoiceId   String
+  toEmail     String
+  subject     String
+  status      EmailStatus
+  sendGridId  String?     // SendGrid message ID
+  error       String?
+  sentAt      DateTime?
+  createdAt   DateTime    @default(now())
+
+  invoice     Invoice     @relation(fields: [invoiceId], references: [id])
+}
+
+// ==================== AUDIT LOGS ====================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String   // e.g., "INVOICE_APPROVED", "INVOICE_REJECTED", "EMAIL_SENT"
+  entityType  String   // e.g., "Invoice", "Contract"
+  entityId    String
+  details     Json?    // Additional details
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  user        User?    @relation(fields: [userId], references: [id])
+}
+
+// ==================== SYSTEM CONFIGURATION ====================
+
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==================== SCHEDULED JOBS ====================
+
+model ScheduledJob {
+  id          String    @id @default(cuid())
+  name        String
+  cronExpr    String    // Cron expression
+  lastRun     DateTime?
+  nextRun     DateTime?
+  isEnabled   Boolean   @default(true)
+  status      JobStatus @default(IDLE)
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model JobRun {
+  id          String    @id @default(cuid())
+  jobName     String
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  status      JobStatus
+  itemsProcessed Int    @default(0)
+  errors      Json?
+  createdAt   DateTime  @default(now())
+}
+
+enum JobStatus {
+  IDLE
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+// ==================== SETTINGS ====================
+
+model Settings {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       Json
+  description String?
+  category    String   @default("general") // general, soa, scheduler, email
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ==================== NOTIFICATIONS ====================
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String?          // Target user (null = all users)
+  type        NotificationType
+  title       String
+  message     String
+  link        String?          // Link to relevant page/entity
+  entityType  String?          // "Invoice", "Contract", etc.
+  entityId    String?          // ID of related entity
+  isRead      Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+
+  user        User?            @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  INVOICE_PENDING      // New invoice needs approval
+  INVOICE_APPROVED     // Invoice was approved
+  INVOICE_REJECTED     // Invoice was rejected
+  INVOICE_SENT         // Invoice was sent to client
+  INVOICE_PAID         // Invoice was marked as paid
+  INVOICE_OVERDUE      // Invoice is overdue
+  SYSTEM               // System notification
+}
