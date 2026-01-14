@@ -24,26 +24,43 @@ export interface CreateInvoiceParams {
   periodStart?: Date;
   periodEnd?: Date;
   remarks?: string;
+  autoApprove?: boolean;  // If true, create invoice as APPROVED
 }
 
-export interface DraftInvoice {
+// Result of invoice generation
+export interface InvoiceGenerationResult {
+  invoiceId: string;
   contractId: string;
   customerName: string;
-  productType: string;
-  serviceFee: number;
-  vatAmount: number;
-  grossAmount: number;
-  withholdingTax: number;
-  netAmount: number;
-  dueDate: Date;
-  billingEntity: string;
-  billingModel: BillingModel;
-  vatType: VatType;
-  hasWithholding: boolean;
-  autoSendEnabled: boolean;  // Per-contract auto-send control
+  billingNo: string;
+  status: InvoiceStatus;
+  autoApproved: boolean;
+  autoSendEnabled: boolean;
 }
 
-// Get contracts due within specified days
+// Get contracts due today based on billingDayOfMonth
+export async function getContractsDueToday() {
+  const today = new Date();
+  const dayOfMonth = today.getDate();
+
+  return prisma.contract.findMany({
+    where: {
+      status: ContractStatus.ACTIVE,
+      billingDayOfMonth: dayOfMonth,
+      // Exclude contracts that have ended
+      OR: [
+        { contractEndDate: null },
+        { contractEndDate: { gt: today } },
+      ],
+    },
+    include: {
+      partner: true,
+      billingEntity: true,
+    },
+  });
+}
+
+// Get contracts due within specified days (kept for backward compatibility)
 export async function getContractsDueWithin(days: number) {
   const today = new Date();
   const futureDate = new Date();
@@ -69,60 +86,85 @@ export async function getContractsDueWithin(days: number) {
   });
 }
 
-// Generate draft invoices for contracts due soon
-export async function generateDraftInvoices(daysBeforeDue: number = 15): Promise<DraftInvoice[]> {
-  const contracts = await getContractsDueWithin(daysBeforeDue);
-  const drafts: DraftInvoice[] = [];
+// Helper to check if invoice exists for current billing period
+async function checkExistingInvoiceForMonth(contractId: string): Promise<boolean> {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-  for (const contract of contracts) {
-    // Check if invoice already exists for this due date
-    const existingInvoice = await prisma.invoice.findFirst({
-      where: {
-        contracts: {
-          some: { id: contract.id },
-        },
-        dueDate: contract.nextDueDate!,
-        status: {
-          not: InvoiceStatus.CANCELLED,
-        },
+  const existing = await prisma.invoice.findFirst({
+    where: {
+      contracts: { some: { id: contractId } },
+      statementDate: {
+        gte: startOfMonth,
+        lte: endOfMonth,
       },
-    });
+      status: { not: InvoiceStatus.CANCELLED },
+    },
+  });
 
-    if (existingInvoice) continue;
-
-    const billingAmount = Number(contract.billingAmount || contract.monthlyFee);
-    const isVatClient = contract.vatType === VatType.VAT;
-    const hasWithholding = Number(contract.withholdingTax || 0) > 0;
-
-    const calculation = calculateBilling(
-      billingAmount,
-      true, // assume VAT-inclusive
-      isVatClient,
-      hasWithholding
-    );
-
-    drafts.push({
-      contractId: contract.id,
-      customerName: contract.companyName,
-      productType: contract.productType,
-      serviceFee: calculation.serviceFee,
-      vatAmount: calculation.vatAmount,
-      grossAmount: calculation.grossAmount,
-      withholdingTax: calculation.withholdingTax,
-      netAmount: calculation.netAmount,
-      dueDate: contract.nextDueDate!,
-      billingEntity: contract.billingEntity.code,
-      billingModel: contract.partner?.billingModel || BillingModel.DIRECT,
-      vatType: contract.vatType,
-      hasWithholding,
-      autoSendEnabled: contract.autoSendEnabled,
-    });
-  }
-
-  return drafts;
+  return !!existing;
 }
 
-// Create invoice from draft
+// Helper to calculate and update nextDueDate
+async function updateNextDueDate(contractId: string, billingDayOfMonth: number) {
+  const now = new Date();
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+  // Handle months with fewer days (e.g., billing day 31 in February)
+  const lastDayOfNextMonth = new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0).getDate();
+  const actualDay = Math.min(billingDayOfMonth, lastDayOfNextMonth);
+
+  const nextDueDate = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), actualDay);
+
+  await prisma.contract.update({
+    where: { id: contractId },
+    data: { nextDueDate },
+  });
+}
+
+// Generate invoices directly for contracts due today (no draft stage)
+export async function generateInvoices(): Promise<InvoiceGenerationResult[]> {
+  const contracts = await getContractsDueToday();
+  const results: InvoiceGenerationResult[] = [];
+
+  for (const contract of contracts) {
+    // Check if invoice already exists for this month
+    const hasExisting = await checkExistingInvoiceForMonth(contract.id);
+    if (hasExisting) continue;
+
+    const billingAmount = Number(contract.billingAmount || contract.monthlyFee);
+    const hasWithholding = Number(contract.withholdingTax || 0) > 0;
+
+    // Create invoice with status based on autoApprove
+    const invoice = await createInvoiceFromContract({
+      contractId: contract.id,
+      billingAmount,
+      hasWithholding,
+      autoApprove: contract.autoApprove,
+    });
+
+    results.push({
+      invoiceId: invoice.id,
+      contractId: contract.id,
+      customerName: contract.companyName,
+      billingNo: invoice.billingNo || invoice.id,
+      status: invoice.status,
+      autoApproved: contract.autoApprove,
+      autoSendEnabled: contract.autoSendEnabled,
+    });
+
+    // Update contract's nextDueDate to next month
+    if (contract.billingDayOfMonth) {
+      await updateNextDueDate(contract.id, contract.billingDayOfMonth);
+    }
+  }
+
+  return results;
+}
+
+// Create invoice from contract
+// If autoApprove is true, invoice is created with APPROVED status
 export async function createInvoiceFromContract(params: CreateInvoiceParams) {
   const contract = await prisma.contract.findUnique({
     where: { id: params.contractId },
@@ -178,6 +220,7 @@ export async function createInvoiceFromContract(params: CreateInvoiceParams) {
     data: {
       billingNo,
       companyId: contract.billingEntityId,
+      partnerId: contract.partnerId, // Link to partner for traceability
       customerName,
       attention,
       customerAddress,
@@ -197,7 +240,8 @@ export async function createInvoiceFromContract(params: CreateInvoiceParams) {
       withholdingCode: params.hasWithholding ? 'WC160' : null,
       billingFrequency,
       monthlyFee: Number(contract.monthlyFee),
-      status: InvoiceStatus.PENDING,
+      status: params.autoApprove ? InvoiceStatus.APPROVED : InvoiceStatus.PENDING,
+      approvedAt: params.autoApprove ? new Date() : null,
       billingModel: contract.partner?.billingModel || BillingModel.DIRECT,
       remarks: params.remarks,
       contracts: {
@@ -207,7 +251,7 @@ export async function createInvoiceFromContract(params: CreateInvoiceParams) {
         create: {
           contractId: contract.id,
           date: new Date(),
-          description: `${contract.productType} Service Fee`,
+          description: contract.productType.charAt(0) + contract.productType.slice(1).toLowerCase(),
           quantity: 1,
           unitPrice: calculation.serviceFee,
           serviceFee: calculation.serviceFee,

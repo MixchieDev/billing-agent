@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
+import { clearSettingsCache } from '@/lib/settings';
+import { reloadScheduler } from '@/lib/scheduler';
 
 // Default settings
 const DEFAULT_SETTINGS = {
@@ -17,7 +19,6 @@ const DEFAULT_SETTINGS = {
   'soa.reviewedBy': { value: 'RUTH MICHELLE C. BAYRON', category: 'soa', description: 'Reviewed By (default)' },
 
   // Scheduler Settings
-  'scheduler.enabled': { value: false, category: 'scheduler', description: 'Enable automatic billing runs' },
   'scheduler.cronExpression': { value: '0 8 * * *', category: 'scheduler', description: 'Cron expression for billing runs (default: 8 AM daily)' },
   'scheduler.daysBeforeDue': { value: 15, category: 'scheduler', description: 'Generate invoices X days before due date' },
 
@@ -26,9 +27,16 @@ const DEFAULT_SETTINGS = {
   'email.bccAddress': { value: '', category: 'email', description: 'BCC email address for all sent invoices' },
   'email.replyTo': { value: '', category: 'email', description: 'Reply-to email address' },
 
-  // General Settings
-  'general.vatRate': { value: 0.12, category: 'general', description: 'VAT Rate (decimal)' },
-  'general.withholdingRate': { value: 0.02, category: 'general', description: 'Withholding Tax Rate (decimal)' },
+  // Tax Settings
+  'tax.vatRate': { value: 0.12, category: 'tax', description: 'VAT Rate (decimal)' },
+  'tax.withholdingPresets': { value: [
+    { rate: 0.01, code: 'WC100', label: '1% - Services' },
+    { rate: 0.02, code: 'WC160', label: '2% - Professional Services' },
+    { rate: 0.05, code: 'WC058', label: '5% - Rentals' },
+    { rate: 0.10, code: 'WC010', label: '10% - Professional Fees' },
+  ], category: 'tax', description: 'Withholding Tax Presets' },
+  'tax.defaultWithholdingRate': { value: 0.02, category: 'tax', description: 'Default Withholding Rate (decimal)' },
+  'tax.defaultWithholdingCode': { value: 'WC160', category: 'tax', description: 'Default Withholding ATC Code' },
 };
 
 // GET - Fetch all settings
@@ -147,6 +155,19 @@ export async function POST(request: NextRequest) {
         details: { updatedKeys: settings.map((s: any) => s.key) },
       },
     });
+
+    // Clear settings cache so new values take effect
+    clearSettingsCache();
+
+    // Check if scheduler settings were updated and reload if needed
+    const schedulerSettingsUpdated = settings.some((s: any) =>
+      s.key?.startsWith('scheduler.')
+    );
+
+    if (schedulerSettingsUpdated) {
+      console.log('[Settings API] Scheduler settings changed, reloading scheduler...');
+      await reloadScheduler();
+    }
 
     return NextResponse.json({
       success: true,

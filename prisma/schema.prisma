@@ -30,6 +30,11 @@ model User {
   approvals     Invoice[] @relation("ApprovedBy")
   rejections    Invoice[] @relation("RejectedBy")
   notifications Notification[]
+
+  // Scheduled billing relations
+  schedulesCreated   ScheduledBilling[] @relation("ScheduleCreatedBy")
+  schedulesApproved  ScheduledBilling[] @relation("ScheduleApprovedBy")
+  schedulesRejected  ScheduledBilling[] @relation("ScheduleRejectedBy")
 }
 
 model Account {
@@ -92,10 +97,12 @@ model Company {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  partners        Partner[]
-  contracts       Contract[]
-  invoices        Invoice[]
-  signatories     Signatory[]
+  partners           Partner[]
+  contracts          Contract[]
+  invoices           Invoice[]
+  signatories        Signatory[]
+  template           InvoiceTemplate?
+  scheduledBillings  ScheduledBilling[] @relation("ScheduledBillingEntity")
 }
 
 model Signatory {
@@ -108,31 +115,75 @@ model Signatory {
   updatedAt DateTime @updatedAt
 
   company   Company  @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, role, isDefault])
+}
+
+model InvoiceTemplate {
+  id              String   @id @default(cuid())
+  companyId       String   @unique
+
+  // Colors (hex values)
+  primaryColor    String   @default("#2563eb")
+  secondaryColor  String   @default("#1e40af")
+  footerBgColor   String   @default("#dbeafe")
+
+  // Branding
+  logoPath        String?
+  invoiceTitle    String   @default("Invoice")
+  footerText      String   @default("Powered by: YAHSHUA")
+  showDisclaimer  Boolean  @default(true)
+  notes           String?  @db.Text // Customizable notes shown on invoice
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company         Company  @relation(fields: [companyId], references: [id])
 }
 
 // ==================== PARTNERS ====================
 
 model Partner {
-  id            String   @id @default(cuid())
-  code          String   @unique // "Globe", "RCBC", "Direct-YOWI", "Direct-ABBA"
-  name          String
-  invoiceTo     String?  // Company name to invoice
-  attention     String?  // Contact person
-  address       String?
-  email         String?
-  billingModel  BillingModel @default(DIRECT)
-  companyId     String   // Which entity bills this partner (YOWI or ABBA)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String   @id @default(cuid())
+  code            String   @unique // "Globe", "RCBC", "Direct-YOWI", "Direct-ABBA"
+  name            String
+  invoiceTo       String?  // Company name to invoice
+  attention       String?  // Contact person
+  address         String?
+  email           String?  // Legacy single email
+  emails          String?  // Comma-separated list of emails
+  billingModel    BillingModel @default(DIRECT)
+  companyId       String   // Which entity bills this partner (YOWI or ABBA)
+  emailTemplateId String?  // Custom email template for this partner
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  company       Company  @relation(fields: [companyId], references: [id])
-  contracts     Contract[]
+  company         Company  @relation(fields: [companyId], references: [id])
+  contracts       Contract[]
+  invoices        Invoice[]
+  emailTemplate   EmailTemplate? @relation(fields: [emailTemplateId], references: [id])
 }
 
 enum BillingModel {
   DIRECT
   GLOBE_INNOVE
   RCBC_CONSOLIDATED
+}
+
+// ==================== EMAIL TEMPLATES ====================
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  subject   String   // Email subject with placeholders
+  greeting  String   // Opening greeting
+  body      String   @db.Text // Main content with placeholders
+  closing   String   @db.Text // Sign-off text
+  isDefault Boolean  @default(false) // System default template
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  partners  Partner[] // Partners using this template
 }
 
 // ==================== CONTRACTS ====================
@@ -152,7 +203,9 @@ model Contract {
   daysOverdue     Int           @default(0)
   status          ContractStatus @default(NOT_STARTED)
   contactPerson   String?
-  email           String?
+  email           String?       // Single email (legacy, use emails for multiple)
+  emails          String?       // Comma-separated list of email addresses
+  address         String?       // Client's billing address
   tin             String?
   mobile          String?
   industry        String?
@@ -161,6 +214,7 @@ model Contract {
   vatAmount       Decimal?      @db.Decimal(15, 2)
   totalWithVat    Decimal?      @db.Decimal(15, 2)
   withholdingTax  Decimal?      @db.Decimal(15, 2)
+  withholdingRate Decimal?      @db.Decimal(5, 4)  // Rate as decimal (e.g., 0.02 = 2%)
   netReceivable   Decimal?      @db.Decimal(15, 2)
   clientSince     DateTime?
   lifetimeValue   Decimal?      @db.Decimal(15, 2)
@@ -178,14 +232,19 @@ model Contract {
   autoSendEnabled Boolean       @default(true)  // Per-contract auto-send toggle
   contractEndDate DateTime?     // Stop generating invoices after this date
 
+  // Simplified billing flow
+  billingDayOfMonth Int?        // Day of month for billing (1-31)
+  autoApprove       Boolean     @default(false) // Skip approval workflow if true
+
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   sheetRowIndex   Int?          // Track the row in Google Sheets
 
-  partner         Partner?      @relation(fields: [partnerId], references: [id])
-  billingEntity   Company       @relation(fields: [billingEntityId], references: [id])
-  invoices        Invoice[]
-  lineItems       InvoiceLineItem[]
+  partner            Partner?           @relation(fields: [partnerId], references: [id])
+  billingEntity      Company            @relation(fields: [billingEntityId], references: [id])
+  invoices           Invoice[]
+  lineItems          InvoiceLineItem[]
+  scheduledBillings  ScheduledBilling[]
 }
 
 enum ProductType {
@@ -216,6 +275,12 @@ enum BillingFrequency {
   MONTHLY
   QUARTERLY
   ANNUALLY
+  CUSTOM      // For custom intervals (every X days/months)
+}
+
+enum IntervalUnit {
+  DAYS
+  MONTHS
 }
 
 // ==================== INVOICES ====================
@@ -230,7 +295,8 @@ model Invoice {
   customerName      String        // Who to bill (could be partner like Innove/RCBC)
   attention         String?
   customerAddress   String?
-  customerEmail     String?
+  customerEmail     String?       // Single email (legacy, use customerEmails for multiple)
+  customerEmails    String?       // Comma-separated list of email addresses
   customerTin       String?
 
   // Dates
@@ -251,6 +317,7 @@ model Invoice {
   vatType           VatType       @default(VAT)
   hasWithholding    Boolean       @default(false)
   withholdingCode   String?       // "WC160" or "WC061"
+  withholdingRate   Decimal?      @db.Decimal(5, 4)  // Rate as decimal (e.g., 0.02 = 2%)
 
   // Billing frequency (for quarterly/annual invoices)
   billingFrequency  BillingFrequency @default(MONTHLY)
@@ -283,6 +350,7 @@ model Invoice {
   // Metadata
   billingModel      BillingModel  @default(DIRECT)
   isConsolidated    Boolean       @default(false) // For RCBC
+  partnerId         String?       // Link to billing partner for traceability
   remarks           String?       @db.Text
   preparedBy        String?
   reviewedBy        String?
@@ -291,11 +359,14 @@ model Invoice {
   updatedAt         DateTime      @updatedAt
 
   company           Company       @relation(fields: [companyId], references: [id])
+  partner           Partner?      @relation(fields: [partnerId], references: [id])
   approvedBy        User?         @relation("ApprovedBy", fields: [approvedById], references: [id])
   rejectedBy        User?         @relation("RejectedBy", fields: [rejectedById], references: [id])
-  lineItems         InvoiceLineItem[]
-  emailLogs         EmailLog[]
-  contracts         Contract[]    // For direct invoices
+  lineItems              InvoiceLineItem[]
+  emailLogs              EmailLog[]
+  contracts              Contract[]              // For direct invoices
+  scheduledBillingRuns   ScheduledBillingRun[]
+  attachments            InvoiceAttachment[]
 }
 
 model InvoiceLineItem {
@@ -343,17 +414,34 @@ enum EmailStatus {
   FAILED
 }
 
+// ==================== INVOICE ATTACHMENTS ====================
+
+model InvoiceAttachment {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  filename    String   // Original filename
+  mimeType    String   // MIME type (e.g., "application/pdf")
+  size        Int      // File size in bytes
+  data        Bytes    // File content (PostgreSQL BYTEA)
+  uploadedAt  DateTime @default(now())
+  uploadedBy  String?  // User ID who uploaded
+
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
 // ==================== RCBC END-CLIENTS ====================
 
 model RcbcEndClient {
-  id            String   @id @default(cuid())
-  name          String
-  employeeCount Int
-  month         DateTime // Which month this data is for
-  isActive      Boolean  @default(true)
-  sheetRowIndex Int?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  employeeCount   Int
+  ratePerEmployee Decimal  @db.Decimal(10, 2) @default(0)
+  month           DateTime // Which month this data is for
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@unique([name, month])
 }
@@ -471,5 +559,96 @@ enum NotificationType {
   INVOICE_SENT         // Invoice was sent to client
   INVOICE_PAID         // Invoice was marked as paid
   INVOICE_OVERDUE      // Invoice is overdue
+  SCHEDULE_PENDING     // New schedule needs approval
+  SCHEDULE_APPROVED    // Schedule was approved
+  SCHEDULE_REJECTED    // Schedule was rejected
   SYSTEM               // System notification
+}
+
+// ==================== SCHEDULED BILLING ====================
+
+model ScheduledBilling {
+  id                String              @id @default(cuid())
+  contractId        String
+  billingEntityId   String              // YOWI or ABBA
+
+  // Amount configuration
+  billingAmount     Decimal             @db.Decimal(15, 2)
+  vatType           VatType             @default(VAT)
+  hasWithholding    Boolean             @default(false)
+  withholdingRate   Decimal?            @db.Decimal(5, 4)  // Rate as decimal (e.g., 0.02 = 2%)
+
+  // Description (editable, used on invoice line item)
+  description       String?             // e.g., "Monthly Payroll Services"
+
+  // Schedule configuration
+  frequency         BillingFrequency    @default(MONTHLY)
+  billingDayOfMonth Int                 // Day of month to generate invoice (1-31)
+  dueDayOfMonth     Int?                // Day of month invoice is due (1-31), defaults to billingDayOfMonth
+  startDate         DateTime            @default(now())
+  endDate           DateTime?
+  nextBillingDate   DateTime?           // Calculated next run date
+
+  // Custom frequency configuration (when frequency = CUSTOM)
+  customIntervalValue   Int?            // e.g., 45 for "every 45 days"
+  customIntervalUnit    IntervalUnit?   // DAYS or MONTHS
+
+  // Automation flags
+  autoApprove       Boolean             @default(false)
+  autoSendEnabled   Boolean             @default(true)
+
+  // Status
+  status            ScheduleStatus      @default(PENDING)
+  remarks           String?             @db.Text
+
+  // Approval workflow
+  createdById       String?
+  approvedById      String?
+  approvedAt        DateTime?
+  rejectedById      String?
+  rejectedAt        DateTime?
+  rejectionReason   String?
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  contract          Contract            @relation(fields: [contractId], references: [id])
+  billingEntity     Company             @relation("ScheduledBillingEntity", fields: [billingEntityId], references: [id])
+  runs              ScheduledBillingRun[]
+  createdBy         User?               @relation("ScheduleCreatedBy", fields: [createdById], references: [id])
+  approvedBy        User?               @relation("ScheduleApprovedBy", fields: [approvedById], references: [id])
+  rejectedBy        User?               @relation("ScheduleRejectedBy", fields: [rejectedById], references: [id])
+
+  @@index([billingDayOfMonth])
+  @@index([status, nextBillingDate])
+}
+
+model ScheduledBillingRun {
+  id                  String            @id @default(cuid())
+  scheduledBillingId  String
+  invoiceId           String?           // FK to generated invoice
+  runDate             DateTime          @default(now())
+  status              RunStatus         @default(PENDING)
+  errorMessage        String?
+  createdAt           DateTime          @default(now())
+
+  scheduledBilling    ScheduledBilling  @relation(fields: [scheduledBillingId], references: [id])
+  invoice             Invoice?          @relation(fields: [invoiceId], references: [id])
+
+  @@index([scheduledBillingId])
+  @@index([runDate])
+}
+
+enum ScheduleStatus {
+  PENDING     // Awaiting approval
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+enum RunStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  SKIPPED
 }

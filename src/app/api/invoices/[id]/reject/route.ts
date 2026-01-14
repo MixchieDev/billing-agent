@@ -20,6 +20,17 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Verify user exists in database
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+    });
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User session is invalid. Please log out and log in again.' },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
     const body = await request.json();
     const { reason, rescheduleDate } = body;
@@ -55,8 +66,9 @@ export async function POST(
     return NextResponse.json(invoice);
   } catch (error) {
     console.error('Error rejecting invoice:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to reject invoice' },
+      { error: 'Failed to reject invoice', details: errorMessage },
       { status: 500 }
     );
   }

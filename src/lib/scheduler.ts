@@ -1,27 +1,43 @@
 import * as cron from 'node-cron';
 import prisma from './prisma';
-import { generateDraftInvoices, createInvoiceFromContract, autoApproveInvoice } from './billing-service';
-import { JobStatus, BillingFrequency } from '@/generated/prisma';
+import { JobStatus, InvoiceStatus } from '@/generated/prisma';
 import { autoSendInvoice } from './auto-send';
-import { notifyAnnualRenewalPending, notifyInvoicePending } from './notifications';
+import { notifyInvoicePending } from './notifications';
+import {
+  getSchedulesDueToday,
+  createScheduledBillingRun,
+  updateNextBillingDate,
+  checkExistingInvoiceForPeriod,
+} from './scheduled-billing-service';
+import { generateFromScheduledBilling } from './invoice-generator';
+import { getSchedulerSettings } from './settings';
 
 interface SchedulerConfig {
   cronExpression: string;
   timezone: string;
-  daysBeforeDue: number;
   enabled: boolean;
+  daysBeforeDue: number;
 }
 
 const defaultConfig: SchedulerConfig = {
   cronExpression: '0 8 * * *', // 8:00 AM daily
   timezone: 'Asia/Manila',
-  daysBeforeDue: 15,
-  enabled: true,
+  enabled: true, // Always enabled - individual schedules control themselves
+  daysBeforeDue: 0,
 };
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null;
+let currentConfig: SchedulerConfig = { ...defaultConfig };
+let lastRun: Date | null = null;
+let nextRun: Date | null = null;
 
-// Main billing job
+/**
+ * Main billing job - uses ScheduledBilling model
+ * 1. Get scheduled billings where billingDayOfMonth = today
+ * 2. For each schedule, generate invoice
+ * 3. For APPROVED invoices with autoSendEnabled: auto-send
+ * 4. For PENDING invoices: notify for approval
+ */
 async function runBillingJob() {
   const jobRun = await prisma.jobRun.create({
     data: {
@@ -33,97 +49,93 @@ async function runBillingJob() {
   try {
     console.log('[Scheduler] Starting daily billing check...');
 
-    // Generate draft invoices for contracts due within 15 days
-    const drafts = await generateDraftInvoices(defaultConfig.daysBeforeDue);
-
-    console.log(`[Scheduler] Found ${drafts.length} contracts due soon`);
+    // Get scheduled billings due today
+    const schedules = await getSchedulesDueToday();
+    console.log(`[Scheduler] Found ${schedules.length} scheduled billings due today`);
 
     let processed = 0;
-    const errors: any[] = [];
-
     let autoSent = 0;
     let pendingApproval = 0;
+    let skipped = 0;
+    const errors: any[] = [];
 
-    for (const draft of drafts) {
+    // Process each scheduled billing
+    for (const schedule of schedules) {
       try {
-        // Create the invoice
-        const invoice = await createInvoiceFromContract({
-          contractId: draft.contractId,
-          billingAmount: draft.serviceFee + draft.vatAmount,
-          hasWithholding: draft.hasWithholding,
-        });
+        // Check if invoice already exists for this period
+        const hasExisting = await checkExistingInvoiceForPeriod(schedule.id);
+        if (hasExisting) {
+          console.log(`[Scheduler] Skipping ${schedule.contract.companyName} - invoice already exists for this period`);
+          skipped++;
+          continue;
+        }
+
+        // Generate invoice
+        const result = await generateFromScheduledBilling(schedule.id);
         processed++;
 
-        // Get the billing frequency (default to MONTHLY if not set)
-        const billingFrequency = invoice.billingFrequency || BillingFrequency.MONTHLY;
+        console.log(`[Scheduler] Created invoice ${result.invoice.billingNo} for ${schedule.contract.companyName}`);
 
-        // Check if auto-send is disabled for this contract
-        if (!draft.autoSendEnabled) {
-          console.log(`[Scheduler] Auto-send disabled for contract, invoice ${invoice.billingNo} requires manual approval`);
+        if (result.invoice.status === InvoiceStatus.APPROVED) {
+          // Auto-approved invoice - try to send if autoSendEnabled
+          if (schedule.autoSendEnabled) {
+            try {
+              const sendResult = await autoSendInvoice(result.invoice.id);
 
-          await notifyInvoicePending({
-            id: invoice.id,
-            billingNo: invoice.billingNo,
-            customerName: invoice.customerName,
-          });
-
-          pendingApproval++;
-          continue; // Skip auto-send logic
-        }
-
-        // Handle based on billing frequency
-        if (billingFrequency === BillingFrequency.MONTHLY || billingFrequency === BillingFrequency.QUARTERLY) {
-          // MONTHLY/QUARTERLY: Auto-approve and auto-send
-          console.log(`[Scheduler] Auto-processing ${billingFrequency} invoice ${invoice.billingNo}`);
-
-          try {
-            // Auto-approve
-            await autoApproveInvoice(invoice.id);
-
-            // Auto-send
-            const sendResult = await autoSendInvoice(invoice.id);
-
-            if (sendResult.success) {
-              autoSent++;
-              console.log(`[Scheduler] Auto-sent invoice ${invoice.billingNo} to ${sendResult.sentTo}`);
-            } else {
-              console.error(`[Scheduler] Failed to auto-send ${invoice.billingNo}: ${sendResult.error}`);
+              if (sendResult.success) {
+                autoSent++;
+                console.log(`[Scheduler] Auto-sent invoice ${result.invoice.billingNo} to ${sendResult.sentTo}`);
+              } else {
+                console.error(`[Scheduler] Failed to auto-send ${result.invoice.billingNo}: ${sendResult.error}`);
+                errors.push({
+                  scheduleId: schedule.id,
+                  invoiceId: result.invoice.id,
+                  billingNo: result.invoice.billingNo,
+                  error: `Auto-send failed: ${sendResult.error}`,
+                });
+              }
+            } catch (sendError) {
+              console.error(`[Scheduler] Error sending invoice ${result.invoice.billingNo}:`, sendError);
               errors.push({
-                invoiceId: invoice.id,
-                billingNo: invoice.billingNo,
-                error: `Auto-send failed: ${sendResult.error}`,
+                scheduleId: schedule.id,
+                invoiceId: result.invoice.id,
+                billingNo: result.invoice.billingNo,
+                error: `Auto-send error: ${sendError instanceof Error ? sendError.message : 'Unknown'}`,
               });
             }
-          } catch (sendError) {
-            console.error(`[Scheduler] Error auto-sending invoice ${invoice.billingNo}:`, sendError);
-            errors.push({
-              invoiceId: invoice.id,
-              billingNo: invoice.billingNo,
-              error: sendError instanceof Error ? sendError.message : 'Unknown send error',
-            });
+          } else {
+            console.log(`[Scheduler] Invoice ${result.invoice.billingNo} approved but auto-send disabled`);
           }
         } else {
-          // ANNUALLY: Keep as pending, create renewal notification
-          console.log(`[Scheduler] Annual invoice ${invoice.billingNo} requires manual approval`);
+          // PENDING invoice - notify for manual approval
+          pendingApproval++;
 
-          await notifyAnnualRenewalPending({
-            id: invoice.id,
-            billingNo: invoice.billingNo,
-            customerName: invoice.customerName,
+          await notifyInvoicePending({
+            id: result.invoice.id,
+            billingNo: result.invoice.billingNo,
+            customerName: result.invoice.customerName,
           });
 
-          pendingApproval++;
+          console.log(`[Scheduler] Invoice ${result.invoice.billingNo} pending approval`);
         }
       } catch (error) {
-        console.error(`[Scheduler] Error processing contract ${draft.contractId}:`, error);
+        console.error(`[Scheduler] Error processing schedule for ${schedule.contract.companyName}:`, error);
+
+        // Record failed run
+        await createScheduledBillingRun(
+          schedule.id,
+          null,
+          'FAILED',
+          error instanceof Error ? error.message : 'Unknown error'
+        );
+
         errors.push({
-          contractId: draft.contractId,
+          scheduleId: schedule.id,
+          companyName: schedule.contract.companyName,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }
-
-    console.log(`[Scheduler] Summary: ${autoSent} auto-sent, ${pendingApproval} pending approval`);
 
     // Update job run
     await prisma.jobRun.update({
@@ -132,13 +144,17 @@ async function runBillingJob() {
         status: JobStatus.COMPLETED,
         completedAt: new Date(),
         itemsProcessed: processed,
-        errors: errors.length > 0 ? { errors, autoSent, pendingApproval } : undefined,
+        errors: { errors, autoSent, pendingApproval, skipped },
       },
     });
 
-    console.log(`[Scheduler] Completed. Processed: ${processed}, Auto-sent: ${autoSent}, Pending: ${pendingApproval}, Errors: ${errors.length}`);
+    console.log(`[Scheduler] Completed. Processed: ${processed}, Auto-sent: ${autoSent}, Pending: ${pendingApproval}, Skipped: ${skipped}, Errors: ${errors.length}`);
 
-    return { processed, autoSent, pendingApproval, errors };
+    // Track last run time
+    lastRun = new Date();
+    updateNextRunTime();
+
+    return { processed, autoSent, pendingApproval, skipped, errors };
   } catch (error) {
     console.error('[Scheduler] Job failed:', error);
 
@@ -151,16 +167,62 @@ async function runBillingJob() {
       },
     });
 
+    // Still track last run even on failure
+    lastRun = new Date();
+    updateNextRunTime();
+
     throw error;
   }
 }
 
-// Start the scheduler
+/**
+ * Calculate next run time based on cron expression
+ */
+function updateNextRunTime() {
+  if (!scheduledTask || !currentConfig.enabled) {
+    nextRun = null;
+    return;
+  }
+
+  try {
+    // Parse cron and calculate next occurrence
+    const cronParts = currentConfig.cronExpression.split(' ');
+    const now = new Date();
+
+    // Simple calculation for common patterns (minute hour * * *)
+    if (cronParts.length >= 2) {
+      const minute = parseInt(cronParts[0]) || 0;
+      const hour = parseInt(cronParts[1]) || 8;
+
+      const next = new Date(now);
+      next.setHours(hour, minute, 0, 0);
+
+      // If time has passed today, schedule for tomorrow
+      if (next <= now) {
+        next.setDate(next.getDate() + 1);
+      }
+
+      nextRun = next;
+    }
+  } catch {
+    nextRun = null;
+  }
+}
+
+/**
+ * Start the scheduler with given config
+ */
 export function startScheduler(config?: Partial<SchedulerConfig>) {
   const mergedConfig = { ...defaultConfig, ...config };
+  currentConfig = mergedConfig;
 
   if (!mergedConfig.enabled) {
     console.log('[Scheduler] Scheduler is disabled');
+    if (scheduledTask) {
+      scheduledTask.stop();
+      scheduledTask = null;
+    }
+    nextRun = null;
     return;
   }
 
@@ -185,27 +247,87 @@ export function startScheduler(config?: Partial<SchedulerConfig>) {
     }
   );
 
+  updateNextRunTime();
   console.log('[Scheduler] Started successfully');
 }
 
-// Stop the scheduler
+/**
+ * Stop the scheduler
+ */
 export function stopScheduler() {
   if (scheduledTask) {
     scheduledTask.stop();
     scheduledTask = null;
     console.log('[Scheduler] Stopped');
   }
+  currentConfig = { ...defaultConfig, enabled: false };
+  nextRun = null;
 }
 
-// Manual trigger for testing
+/**
+ * Initialize scheduler from database settings
+ * Call this on app startup
+ */
+export async function initializeScheduler() {
+  try {
+    console.log('[Scheduler] Initializing from database settings...');
+    const settings = await getSchedulerSettings();
+
+    startScheduler({
+      enabled: true, // Always enabled - individual schedules control themselves
+      cronExpression: settings.cronExpression,
+      daysBeforeDue: settings.daysBeforeDue,
+    });
+
+    console.log('[Scheduler] Initialized and running');
+  } catch (error) {
+    console.error('[Scheduler] Failed to initialize:', error);
+  }
+}
+
+/**
+ * Reload scheduler settings from database
+ * Call this after settings are updated
+ */
+export async function reloadScheduler() {
+  console.log('[Scheduler] Reloading settings...');
+  await initializeScheduler();
+}
+
+/**
+ * Manual trigger for testing
+ */
 export async function triggerBillingJob() {
   return runBillingJob();
 }
 
-// Get scheduler status
+/**
+ * Get scheduler status (reads current state, not DB)
+ */
 export function getSchedulerStatus() {
   return {
+    running: scheduledTask !== null && currentConfig.enabled,
+    config: currentConfig,
+    lastRun: lastRun?.toISOString() || null,
+    nextRun: nextRun?.toISOString() || null,
+  };
+}
+
+/**
+ * Get scheduler status with fresh DB settings
+ */
+export async function getSchedulerStatusAsync() {
+  const settings = await getSchedulerSettings();
+
+  return {
     running: scheduledTask !== null,
-    config: defaultConfig,
+    config: {
+      ...currentConfig,
+      enabled: true, // Always enabled
+      cronExpression: settings.cronExpression,
+      daysBeforeDue: settings.daysBeforeDue,
+    },
+    lastRun: lastRun?.toISOString() || null,
+    nextRun: nextRun?.toISOString() || null,
   };
 }

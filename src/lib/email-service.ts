@@ -16,12 +16,42 @@ interface EmailConfig {
   bccEmail?: string;
 }
 
-// Email template data
+// Email template data (legacy, kept for backwards compatibility)
 interface EmailTemplateData {
   clientName: string;
   serviceType: string;
   periodDescription: string;
   billingNo: string;
+}
+
+// Email placeholder data for template replacement
+export interface EmailPlaceholderData {
+  customerName: string;
+  billingNo: string;
+  dueDate: string;
+  totalAmount: string;
+  periodStart: string;
+  periodEnd: string;
+  companyName: string;
+  clientCompanyName: string; // The actual client company name (from contract)
+}
+
+// Additional email attachment (for invoice attachments from database)
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+}
+
+// Email template from database
+export interface EmailTemplateContent {
+  id: string;
+  name: string;
+  subject: string;
+  greeting: string;
+  body: string;
+  closing: string;
+  isDefault: boolean;
 }
 
 let transporter: nodemailer.Transporter | null = null;
@@ -83,7 +113,124 @@ export async function verifyEmailConnection(): Promise<boolean> {
   }
 }
 
-// Generate email subject
+// Get email template for a partner (or default template if no partner-specific)
+export async function getEmailTemplateForPartner(partnerId: string | null): Promise<EmailTemplateContent | null> {
+  try {
+    // If partner has a template assigned, use it
+    if (partnerId) {
+      const partner = await prisma.partner.findUnique({
+        where: { id: partnerId },
+        include: { emailTemplate: true },
+      });
+
+      if (partner?.emailTemplate) {
+        return partner.emailTemplate;
+      }
+    }
+
+    // Fall back to default template
+    const defaultTemplate = await prisma.emailTemplate.findFirst({
+      where: { isDefault: true },
+    });
+
+    return defaultTemplate;
+  } catch (error) {
+    console.error('[Email Service] Failed to fetch email template:', error);
+    return null;
+  }
+}
+
+// Replace placeholders in template text
+export function replacePlaceholders(text: string, data: EmailPlaceholderData): string {
+  return text
+    .replace(/\{\{customerName\}\}/g, data.customerName)
+    .replace(/\{\{billingNo\}\}/g, data.billingNo)
+    .replace(/\{\{dueDate\}\}/g, data.dueDate)
+    .replace(/\{\{totalAmount\}\}/g, data.totalAmount)
+    .replace(/\{\{periodStart\}\}/g, data.periodStart)
+    .replace(/\{\{periodEnd\}\}/g, data.periodEnd)
+    .replace(/\{\{companyName\}\}/g, data.companyName)
+    .replace(/\{\{clientCompanyName\}\}/g, data.clientCompanyName);
+}
+
+// Generate email subject from template
+export function generateEmailSubjectFromTemplate(
+  template: EmailTemplateContent | null,
+  data: EmailPlaceholderData
+): string {
+  if (template) {
+    return replacePlaceholders(template.subject, data);
+  }
+  // Fallback to legacy format
+  return `Bill No. ${data.billingNo} | ${data.customerName}`;
+}
+
+// Generate email body from template (plain text)
+export function generateEmailBodyFromTemplate(
+  template: EmailTemplateContent | null,
+  data: EmailPlaceholderData
+): string {
+  if (template) {
+    const greeting = replacePlaceholders(template.greeting, data);
+    const body = replacePlaceholders(template.body, data);
+    const closing = replacePlaceholders(template.closing, data);
+    return `${greeting}\n\n${body}\n\n${closing}`;
+  }
+  // Fallback to legacy format
+  return generateEmailBody({
+    clientName: data.customerName,
+    serviceType: 'Professional Services',
+    periodDescription: `${data.periodStart} to ${data.periodEnd}`,
+    billingNo: data.billingNo,
+  });
+}
+
+// Generate HTML email body from template
+export function generateEmailHtmlFromTemplate(
+  template: EmailTemplateContent | null,
+  data: EmailPlaceholderData
+): string {
+  if (template) {
+    const greeting = replacePlaceholders(template.greeting, data);
+    const body = replacePlaceholders(template.body, data);
+    const closing = replacePlaceholders(template.closing, data);
+
+    // Convert newlines to HTML breaks
+    const formatHtml = (text: string) => text.replace(/\n/g, '<br>');
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .greeting { color: #1a365d; font-weight: bold; }
+    .body { margin: 20px 0; }
+    .signature { margin-top: 30px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <p class="greeting">${formatHtml(greeting)}</p>
+    <div class="body">${formatHtml(body)}</div>
+    <div class="signature">${formatHtml(closing)}</div>
+  </div>
+</body>
+</html>
+    `;
+  }
+  // Fallback to legacy format
+  return generateEmailHtml({
+    clientName: data.customerName,
+    serviceType: 'Professional Services',
+    periodDescription: `${data.periodStart} to ${data.periodEnd}`,
+    billingNo: data.billingNo,
+  });
+}
+
+// Generate email subject (legacy - kept for backwards compatibility)
 export function generateEmailSubject(billingNo: string, clientName: string): string {
   return `Bill No. ${billingNo} | ${clientName}`;
 }
@@ -151,22 +298,26 @@ export function generateEmailHtml(data: EmailTemplateData): string {
 // Send billing email
 export async function sendBillingEmail(
   invoiceId: string,
-  toEmail: string,
+  toEmails: string | string[],  // Accept single email or array
   subject: string,
   body: string,
   htmlBody?: string,
   pdfAttachment?: Buffer,
-  pdfFilename?: string
+  pdfFilename?: string,
+  additionalAttachments?: EmailAttachment[]  // Additional files to attach
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   if (!transporter || !emailConfig) {
     return { success: false, error: 'Email service not configured' };
   }
 
-  // Log the email attempt
+  // Normalize to comma-separated string for nodemailer (supports multiple recipients)
+  const emailString = Array.isArray(toEmails) ? toEmails.join(', ') : toEmails;
+
+  // Log the email attempt (store all recipients)
   const emailLog = await prisma.emailLog.create({
     data: {
       invoiceId,
-      toEmail,
+      toEmail: emailString,
       subject,
       status: EmailStatus.QUEUED,
     },
@@ -178,7 +329,7 @@ export async function sendBillingEmail(
         name: emailConfig.fromName,
         address: emailConfig.fromEmail,
       },
-      to: toEmail,
+      to: emailString,  // Nodemailer supports comma-separated emails
       replyTo: emailConfig.replyTo || emailConfig.fromEmail,
       subject,
       text: body,
@@ -190,15 +341,35 @@ export async function sendBillingEmail(
       mailOptions.bcc = emailConfig.bccEmail;
     }
 
+    // Build attachments array
+    const attachments: Array<{
+      filename: string;
+      content: Buffer;
+      contentType: string;
+    }> = [];
+
     // Add PDF attachment if provided
     if (pdfAttachment && pdfFilename) {
-      mailOptions.attachments = [
-        {
-          filename: pdfFilename,
-          content: pdfAttachment,
-          contentType: 'application/pdf',
-        },
-      ];
+      attachments.push({
+        filename: pdfFilename,
+        content: pdfAttachment,
+        contentType: 'application/pdf',
+      });
+    }
+
+    // Add additional attachments (from invoice attachments)
+    if (additionalAttachments && additionalAttachments.length > 0) {
+      for (const att of additionalAttachments) {
+        attachments.push({
+          filename: att.filename,
+          content: att.content,
+          contentType: att.contentType,
+        });
+      }
+    }
+
+    if (attachments.length > 0) {
+      mailOptions.attachments = attachments;
     }
 
     const result = await transporter.sendMail(mailOptions);

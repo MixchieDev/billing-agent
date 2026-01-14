@@ -201,18 +201,25 @@ describe('getBillingEntity', () => {
 });
 
 describe('generateBillingNo', () => {
-  it('generates billing number with correct format', () => {
-    const currentYear = new Date().getFullYear();
-    expect(generateBillingNo('S', 1)).toBe(`S-${currentYear}-00001`);
-    expect(generateBillingNo('S', 123)).toBe(`S-${currentYear}-00123`);
-    expect(generateBillingNo('A', 99999)).toBe(`A-${currentYear}-99999`);
+  it('generates billing number with prefix and 10-digit padded sequence', () => {
+    expect(generateBillingNo('S', 1)).toBe('S0000000001');
+    expect(generateBillingNo('S', 123)).toBe('S0000000123');
+    expect(generateBillingNo('A', 99999)).toBe('A0000099999');
   });
 
-  it('pads sequence numbers correctly', () => {
-    const currentYear = new Date().getFullYear();
-    expect(generateBillingNo('INV', 5)).toBe(`INV-${currentYear}-00005`);
-    expect(generateBillingNo('INV', 50)).toBe(`INV-${currentYear}-00050`);
-    expect(generateBillingNo('INV', 500)).toBe(`INV-${currentYear}-00500`);
+  it('pads sequence numbers to 10 digits correctly', () => {
+    expect(generateBillingNo('INV', 5)).toBe('INV0000000005');
+    expect(generateBillingNo('INV', 50)).toBe('INV0000000050');
+    expect(generateBillingNo('INV', 500)).toBe('INV0000000500');
+  });
+
+  it('handles prefixes with special characters', () => {
+    expect(generateBillingNo('BILL NO.', 7)).toBe('BILL NO.0000000007');
+  });
+
+  it('handles large sequence numbers', () => {
+    expect(generateBillingNo('S', 1234567890)).toBe('S1234567890');
+    expect(generateBillingNo('S', 9999999999)).toBe('S9999999999');
   });
 });
 

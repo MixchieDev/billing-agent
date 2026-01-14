@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Header } from '@/components/dashboard/header';
 import { InvoiceTable, InvoiceRow } from '@/components/dashboard/invoice-table';
 import { MarkPaidModal, InvoiceForPayment } from '@/components/dashboard/mark-paid-modal';
+import { InvoiceEditModal } from '@/components/dashboard/invoice-edit-modal';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Loader2 } from 'lucide-react';
+import { RefreshCw, Loader2, Search, X } from 'lucide-react';
 
 interface InvoiceListPageProps {
   title: string;
@@ -19,6 +20,41 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<InvoiceForPayment | null>(null);
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
+
+  // Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [entityFilter, setEntityFilter] = useState<'ALL' | 'YOWI' | 'ABBA'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+
+  // Filter invoices based on search and filters
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter((inv) => {
+      // Search filter (client name or billing number)
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesName = inv.customerName.toLowerCase().includes(query);
+        const matchesBillingNo = inv.billingNo?.toLowerCase().includes(query);
+        if (!matchesName && !matchesBillingNo) return false;
+      }
+
+      // Entity filter
+      if (entityFilter !== 'ALL' && inv.billingEntity !== entityFilter) return false;
+
+      // Status filter (only when showing all statuses)
+      if (showAllStatuses && statusFilter !== 'ALL' && inv.status !== statusFilter) return false;
+
+      return true;
+    });
+  }, [invoices, searchQuery, entityFilter, statusFilter, showAllStatuses]);
+
+  const hasActiveFilters = searchQuery || entityFilter !== 'ALL' || (showAllStatuses && statusFilter !== 'ALL');
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setEntityFilter('ALL');
+    setStatusFilter('ALL');
+  };
 
   // Fetch invoices
   const fetchInvoices = useCallback(async () => {
@@ -42,11 +78,14 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
         id: inv.id,
         billingNo: inv.billingNo,
         customerName: inv.customerName,
+        customerEmail: inv.customerEmail,
+        customerEmails: inv.customerEmails,
         productType: inv.lineItems?.[0]?.description?.includes('Payroll') ? 'PAYROLL' : 'ACCOUNTING',
         serviceFee: Number(inv.serviceFee),
         vatAmount: Number(inv.vatAmount),
         netAmount: Number(inv.netAmount),
         dueDate: new Date(inv.dueDate),
+        createdAt: new Date(inv.createdAt),
         billingEntity: inv.company?.code || 'YOWI',
         billingModel: inv.billingModel,
         status: inv.status,
@@ -89,7 +128,10 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason }),
       });
-      if (!response.ok) throw new Error('Failed to reject invoice');
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.details || data.error || 'Failed to reject invoice');
+      }
       await fetchInvoices();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
@@ -116,7 +158,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
   };
 
   const handleEdit = (id: string) => {
-    alert('Edit functionality coming soon!');
+    setEditingInvoiceId(id);
   };
 
   const handleMarkPaid = (invoice: InvoiceRow) => {
@@ -155,20 +197,70 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
     <div className="flex flex-col">
       <Header title={title} subtitle={subtitle} />
 
-      <div className="flex-1 space-y-6 p-6">
-        {/* Actions bar */}
+      <div className="flex-1 space-y-4 p-6">
+        {/* Header row */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">
             {title}
             {loading && <Loader2 className="ml-2 inline h-4 w-4 animate-spin" />}
             <span className="ml-2 text-sm font-normal text-gray-500">
-              ({invoices.length} invoice{invoices.length !== 1 ? 's' : ''})
+              ({filteredInvoices.length}{hasActiveFilters ? ` of ${invoices.length}` : ''} invoice{filteredInvoices.length !== 1 ? 's' : ''})
             </span>
           </h2>
           <Button variant="outline" onClick={fetchInvoices} disabled={loading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
+        </div>
+
+        {/* Filter bar */}
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-gray-50 p-3">
+          {/* Search input */}
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by client or invoice no..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Entity filter */}
+          <select
+            value={entityFilter}
+            onChange={(e) => setEntityFilter(e.target.value as 'ALL' | 'YOWI' | 'ABBA')}
+            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="ALL">All Entities</option>
+            <option value="YOWI">YOWI</option>
+            <option value="ABBA">ABBA</option>
+          </select>
+
+          {/* Status filter (only when showing all statuses) */}
+          {showAllStatuses && (
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="APPROVED">Approved</option>
+              <option value="SENT">Sent</option>
+              <option value="PAID">Paid</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
+          )}
+
+          {/* Clear filters button */}
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="text-gray-500">
+              <X className="mr-1 h-4 w-4" />
+              Clear
+            </Button>
+          )}
         </div>
 
         {/* Error message */}
@@ -180,7 +272,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
 
         {/* Invoice Table */}
         <InvoiceTable
-          invoices={invoices}
+          invoices={filteredInvoices}
           onApprove={handleApprove}
           onReject={handleReject}
           onEdit={handleEdit}
@@ -196,6 +288,16 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
             No {status?.toLowerCase() || ''} invoices found.
           </div>
         )}
+
+        {/* No results from filter */}
+        {!loading && invoices.length > 0 && filteredInvoices.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            No invoices match your filters.{' '}
+            <button onClick={clearFilters} className="text-blue-600 hover:underline">
+              Clear filters
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Mark Paid Modal */}
@@ -204,6 +306,14 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
         isOpen={!!selectedInvoiceForPayment}
         onClose={() => setSelectedInvoiceForPayment(null)}
         onSave={handleSavePayment}
+      />
+
+      {/* Invoice Edit Modal */}
+      <InvoiceEditModal
+        invoiceId={editingInvoiceId}
+        isOpen={!!editingInvoiceId}
+        onClose={() => setEditingInvoiceId(null)}
+        onSave={fetchInvoices}
       />
     </div>
   );

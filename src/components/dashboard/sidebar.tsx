@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
@@ -13,11 +14,13 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  Building2,
   Calendar,
   DollarSign,
   ChevronLeft,
   ChevronRight,
+  Landmark,
+  Handshake,
+  FilePlus,
 } from 'lucide-react';
 
 const navigation = [
@@ -28,8 +31,10 @@ const navigation = [
   { name: 'All Invoices', href: '/dashboard/invoices', icon: FileText },
   { name: 'Paid Invoices', href: '/dashboard/paid', icon: DollarSign },
   { name: 'Contracts', href: '/dashboard/contracts', icon: Users },
-  { name: 'Companies', href: '/dashboard/companies', icon: Building2 },
   { name: 'Scheduled Billings', href: '/dashboard/scheduled', icon: Calendar },
+  { name: 'Invoice Generator', href: '/dashboard/generate-invoice', icon: FilePlus },
+  { name: 'RCBC', href: '/dashboard/rcbc', icon: Landmark },
+  { name: 'Partners', href: '/dashboard/partners', icon: Handshake },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
@@ -98,6 +103,7 @@ export function Sidebar() {
       {/* User section */}
       <div className="border-t border-gray-800 p-2">
         <button
+          onClick={() => signOut({ callbackUrl: '/login' })}
           className={cn(
             'flex w-full items-center rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white transition-colors',
             collapsed ? 'justify-center' : 'gap-3'

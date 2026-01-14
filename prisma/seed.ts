@@ -46,6 +46,40 @@ async function main() {
   });
   console.log('Created ABBA company:', abba.id);
 
+  // Create YOWI invoice template
+  await prisma.invoiceTemplate.upsert({
+    where: { companyId: yowi.id },
+    update: {},
+    create: {
+      companyId: yowi.id,
+      primaryColor: '#2563eb',    // Blue
+      secondaryColor: '#1e40af',
+      footerBgColor: '#dbeafe',
+      logoPath: '/assets/yowi-logo.png',
+      invoiceTitle: 'Invoice',
+      footerText: 'Powered by: YAHSHUA',
+      showDisclaimer: true,
+    },
+  });
+  console.log('Created YOWI invoice template');
+
+  // Create ABBA invoice template
+  await prisma.invoiceTemplate.upsert({
+    where: { companyId: abba.id },
+    update: {},
+    create: {
+      companyId: abba.id,
+      primaryColor: '#059669',    // Green
+      secondaryColor: '#047857',
+      footerBgColor: '#d1fae5',
+      logoPath: '/assets/abba-logo.png',
+      invoiceTitle: 'Invoice',
+      footerText: 'Powered by: THE ABBA INITIATIVE',
+      showDisclaimer: true,
+    },
+  });
+  console.log('Created ABBA invoice template');
+
   // Create YOWI signatories
   await prisma.signatory.upsert({
     where: { id: 'yowi-prepared' },
@@ -116,13 +150,18 @@ async function main() {
 
   const rcbcPartner = await prisma.partner.upsert({
     where: { code: 'RCBC' },
-    update: {},
+    update: {
+      email: 'billing@rcbc.com', // Update this with actual RCBC email
+      attention: 'Ms. Lisa F. Cabance',
+      address: '12/F Yuchengco Tower 1 RCBC Plaza 6819 Ayala Avenue, Makati City 0727',
+    },
     create: {
       code: 'RCBC',
       name: 'RCBC',
       invoiceTo: 'RIZAL COMMERCIAL BANKING CORPORATION',
       attention: 'Ms. Lisa F. Cabance',
       address: '12/F Yuchengco Tower 1 RCBC Plaza 6819 Ayala Avenue, Makati City 0727',
+      email: 'billing@rcbc.com', // Update this with actual RCBC email
       billingModel: 'RCBC_CONSOLIDATED',
       companyId: yowi.id,
     },
@@ -180,6 +219,33 @@ async function main() {
     },
   });
   console.log('Created scheduled job record');
+
+  // Create default email template
+  await prisma.emailTemplate.upsert({
+    where: { name: 'Default Template' },
+    update: {},
+    create: {
+      name: 'Default Template',
+      subject: 'Billing Statement - {{billingNo}}',
+      greeting: 'A blessed day, Beloved Client!',
+      body: `Please find attached the billing statement for {{customerName}}.
+
+Invoice Number: {{billingNo}}
+Billing Period: {{periodStart}} to {{periodEnd}}
+Total Amount Due: {{totalAmount}}
+Due Date: {{dueDate}}
+
+Kindly confirm receipt of this billing by replying to this email.
+
+For your 2307, you may send the proof of payment to this same email.`,
+      closing: `Thank you and God bless!
+
+Best regards,
+{{companyName}} Billing Team`,
+      isDefault: true,
+    },
+  });
+  console.log('Created default email template');
 
   console.log('Database seeding completed!');
 }

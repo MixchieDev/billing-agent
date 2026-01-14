@@ -14,7 +14,6 @@ const DEFAULTS: Record<string, any> = {
   'soa.reviewedBy': 'RUTH MICHELLE C. BAYRON',
 
   // Scheduler Settings
-  'scheduler.enabled': false,
   'scheduler.cronExpression': '0 8 * * *',
   'scheduler.daysBeforeDue': 15,
 
@@ -23,9 +22,16 @@ const DEFAULTS: Record<string, any> = {
   'email.bccAddress': '',
   'email.replyTo': '',
 
-  // General Settings
-  'general.vatRate': 0.12,
-  'general.withholdingRate': 0.02,
+  // Tax Settings
+  'tax.vatRate': 0.12,
+  'tax.withholdingPresets': [
+    { rate: 0.01, code: 'WC100', label: '1% - Services' },
+    { rate: 0.02, code: 'WC160', label: '2% - Professional Services' },
+    { rate: 0.05, code: 'WC058', label: '5% - Rentals' },
+    { rate: 0.10, code: 'WC010', label: '10% - Professional Fees' },
+  ],
+  'tax.defaultWithholdingRate': 0.02,
+  'tax.defaultWithholdingCode': 'WC160',
 };
 
 // Cache for settings (refreshed every 5 minutes)
@@ -98,6 +104,7 @@ export function clearSettingsCache(): void {
 
 /**
  * Get SOA/PDF template settings for a company
+ * Now fetches from Company model (bank details) and Signatory model (signatories)
  */
 export async function getSOASettings(companyCode: 'YOWI' | 'ABBA'): Promise<{
   bankName: string;
@@ -107,23 +114,62 @@ export async function getSOASettings(companyCode: 'YOWI' | 'ABBA'): Promise<{
   preparedBy: string;
   reviewedBy: string;
 }> {
-  const prefix = companyCode.toLowerCase();
-  const settings = await getSettings([
-    `soa.${prefix}.bankName`,
-    `soa.${prefix}.bankAccountName`,
-    `soa.${prefix}.bankAccountNo`,
-    'soa.footer',
-    'soa.preparedBy',
-    'soa.reviewedBy',
-  ]);
+  try {
+    // Fetch company with signatories
+    const company = await prisma.company.findUnique({
+      where: { code: companyCode },
+      include: {
+        signatories: {
+          where: { isDefault: true },
+        },
+      },
+    });
 
+    if (!company) {
+      // Fallback to defaults if company not found
+      return getSOASettingsDefaults(companyCode);
+    }
+
+    // Get signatories by role
+    const preparedBySignatory = company.signatories.find(s => s.role === 'prepared_by');
+    const reviewedBySignatory = company.signatories.find(s => s.role === 'reviewed_by');
+
+    // Get footer from Settings (shared setting)
+    const footerSetting = await getSetting('soa.footer');
+
+    return {
+      bankName: company.bankName || 'BDO',
+      bankAccountName: company.bankAccountName || company.name,
+      bankAccountNo: company.bankAccountNo || '',
+      footer: footerSetting || 'Thank you for your business. Please include the invoice number in your payment reference.',
+      preparedBy: preparedBySignatory?.name || 'VANESSA L. DONOSO',
+      reviewedBy: reviewedBySignatory?.name || 'RUTH MICHELLE C. BAYRON',
+    };
+  } catch (error) {
+    console.error('Error fetching SOA settings:', error);
+    return getSOASettingsDefaults(companyCode);
+  }
+}
+
+/**
+ * Get default SOA settings (fallback)
+ */
+function getSOASettingsDefaults(companyCode: 'YOWI' | 'ABBA'): {
+  bankName: string;
+  bankAccountName: string;
+  bankAccountNo: string;
+  footer: string;
+  preparedBy: string;
+  reviewedBy: string;
+} {
+  const isYowi = companyCode === 'YOWI';
   return {
-    bankName: settings[`soa.${prefix}.bankName`],
-    bankAccountName: settings[`soa.${prefix}.bankAccountName`],
-    bankAccountNo: settings[`soa.${prefix}.bankAccountNo`],
-    footer: settings['soa.footer'],
-    preparedBy: settings['soa.preparedBy'],
-    reviewedBy: settings['soa.reviewedBy'],
+    bankName: 'BDO',
+    bankAccountName: isYowi ? 'YAHSHUA OUTSOURCING WORLDWIDE INC.' : 'THE ABBA INITIATIVE OPC',
+    bankAccountNo: '',
+    footer: 'Thank you for your business. Please include the invoice number in your payment reference.',
+    preparedBy: 'VANESSA L. DONOSO',
+    reviewedBy: 'RUTH MICHELLE C. BAYRON',
   };
 }
 
@@ -131,18 +177,15 @@ export async function getSOASettings(companyCode: 'YOWI' | 'ABBA'): Promise<{
  * Get scheduler settings
  */
 export async function getSchedulerSettings(): Promise<{
-  enabled: boolean;
   cronExpression: string;
   daysBeforeDue: number;
 }> {
   const settings = await getSettings([
-    'scheduler.enabled',
     'scheduler.cronExpression',
     'scheduler.daysBeforeDue',
   ]);
 
   return {
-    enabled: settings['scheduler.enabled'],
     cronExpression: settings['scheduler.cronExpression'],
     daysBeforeDue: settings['scheduler.daysBeforeDue'],
   };
@@ -167,4 +210,139 @@ export async function getEmailSettings(): Promise<{
     bccAddress: settings['email.bccAddress'],
     replyTo: settings['email.replyTo'],
   };
+}
+
+// Invoice template type (matches TemplateConfig in pdf-generator.ts)
+export interface InvoiceTemplateConfig {
+  primaryColor: string;
+  secondaryColor: string;
+  footerBgColor: string;
+  logoPath?: string;
+  invoiceTitle: string;
+  footerText: string;
+  showDisclaimer: boolean;
+  notes?: string;
+}
+
+// Cache for invoice templates (per-company cache with individual timestamps)
+let templateCache: Record<string, { template: InvoiceTemplateConfig; timestamp: number }> = {};
+
+/**
+ * Get invoice template for a company
+ */
+export async function getInvoiceTemplate(companyCode: 'YOWI' | 'ABBA'): Promise<InvoiceTemplateConfig> {
+  const now = Date.now();
+
+  // Check cache (per-company timestamp)
+  const cached = templateCache[companyCode];
+  if (cached && now - cached.timestamp < CACHE_TTL) {
+    console.log('[Template] Using cached template for:', companyCode);
+    return cached.template;
+  }
+
+  try {
+    const company = await prisma.company.findUnique({
+      where: { code: companyCode },
+      include: { template: true },
+    });
+
+    if (company?.template) {
+      console.log('[Template] Loaded from database for:', companyCode, company.template.id);
+      const template: InvoiceTemplateConfig = {
+        primaryColor: company.template.primaryColor,
+        secondaryColor: company.template.secondaryColor,
+        footerBgColor: company.template.footerBgColor,
+        logoPath: company.template.logoPath || undefined,
+        invoiceTitle: company.template.invoiceTitle,
+        footerText: company.template.footerText,
+        showDisclaimer: company.template.showDisclaimer,
+        notes: company.template.notes || undefined,
+      };
+
+      // Update cache with per-company timestamp
+      templateCache[companyCode] = { template, timestamp: now };
+
+      return template;
+    }
+
+    console.log('[Template] No template found in DB, using defaults for:', companyCode);
+    // Return defaults based on company
+    const defaultTemplate: InvoiceTemplateConfig = companyCode === 'YOWI'
+      ? {
+          primaryColor: '#2563eb',
+          secondaryColor: '#1e40af',
+          footerBgColor: '#dbeafe',
+          logoPath: '/assets/yowi-logo.png',
+          invoiceTitle: 'Invoice',
+          footerText: 'Powered by: YAHSHUA',
+          showDisclaimer: true,
+        }
+      : {
+          primaryColor: '#059669',
+          secondaryColor: '#047857',
+          footerBgColor: '#d1fae5',
+          logoPath: '/assets/abba-logo.png',
+          invoiceTitle: 'Invoice',
+          footerText: 'Powered by: THE ABBA INITIATIVE',
+          showDisclaimer: true,
+        };
+
+    return defaultTemplate;
+  } catch (error) {
+    console.error('Error fetching invoice template:', error);
+    // Return YOWI defaults on error
+    return {
+      primaryColor: '#2563eb',
+      secondaryColor: '#1e40af',
+      footerBgColor: '#dbeafe',
+      invoiceTitle: 'Invoice',
+      footerText: 'Powered by: YAHSHUA',
+      showDisclaimer: true,
+    };
+  }
+}
+
+/**
+ * Clear template cache (call after updating templates)
+ */
+export function clearTemplateCache(): void {
+  templateCache = {};
+  console.log('[Template] Cache cleared');
+}
+
+// ==================== TAX SETTINGS ====================
+
+export interface WithholdingPreset {
+  rate: number;
+  code: string;
+  label: string;
+}
+
+/**
+ * Get VAT rate
+ */
+export async function getVatRate(): Promise<number> {
+  return await getSetting('tax.vatRate') ?? 0.12;
+}
+
+/**
+ * Get withholding tax presets
+ */
+export async function getWithholdingPresets(): Promise<WithholdingPreset[]> {
+  const presets = await getSetting('tax.withholdingPresets');
+  return presets || DEFAULTS['tax.withholdingPresets'];
+}
+
+/**
+ * Get default withholding rate
+ */
+export async function getDefaultWithholdingRate(): Promise<number> {
+  return await getSetting('tax.defaultWithholdingRate') ?? 0.02;
+}
+
+/**
+ * Get default withholding code
+ */
+export async function getDefaultWithholdingCode(): Promise<string> {
+  return await getSetting('tax.defaultWithholdingCode') ?? 'WC160';
 }

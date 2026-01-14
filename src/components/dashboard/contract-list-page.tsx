@@ -3,16 +3,38 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Header } from '@/components/dashboard/header';
 import { ContractTable, ContractRow } from '@/components/dashboard/contract-table';
-import { ContractSettingsModal, ContractForSettings } from '@/components/dashboard/contract-settings-modal';
+import { ContractFormModal } from '@/components/dashboard/contract-form-modal';
+import { CSVImportModal } from '@/components/dashboard/csv-import-modal';
+import { DeleteConfirmationModal } from '@/components/dashboard/delete-confirmation-modal';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Loader2, CloudDownload } from 'lucide-react';
+import { RefreshCw, Loader2, Upload, Plus } from 'lucide-react';
+
+interface Partner {
+  id: string;
+  code: string;
+  name: string;
+  billingModel: string;
+}
+
+interface Company {
+  id: string;
+  code: string;
+  name: string;
+}
 
 export function ContractListPage() {
   const [contracts, setContracts] = useState<ContractRow[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedContract, setSelectedContract] = useState<ContractForSettings | null>(null);
+
+  // Modal states
+  const [showFormModal, setShowFormModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedContract, setSelectedContract] = useState<any>(null);
+  const [contractToDelete, setContractToDelete] = useState<ContractRow | null>(null);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -37,6 +59,7 @@ export function ContractListPage() {
 
       const transformedContracts: ContractRow[] = data.map((contract: any) => ({
         id: contract.id,
+        customerId: contract.customerId,
         companyName: contract.companyName,
         productType: contract.productType,
         monthlyFee: Number(contract.monthlyFee),
@@ -48,6 +71,7 @@ export function ContractListPage() {
         paymentPlan: contract.paymentPlan,
         autoSendEnabled: contract.autoSendEnabled ?? true,
         contractEndDate: contract.contractEndDate ? new Date(contract.contractEndDate) : null,
+        partner: contract.partner,
       }));
 
       setContracts(transformedContracts);
@@ -59,60 +83,70 @@ export function ContractListPage() {
     }
   }, [statusFilter, billingEntityFilter, productTypeFilter]);
 
+  const fetchPartnersAndCompanies = async () => {
+    try {
+      const [partnersRes, companiesRes] = await Promise.all([
+        fetch('/api/partners'),
+        fetch('/api/companies'),
+      ]);
+
+      if (partnersRes.ok) {
+        const partnersData = await partnersRes.json();
+        setPartners(partnersData);
+      }
+
+      if (companiesRes.ok) {
+        const companiesData = await companiesRes.json();
+        setCompanies(companiesData);
+      }
+    } catch (err) {
+      console.error('Error fetching partners/companies:', err);
+    }
+  };
+
   useEffect(() => {
     fetchContracts();
+    fetchPartnersAndCompanies();
   }, [fetchContracts]);
 
-  const handleSync = async () => {
-    if (!confirm('Sync contracts from Google Sheets? This will update existing contracts and add new ones.')) {
-      return;
-    }
+  const handleNewContract = () => {
+    setSelectedContract(null);
+    setShowFormModal(true);
+  };
 
+  const handleEditContract = async (contract: ContractRow) => {
+    // Fetch full contract details
     try {
-      setSyncing(true);
-      const response = await fetch('/api/sync?type=contracts', {
-        method: 'POST',
-      });
-
-      if (!response.ok) throw new Error('Sync failed');
-
-      const result = await response.json();
-      const contractsResult = result.data?.contracts || result.contracts || {};
-      alert(`Sync complete!\nCreated: ${contractsResult.created || 0}\nUpdated: ${contractsResult.updated || 0}\nSkipped: ${contractsResult.skipped || 0}`);
-      await fetchContracts();
-    } catch (err: any) {
-      alert(`Sync error: ${err.message}`);
-    } finally {
-      setSyncing(false);
+      const response = await fetch(`/api/contracts/${contract.id}`);
+      if (response.ok) {
+        const fullContract = await response.json();
+        setSelectedContract(fullContract);
+        setShowFormModal(true);
+      }
+    } catch (err) {
+      console.error('Error fetching contract details:', err);
     }
   };
 
-  const handleContractClick = (contract: ContractRow) => {
-    setSelectedContract({
-      id: contract.id,
-      companyName: contract.companyName,
-      autoSendEnabled: contract.autoSendEnabled,
-      contractEndDate: contract.contractEndDate,
-    });
+  const handleDeleteContract = (contract: ContractRow) => {
+    setContractToDelete(contract);
+    setShowDeleteModal(true);
   };
 
-  const handleSaveSettings = async (
-    contractId: string,
-    data: { autoSendEnabled: boolean; contractEndDate: string | null }
-  ) => {
-    const response = await fetch(`/api/contracts/${contractId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+  const confirmDelete = async () => {
+    if (!contractToDelete) return;
+
+    const response = await fetch(`/api/contracts/${contractToDelete.id}`, {
+      method: 'DELETE',
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to update contract');
+      const data = await response.json();
+      throw new Error(data.error || 'Failed to delete contract');
     }
 
-    // Refresh the list after saving
     await fetchContracts();
+    setContractToDelete(null);
   };
 
   const selectClassName = "h-9 rounded-md border border-gray-300 bg-white px-3 py-1 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
@@ -175,13 +209,14 @@ export function ContractListPage() {
               Refresh
             </Button>
 
-            <Button onClick={handleSync} disabled={syncing}>
-              {syncing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <CloudDownload className="mr-2 h-4 w-4" />
-              )}
-              {syncing ? 'Syncing...' : 'Sync from Sheets'}
+            <Button variant="outline" onClick={() => setShowImportModal(true)}>
+              <Upload className="mr-2 h-4 w-4" />
+              Import CSV
+            </Button>
+
+            <Button onClick={handleNewContract}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Contract
             </Button>
           </div>
         </div>
@@ -194,22 +229,70 @@ export function ContractListPage() {
         )}
 
         {/* Contract Table */}
-        <ContractTable contracts={contracts} onContractClick={handleContractClick} />
+        <ContractTable
+          contracts={contracts}
+          onEdit={handleEditContract}
+          onDelete={handleDeleteContract}
+        />
 
         {/* Empty state */}
         {!loading && contracts.length === 0 && !error && (
           <div className="text-center py-12 text-gray-500">
-            No contracts found. Try adjusting your filters or sync from Google Sheets.
+            <p>No contracts found.</p>
+            <p className="mt-2">
+              <button
+                onClick={handleNewContract}
+                className="text-blue-600 hover:underline"
+              >
+                Create your first contract
+              </button>
+              {' or '}
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="text-blue-600 hover:underline"
+              >
+                import from CSV
+              </button>
+            </p>
           </div>
         )}
       </div>
 
-      {/* Contract Settings Modal */}
-      <ContractSettingsModal
+      {/* Contract Form Modal */}
+      <ContractFormModal
+        isOpen={showFormModal}
+        onClose={() => {
+          setShowFormModal(false);
+          setSelectedContract(null);
+        }}
+        onSave={() => {
+          fetchContracts();
+        }}
         contract={selectedContract}
-        isOpen={!!selectedContract}
-        onClose={() => setSelectedContract(null)}
-        onSave={handleSaveSettings}
+        partners={partners}
+        companies={companies}
+      />
+
+      {/* CSV Import Modal */}
+      <CSVImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImportComplete={fetchContracts}
+        importType="contracts"
+        title="Import Contracts"
+      />
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setContractToDelete(null);
+        }}
+        onConfirm={confirmDelete}
+        title="Delete Contract"
+        message="Are you sure you want to delete this contract? This action cannot be undone."
+        itemName={contractToDelete?.companyName}
       />
     </div>
   );

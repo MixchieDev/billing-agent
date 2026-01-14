@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Table,
   TableBody,
@@ -22,17 +22,27 @@ import {
   Download,
   Loader2,
   DollarSign,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
+import { SendInvoiceModal } from './send-invoice-modal';
+
+type SortField = 'billingNo' | 'customerName' | 'serviceFee' | 'vatAmount' | 'netAmount' | 'dueDate' | 'createdAt' | 'billingEntity' | 'status';
+type SortDirection = 'asc' | 'desc' | null;
 
 export interface InvoiceRow {
   id: string;
   billingNo: string | null;
   customerName: string;
+  customerEmail?: string | null;
+  customerEmails?: string | null;
   productType: string;
   serviceFee: number;
   vatAmount: number;
   netAmount: number;
   dueDate: Date;
+  createdAt: Date;
   billingEntity: 'YOWI' | 'ABBA';
   billingModel: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SENT' | 'PAID';
@@ -62,37 +72,119 @@ export function InvoiceTable({
   onMarkPaid,
   showBulkActions = true,
 }: InvoiceTableProps) {
-  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [sendingInvoice, setSendingInvoice] = useState<InvoiceRow | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+
+  // Handle column header click for sorting
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      // Cycle through: asc -> desc -> null
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else if (sortDirection === 'desc') {
+        setSortDirection(null);
+        setSortField(null);
+      } else {
+        setSortDirection('asc');
+      }
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Sort invoices
+  const sortedInvoices = useMemo(() => {
+    if (!sortField || !sortDirection) return invoices;
+
+    return [...invoices].sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      switch (sortField) {
+        case 'billingNo':
+          aVal = a.billingNo || '';
+          bVal = b.billingNo || '';
+          break;
+        case 'customerName':
+          aVal = a.customerName.toLowerCase();
+          bVal = b.customerName.toLowerCase();
+          break;
+        case 'serviceFee':
+          aVal = a.serviceFee;
+          bVal = b.serviceFee;
+          break;
+        case 'vatAmount':
+          aVal = a.vatAmount;
+          bVal = b.vatAmount;
+          break;
+        case 'netAmount':
+          aVal = a.netAmount;
+          bVal = b.netAmount;
+          break;
+        case 'dueDate':
+          aVal = new Date(a.dueDate).getTime();
+          bVal = new Date(b.dueDate).getTime();
+          break;
+        case 'createdAt':
+          aVal = new Date(a.createdAt).getTime();
+          bVal = new Date(b.createdAt).getTime();
+          break;
+        case 'billingEntity':
+          aVal = a.billingEntity;
+          bVal = b.billingEntity;
+          break;
+        case 'status':
+          aVal = a.status;
+          bVal = b.status;
+          break;
+        default:
+          return 0;
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [invoices, sortField, sortDirection]);
+
+  // Sortable header component
+  const SortableHeader = ({ field, children, className = '' }: { field: SortField; children: React.ReactNode; className?: string }) => (
+    <TableHead className={className}>
+      <button
+        onClick={() => handleSort(field)}
+        className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+      >
+        {children}
+        {sortField === field ? (
+          sortDirection === 'asc' ? (
+            <ArrowUp className="h-3 w-3" />
+          ) : (
+            <ArrowDown className="h-3 w-3" />
+          )
+        ) : (
+          <ArrowUpDown className="h-3 w-3 opacity-30" />
+        )}
+      </button>
+    </TableHead>
+  );
 
   const handleDownloadPdf = (id: string) => {
     window.open(`/api/invoices/${id}/pdf`, '_blank');
   };
 
-  const handleSend = async (id: string) => {
-    if (!confirm('Send this invoice to the client via email?')) return;
-
-    setSendingId(id);
-    try {
-      const response = await fetch(`/api/invoices/${id}/send`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to send invoice');
-      }
-
-      const data = await response.json();
-      alert(`Invoice sent successfully to ${data.sentTo}`);
-
-      if (onSend) onSend(id);
-    } catch (error: any) {
-      alert(`Error: ${error.message}`);
-    } finally {
-      setSendingId(null);
-    }
+  const handleOpenSendModal = (invoice: InvoiceRow) => {
+    setSendingInvoice(invoice);
   };
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const handleSendComplete = () => {
+    if (sendingInvoice && onSend) {
+      onSend(sendingInvoice.id);
+    }
+    setSendingInvoice(null);
+  };
 
   const toggleSelect = (id: string) => {
     const newSelected = new Set(selectedIds);
@@ -105,10 +197,10 @@ export function InvoiceTable({
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === invoices.length) {
+    if (selectedIds.size === sortedInvoices.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(invoices.map((i) => i.id)));
+      setSelectedIds(new Set(sortedInvoices.map((i) => i.id)));
     }
   };
 
@@ -166,36 +258,38 @@ export function InvoiceTable({
               <TableHead className="w-12">
                 <input
                   type="checkbox"
-                  checked={selectedIds.size === invoices.length && invoices.length > 0}
+                  checked={selectedIds.size === sortedInvoices.length && sortedInvoices.length > 0}
                   onChange={toggleSelectAll}
                   className="h-4 w-4 rounded border-gray-300"
                 />
               </TableHead>
             )}
-            <TableHead>Client</TableHead>
+            <SortableHeader field="billingNo">Invoice No.</SortableHeader>
+            <SortableHeader field="customerName">Client</SortableHeader>
             <TableHead>Service</TableHead>
-            <TableHead className="text-right">Service Fee</TableHead>
-            <TableHead className="text-right">VAT</TableHead>
-            <TableHead className="text-right">Net Amount</TableHead>
-            <TableHead>Due Date</TableHead>
+            <SortableHeader field="serviceFee" className="text-right">Service Fee</SortableHeader>
+            <SortableHeader field="vatAmount" className="text-right">VAT</SortableHeader>
+            <SortableHeader field="netAmount" className="text-right">Net Amount</SortableHeader>
+            <SortableHeader field="createdAt">Created</SortableHeader>
+            <SortableHeader field="dueDate">Due Date</SortableHeader>
             <TableHead>Days Until Due</TableHead>
-            <TableHead>Entity</TableHead>
-            <TableHead>Status</TableHead>
+            <SortableHeader field="billingEntity">Entity</SortableHeader>
+            <SortableHeader field="status">Status</SortableHeader>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {invoices.length === 0 ? (
+          {sortedInvoices.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={showBulkActions ? 11 : 10}
+                colSpan={showBulkActions ? 13 : 12}
                 className="h-24 text-center text-gray-500"
               >
                 No invoices found
               </TableCell>
             </TableRow>
           ) : (
-            invoices.map((invoice) => (
+            sortedInvoices.map((invoice) => (
               <TableRow key={invoice.id}>
                 {showBulkActions && (
                   <TableCell>
@@ -207,6 +301,9 @@ export function InvoiceTable({
                     />
                   </TableCell>
                 )}
+                <TableCell className="font-mono text-xs text-gray-600">
+                  {invoice.billingNo || '-'}
+                </TableCell>
                 <TableCell className="font-medium">
                   {invoice.customerName}
                 </TableCell>
@@ -222,6 +319,7 @@ export function InvoiceTable({
                 <TableCell className="text-right font-medium">
                   {formatCurrency(invoice.netAmount)}
                 </TableCell>
+                <TableCell>{formatDateShort(invoice.createdAt)}</TableCell>
                 <TableCell>{formatDateShort(invoice.dueDate)}</TableCell>
                 <TableCell>{getDaysUntilBadge(invoice.dueDate)}</TableCell>
                 <TableCell>
@@ -283,29 +381,46 @@ export function InvoiceTable({
                         </Button>
                         <Button
                           size="sm"
-                          onClick={() => handleSend(invoice.id)}
-                          disabled={sendingId === invoice.id}
+                          onClick={() => handleOpenSendModal(invoice)}
                           title="Send Email"
                         >
-                          {sendingId === invoice.id ? (
-                            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Mail className="mr-1 h-4 w-4" />
-                          )}
-                          {sendingId === invoice.id ? 'Sending...' : 'Send'}
+                          <Mail className="mr-1 h-4 w-4" />
+                          Send
                         </Button>
                       </>
                     )}
-                    {invoice.status === 'SENT' && onMarkPaid && (
-                      <Button
-                        size="sm"
-                        onClick={() => onMarkPaid(invoice)}
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                        title="Mark as Paid"
-                      >
-                        <DollarSign className="mr-1 h-4 w-4" />
-                        Mark Paid
-                      </Button>
+                    {invoice.status === 'SENT' && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDownloadPdf(invoice.id)}
+                          title="Download PDF"
+                        >
+                          <Download className="mr-1 h-4 w-4" />
+                          PDF
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleOpenSendModal(invoice)}
+                          title="Resend Email"
+                        >
+                          <Mail className="mr-1 h-4 w-4" />
+                          Resend
+                        </Button>
+                        {onMarkPaid && (
+                          <Button
+                            size="sm"
+                            onClick={() => onMarkPaid(invoice)}
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                            title="Mark as Paid"
+                          >
+                            <DollarSign className="mr-1 h-4 w-4" />
+                            Mark Paid
+                          </Button>
+                        )}
+                      </>
                     )}
                   </div>
                 </TableCell>
@@ -314,6 +429,16 @@ export function InvoiceTable({
           )}
         </TableBody>
       </Table>
+
+      {/* Send Invoice Modal */}
+      {sendingInvoice && (
+        <SendInvoiceModal
+          isOpen={!!sendingInvoice}
+          onClose={() => setSendingInvoice(null)}
+          invoice={sendingInvoice}
+          onSent={handleSendComplete}
+        />
+      )}
     </div>
   );
 }

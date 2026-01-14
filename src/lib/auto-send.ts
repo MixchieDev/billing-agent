@@ -5,16 +5,19 @@
 
 import prisma from './prisma';
 import { InvoiceStatus } from '@/generated/prisma';
-import { getSOASettings } from './settings';
+import { getSOASettings, getInvoiceTemplate, clearTemplateCache } from './settings';
 import { generateInvoicePdfLib } from './pdf-generator';
 import {
   initEmailServiceFromEnv,
   sendBillingEmail,
-  generateEmailSubject,
-  generateEmailBody,
-  generateEmailHtml,
+  getEmailTemplateForPartner,
+  generateEmailSubjectFromTemplate,
+  generateEmailBodyFromTemplate,
+  generateEmailHtmlFromTemplate,
+  EmailPlaceholderData,
 } from './email-service';
 import { notifyInvoiceSent } from './notifications';
+import { validateEmails, formatCurrency } from './utils';
 
 export interface AutoSendResult {
   success: boolean;
@@ -31,12 +34,16 @@ export interface AutoSendResult {
  */
 export async function autoSendInvoice(invoiceId: string): Promise<AutoSendResult> {
   try {
-    // Fetch invoice with company and line items
+    // Fetch invoice with company and line items (including contract for client company name)
     const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
       include: {
         company: true,
-        lineItems: true,
+        lineItems: {
+          include: {
+            contract: true,
+          },
+        },
       },
     });
 
@@ -58,9 +65,9 @@ export async function autoSendInvoice(invoiceId: string): Promise<AutoSendResult
       };
     }
 
-    // Validate customer email exists
-    const clientEmail = invoice.customerEmail;
-    if (!clientEmail) {
+    // Validate customer email(s) exist - prioritize customerEmails, fallback to customerEmail
+    const clientEmailsString = invoice.customerEmails || invoice.customerEmail;
+    if (!clientEmailsString) {
       return {
         success: false,
         invoiceId,
@@ -69,36 +76,70 @@ export async function autoSendInvoice(invoiceId: string): Promise<AutoSendResult
       };
     }
 
+    // Validate emails
+    const { valid: validEmails, invalid: invalidEmails } = validateEmails(clientEmailsString);
+    if (validEmails.length === 0) {
+      return {
+        success: false,
+        invoiceId,
+        billingNo: invoice.billingNo || undefined,
+        error: `No valid email addresses. Invalid: ${invalidEmails.join(', ')}`,
+      };
+    }
+
     // Initialize email service
     initEmailServiceFromEnv();
 
-    // Get SOA settings
+    // Get SOA settings and invoice template
     const companyCode = invoice.company?.code === 'YOWI' ? 'YOWI' : 'ABBA';
-    const soaSettings = await getSOASettings(companyCode);
 
-    // Generate PDF
-    const pdfBytes = await generateInvoicePdfLib(invoice, soaSettings);
+    // Clear template cache to ensure we always use the latest template
+    clearTemplateCache();
+
+    const [soaSettings, template] = await Promise.all([
+      getSOASettings(companyCode),
+      getInvoiceTemplate(companyCode),
+    ]);
+
+    // Generate PDF with template
+    const pdfBytes = await generateInvoicePdfLib(invoice, soaSettings, template);
     const pdfBuffer = Buffer.from(pdfBytes);
 
-    // Generate email content
+    // Generate email content using templates
     const billingNo = invoice.billingNo || invoice.invoiceNo || invoice.id;
-    const subject = generateEmailSubject(billingNo, invoice.customerName);
-    const periodDescription = `the month of ${new Date(invoice.dueDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`;
 
-    const templateData = {
-      clientName: invoice.customerName,
-      serviceType: invoice.lineItems?.[0]?.description || 'Professional Services',
-      periodDescription,
-      billingNo,
+    // Fetch email template based on partner
+    const emailTemplate = await getEmailTemplateForPartner(invoice.partnerId);
+
+    // Format dates for placeholders
+    const formatDate = (date: Date | null) => {
+      if (!date) return 'N/A';
+      return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     };
 
-    const body = generateEmailBody(templateData);
-    const htmlBody = generateEmailHtml(templateData);
+    // Get the client company name from the first line item's contract
+    const clientCompanyName = invoice.lineItems?.[0]?.contract?.companyName || invoice.customerName;
 
-    // Send email
+    // Build placeholder data
+    const placeholderData: EmailPlaceholderData = {
+      customerName: invoice.customerName,
+      billingNo,
+      dueDate: formatDate(invoice.dueDate),
+      totalAmount: formatCurrency(Number(invoice.netAmount)),
+      periodStart: formatDate(invoice.periodStart),
+      periodEnd: formatDate(invoice.periodEnd),
+      companyName: invoice.company?.name || 'YAHSHUA-ABBA',
+      clientCompanyName,
+    };
+
+    const subject = generateEmailSubjectFromTemplate(emailTemplate, placeholderData);
+    const body = generateEmailBodyFromTemplate(emailTemplate, placeholderData);
+    const htmlBody = generateEmailHtmlFromTemplate(emailTemplate, placeholderData);
+
+    // Send email to all valid recipients
     const result = await sendBillingEmail(
       invoice.id,
-      clientEmail,
+      validEmails,
       subject,
       body,
       htmlBody,
@@ -132,7 +173,7 @@ export async function autoSendInvoice(invoiceId: string): Promise<AutoSendResult
         entityId: invoiceId,
         details: {
           invoiceNo: billingNo,
-          sentTo: clientEmail,
+          sentTo: validEmails.join(', '),
           messageId: result.messageId,
           automated: true,
         },
@@ -144,16 +185,16 @@ export async function autoSendInvoice(invoiceId: string): Promise<AutoSendResult
       id: invoice.id,
       billingNo: invoice.billingNo,
       customerName: invoice.customerName,
-      customerEmail: clientEmail,
+      customerEmail: validEmails[0],  // Use first email for notification
     });
 
-    console.log(`[Auto-Send] Successfully sent invoice ${billingNo} to ${clientEmail}`);
+    console.log(`[Auto-Send] Successfully sent invoice ${billingNo} to ${validEmails.join(', ')}`);
 
     return {
       success: true,
       invoiceId,
       billingNo,
-      sentTo: clientEmail,
+      sentTo: validEmails.join(', '),
       messageId: result.messageId,
     };
   } catch (error) {

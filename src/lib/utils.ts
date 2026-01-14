@@ -61,7 +61,9 @@ export function calculateBilling(
   amount: number,
   isVatInclusive: boolean = true,
   isVatClient: boolean = true,
-  hasWithholding: boolean = false
+  hasWithholding: boolean = false,
+  withholdingRate: number = 0.02,  // Configurable rate (default 2%)
+  vatRate: number = 0.12  // Configurable VAT rate (default 12%)
 ): BillingCalculation {
   let serviceFee: number;
   let vatAmount: number;
@@ -72,12 +74,12 @@ export function calculateBilling(
   if (isVatClient) {
     if (isVatInclusive) {
       // VAT-inclusive: amount already includes VAT
-      serviceFee = amount / 1.12;
-      vatAmount = serviceFee * 0.12;
+      serviceFee = amount / (1 + vatRate);
+      vatAmount = serviceFee * vatRate;
     } else {
       // VAT-exclusive: add VAT to amount
       serviceFee = amount;
-      vatAmount = serviceFee * 0.12;
+      vatAmount = serviceFee * vatRate;
     }
   } else {
     // Non-VAT client
@@ -88,7 +90,7 @@ export function calculateBilling(
   grossAmount = serviceFee + vatAmount;
 
   if (hasWithholding) {
-    withholdingTax = serviceFee * 0.02; // 2% EWT
+    withholdingTax = serviceFee * withholdingRate;
   } else {
     withholdingTax = 0;
   }
@@ -127,7 +129,46 @@ export function getPeriodDescription(
   }
 }
 
-// Generate billing number
+// Generate billing number (10-digit format)
 export function generateBillingNo(prefix: string, sequence: number): string {
-  return `${prefix}-${new Date().getFullYear()}-${sequence.toString().padStart(5, '0')}`;
+  return `${prefix}${sequence.toString().padStart(10, '0')}`;
+}
+
+// ==================== EMAIL UTILITIES ====================
+
+// Validate a single email address
+export function isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email.trim());
+}
+
+// Parse comma-separated emails into an array
+export function parseEmails(emailsString: string | null | undefined): string[] {
+  if (!emailsString) return [];
+  return emailsString
+    .split(',')
+    .map(e => e.trim())
+    .filter(e => e.length > 0);
+}
+
+// Join emails array back to comma-separated string
+export function joinEmails(emails: string[]): string {
+  return emails.map(e => e.trim()).filter(e => e.length > 0).join(', ');
+}
+
+// Validate all emails in a comma-separated string
+export function validateEmails(emailsString: string | null | undefined): { valid: string[]; invalid: string[] } {
+  const emails = parseEmails(emailsString);
+  const valid: string[] = [];
+  const invalid: string[] = [];
+
+  for (const email of emails) {
+    if (isValidEmail(email)) {
+      valid.push(email);
+    } else {
+      invalid.push(email);
+    }
+  }
+
+  return { valid, invalid };
 }

@@ -10,10 +10,11 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency, formatDateShort } from '@/lib/utils';
-import { Settings } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 
 export interface ContractRow {
   id: string;
+  customerId?: string;
   companyName: string;
   productType: 'ACCOUNTING' | 'PAYROLL' | 'COMPLIANCE' | 'HR';
   monthlyFee: number;
@@ -25,14 +26,17 @@ export interface ContractRow {
   paymentPlan: string | null;
   autoSendEnabled: boolean;
   contractEndDate: Date | null;
+  partner?: { code: string; name: string } | null;
 }
 
 interface ContractTableProps {
   contracts: ContractRow[];
   onContractClick?: (contract: ContractRow) => void;
+  onEdit?: (contract: ContractRow) => void;
+  onDelete?: (contract: ContractRow) => void;
 }
 
-export function ContractTable({ contracts, onContractClick }: ContractTableProps) {
+export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: ContractTableProps) {
   const getStatusBadge = (status: string) => {
     const variants: Record<string, 'success' | 'warning' | 'destructive' | 'secondary'> = {
       ACTIVE: 'success',
@@ -59,21 +63,19 @@ export function ContractTable({ contracts, onContractClick }: ContractTableProps
         <TableHeader>
           <TableRow>
             <TableHead>Company Name</TableHead>
+            <TableHead>Partner</TableHead>
             <TableHead>Product Type</TableHead>
             <TableHead className="text-right">Monthly Fee</TableHead>
-            <TableHead>Payment Plan</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Auto-Send</TableHead>
-            <TableHead>End Date</TableHead>
             <TableHead>Next Due Date</TableHead>
             <TableHead>Billing Entity</TableHead>
-            <TableHead></TableHead>
+            <TableHead className="text-center">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {contracts.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={10} className="h-24 text-center text-gray-500">
+              <TableCell colSpan={8} className="h-24 text-center text-gray-500">
                 No contracts found
               </TableCell>
             </TableRow>
@@ -81,24 +83,17 @@ export function ContractTable({ contracts, onContractClick }: ContractTableProps
             contracts.map((contract) => (
               <TableRow
                 key={contract.id}
-                className={onContractClick ? 'cursor-pointer hover:bg-gray-50' : ''}
-                onClick={() => onContractClick?.(contract)}
+                className="hover:bg-gray-50"
               >
                 <TableCell className="font-medium">{contract.companyName}</TableCell>
-                <TableCell>{getProductBadge(contract.productType)}</TableCell>
-                <TableCell className="text-right">{formatCurrency(contract.monthlyFee)}</TableCell>
-                <TableCell className="text-sm text-gray-600">
-                  {contract.paymentPlan || 'Monthly'}
-                </TableCell>
-                <TableCell>{getStatusBadge(contract.status)}</TableCell>
                 <TableCell>
-                  <Badge variant={contract.autoSendEnabled ? 'success' : 'secondary'}>
-                    {contract.autoSendEnabled ? 'On' : 'Off'}
+                  <Badge variant="outline">
+                    {contract.partner?.code || 'Direct'}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-sm text-gray-600">
-                  {contract.contractEndDate ? formatDateShort(contract.contractEndDate) : '-'}
-                </TableCell>
+                <TableCell>{getProductBadge(contract.productType)}</TableCell>
+                <TableCell className="text-right">{formatCurrency(contract.monthlyFee)}</TableCell>
+                <TableCell>{getStatusBadge(contract.status)}</TableCell>
                 <TableCell>
                   {contract.nextDueDate ? formatDateShort(contract.nextDueDate) : '-'}
                 </TableCell>
@@ -108,18 +103,32 @@ export function ContractTable({ contracts, onContractClick }: ContractTableProps
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  {onContractClick && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onContractClick(contract);
-                      }}
-                      className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                      title="Contract Settings"
-                    >
-                      <Settings className="h-4 w-4" />
-                    </button>
-                  )}
+                  <div className="flex items-center justify-center gap-1">
+                    {onEdit && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit(contract);
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="Edit Contract"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    )}
+                    {onDelete && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete(contract);
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Delete Contract"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ))
