@@ -796,7 +796,7 @@ export function InvoiceGenerator() {
                 <div className="rounded-lg border p-4 space-y-2">
                   {(() => {
                     const isVatClient = vatType === 'VAT';
-                    const serviceFee = isVatClient ? totalBillingAmount / 1.12 : totalBillingAmount;
+                    const serviceFee = totalBillingAmount; // Amount entered is net (VAT-exclusive)
                     const vatAmount = isVatClient ? serviceFee * 0.12 : 0;
                     const grossAmount = serviceFee + vatAmount;
                     const withholdingTax = hasWithholding ? serviceFee * selectedWithholdingRate : 0;
