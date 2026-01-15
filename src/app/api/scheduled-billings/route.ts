@@ -27,7 +27,12 @@ export async function GET(request: NextRequest) {
     const contractId = searchParams.get('contractId');
 
     // Get scheduler status (dynamic import to avoid node-cron in serverless)
-    let schedulerStatus = {
+    let schedulerStatus: {
+      running: boolean;
+      config: { cronExpression: string; enabled: boolean; daysBeforeDue: number; timezone: string };
+      lastRun: string | null;
+      nextRun: string | null;
+    } = {
       running: false,
       config: { cronExpression: '0 8 * * *', enabled: true, daysBeforeDue: 15, timezone: 'Asia/Manila' },
       lastRun: null,
