@@ -181,6 +181,31 @@ export default function DashboardPage() {
     }
   };
 
+  // Void invoice
+  const handleVoid = async (id: string) => {
+    const reason = prompt('Enter reason for voiding this invoice:');
+    if (!reason) return;
+
+    try {
+      const response = await fetch(`/api/invoices/${id}/void`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.details || data.error || 'Failed to void invoice');
+      }
+
+      // Refresh data
+      await fetchInvoices();
+      await fetchStats();
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    }
+  };
+
   const handleEdit = (id: string) => {
     console.log('Edit invoice:', id);
     alert('Edit functionality coming soon!');
@@ -260,6 +285,7 @@ export default function DashboardPage() {
           invoices={filteredInvoices}
           onApprove={handleApprove}
           onReject={handleReject}
+          onVoid={handleVoid}
           onEdit={handleEdit}
           onView={handleView}
           onBulkApprove={handleBulkApprove}

@@ -1,5 +1,5 @@
 import prisma from './prisma';
-import { ScheduleStatus, BillingFrequency, VatType, IntervalUnit } from '@/generated/prisma';
+import { ScheduleStatus, BillingFrequency, VatType, IntervalUnit, InvoiceStatus } from '@/generated/prisma';
 
 // ==================== TYPES ====================
 
@@ -517,7 +517,20 @@ export async function checkExistingInvoiceForPeriod(
         lte: periodEnd,
       },
     },
+    include: {
+      invoice: {
+        select: { status: true },
+      },
+    },
   });
+
+  // If run exists but invoice was voided or cancelled, allow regeneration
+  if (existingRun?.invoice) {
+    const invoiceStatus = existingRun.invoice.status;
+    if (invoiceStatus === InvoiceStatus.CANCELLED || invoiceStatus === InvoiceStatus.VOID) {
+      return false; // Allow new invoice to be generated
+    }
+  }
 
   return !!existingRun;
 }

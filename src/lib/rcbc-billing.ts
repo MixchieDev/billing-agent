@@ -125,7 +125,7 @@ export async function generateRcbcInvoice(monthStr: string, userId: string): Pro
         lte: new Date(summary.month.getFullYear(), summary.month.getMonth() + 1, 0),
       },
       status: {
-        notIn: [InvoiceStatus.CANCELLED, InvoiceStatus.REJECTED],
+        notIn: [InvoiceStatus.CANCELLED, InvoiceStatus.REJECTED, InvoiceStatus.VOID],
       },
     },
   });

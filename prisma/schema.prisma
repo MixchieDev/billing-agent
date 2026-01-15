@@ -29,6 +29,7 @@ model User {
   auditLogs     AuditLog[]
   approvals     Invoice[] @relation("ApprovedBy")
   rejections    Invoice[] @relation("RejectedBy")
+  voids         Invoice[] @relation("VoidedBy")
   notifications Notification[]
 
   // Scheduled billing relations
@@ -334,6 +335,9 @@ model Invoice {
   rejectedAt        DateTime?
   rejectionReason   String?
   rescheduleDate    DateTime?
+  voidedById        String?
+  voidedAt          DateTime?
+  voidReason        String?
 
   // Output files
   pdfPath           String?
@@ -365,6 +369,7 @@ model Invoice {
   partner           Partner?      @relation(fields: [partnerId], references: [id])
   approvedBy        User?         @relation("ApprovedBy", fields: [approvedById], references: [id])
   rejectedBy        User?         @relation("RejectedBy", fields: [rejectedById], references: [id])
+  voidedBy          User?         @relation("VoidedBy", fields: [voidedById], references: [id])
   lineItems              InvoiceLineItem[]
   emailLogs              EmailLog[]
   contracts              Contract[]              // For direct invoices
@@ -408,6 +413,7 @@ enum InvoiceStatus {
   SENT
   PAID
   CANCELLED
+  VOID
 }
 
 enum EmailStatus {
@@ -559,6 +565,7 @@ enum NotificationType {
   INVOICE_PENDING      // New invoice needs approval
   INVOICE_APPROVED     // Invoice was approved
   INVOICE_REJECTED     // Invoice was rejected
+  INVOICE_VOID         // Invoice was voided
   INVOICE_SENT         // Invoice was sent to client
   INVOICE_PAID         // Invoice was marked as paid
   INVOICE_OVERDUE      // Invoice is overdue

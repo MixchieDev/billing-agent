@@ -25,6 +25,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Ban,
 } from 'lucide-react';
 import { SendInvoiceModal } from './send-invoice-modal';
 
@@ -45,7 +46,7 @@ export interface InvoiceRow {
   createdAt: Date;
   billingEntity: 'YOWI' | 'ABBA';
   billingModel: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SENT' | 'PAID';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SENT' | 'PAID' | 'VOID';
   emailStatus?: string;
 }
 
@@ -53,6 +54,7 @@ interface InvoiceTableProps {
   invoices: InvoiceRow[];
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
+  onVoid?: (id: string) => void;
   onEdit: (id: string) => void;
   onView: (id: string) => void;
   onBulkApprove: (ids: string[]) => void;
@@ -65,6 +67,7 @@ export function InvoiceTable({
   invoices,
   onApprove,
   onReject,
+  onVoid,
   onEdit,
   onView,
   onBulkApprove,
@@ -211,6 +214,7 @@ export function InvoiceTable({
       REJECTED: 'destructive',
       SENT: 'default',
       PAID: 'success',
+      VOID: 'secondary',
     };
     return <Badge variant={variants[status] || 'secondary'}>{status}</Badge>;
   };
@@ -387,6 +391,18 @@ export function InvoiceTable({
                           <Mail className="mr-1 h-4 w-4" />
                           Send
                         </Button>
+                        {onVoid && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onVoid(invoice.id)}
+                            title="Void Invoice"
+                            className="text-gray-600 hover:text-gray-800 hover:bg-gray-100"
+                          >
+                            <Ban className="mr-1 h-4 w-4" />
+                            Void
+                          </Button>
+                        )}
                       </>
                     )}
                     {invoice.status === 'SENT' && (

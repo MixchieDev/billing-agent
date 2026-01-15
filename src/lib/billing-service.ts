@@ -99,7 +99,7 @@ async function checkExistingInvoiceForMonth(contractId: string): Promise<boolean
         gte: startOfMonth,
         lte: endOfMonth,
       },
-      status: { not: InvoiceStatus.CANCELLED },
+      status: { notIn: [InvoiceStatus.CANCELLED, InvoiceStatus.VOID] },
     },
   });
 

@@ -11,7 +11,7 @@ import { RefreshCw, Loader2, Search, X } from 'lucide-react';
 interface InvoiceListPageProps {
   title: string;
   subtitle: string;
-  status?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SENT' | 'PAID' | 'CANCELLED';
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SENT' | 'PAID' | 'CANCELLED' | 'VOID';
   showAllStatuses?: boolean;
 }
 
@@ -193,6 +193,27 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
     await fetchInvoices();
   };
 
+  // Void invoice
+  const handleVoid = async (id: string) => {
+    const reason = prompt('Enter reason for voiding this invoice:');
+    if (!reason) return;
+
+    try {
+      const response = await fetch(`/api/invoices/${id}/void`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.details || data.error || 'Failed to void invoice');
+      }
+      await fetchInvoices();
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    }
+  };
+
   return (
     <div className="flex flex-col">
       <Header title={title} subtitle={subtitle} />
@@ -251,6 +272,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
               <option value="SENT">Sent</option>
               <option value="PAID">Paid</option>
               <option value="REJECTED">Rejected</option>
+              <option value="VOID">Void</option>
             </select>
           )}
 
@@ -275,6 +297,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
           invoices={filteredInvoices}
           onApprove={handleApprove}
           onReject={handleReject}
+          onVoid={handleVoid}
           onEdit={handleEdit}
           onView={handleView}
           onBulkApprove={handleBulkApprove}
