@@ -94,6 +94,8 @@ model Company {
   logoPath        String?
   invoicePrefix   String?  // e.g., "S" for YOWI
   nextInvoiceNo   Int      @default(1)
+  contractPrefix  String?  // e.g., "YOWI" for contract numbers
+  nextContractNo  Int      @default(1)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -190,7 +192,8 @@ model EmailTemplate {
 
 model Contract {
   id              String        @id @default(cuid())
-  customerId      String?       // External customer ID
+  customerNumber  String?       @unique // Auto-generated (e.g., YOWI-0001)
+  customerId      String?       // External customer ID (legacy)
   companyName     String        // Client's company name
   productType     ProductType
   revenueModel    String?

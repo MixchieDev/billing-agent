@@ -224,17 +224,17 @@ export function ContractFormModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Customer ID <span className="text-red-500">*</span>
+                External ID <span className="text-gray-400 text-xs font-normal">(optional)</span>
               </label>
               <input
                 type="text"
                 name="customerId"
                 value={formData.customerId}
                 onChange={handleChange}
-                required
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                placeholder="CUST001"
+                placeholder="Your reference (optional)"
               />
+              <p className="text-xs text-gray-500 mt-1">Customer # will be auto-generated</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

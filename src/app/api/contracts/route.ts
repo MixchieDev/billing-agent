@@ -54,8 +54,8 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    // Validate required fields
-    const requiredFields = ['customerId', 'companyName', 'productType', 'partner', 'billingEntity', 'monthlyFee'];
+    // Validate required fields (customerId is now optional - customerNumber is auto-generated)
+    const requiredFields = ['companyName', 'productType', 'partner', 'billingEntity', 'monthlyFee'];
     const missingFields = requiredFields.filter(field => !body[field]);
     if (missingFields.length > 0) {
       return NextResponse.json(
@@ -88,20 +88,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if contract with this customerId already exists
-    const existingContract = await prisma.contract.findFirst({
-      where: {
-        customerId: body.customerId,
-        billingEntityId: company.id,
-      },
-    });
-
-    if (existingContract) {
-      return NextResponse.json(
-        { error: `Contract with customerId ${body.customerId} already exists` },
-        { status: 409 }
-      );
-    }
+    // Generate customer number (e.g., YOWI-0001, ABBA-0001)
+    const prefix = company.contractPrefix || company.code;
+    const nextNo = company.nextContractNo || 1;
+    const customerNumber = `${prefix}-${String(nextNo).padStart(4, '0')}`;
 
     // Map productType to enum
     const productTypeMap: Record<string, ProductType> = {
@@ -132,7 +122,8 @@ export async function POST(request: NextRequest) {
     // Create the contract
     const contract = await prisma.contract.create({
       data: {
-        customerId: body.customerId,
+        customerNumber,
+        customerId: body.customerId || null,
         companyName: body.companyName,
         productType,
         partnerId: partner.id,
@@ -161,6 +152,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Increment company's next contract number
+    await prisma.company.update({
+      where: { id: company.id },
+      data: { nextContractNo: { increment: 1 } },
+    });
+
     // Audit log
     await prisma.auditLog.create({
       data: {
@@ -170,7 +167,7 @@ export async function POST(request: NextRequest) {
         entityId: contract.id,
         details: {
           contractName: contract.companyName,
-          customerId: contract.customerId,
+          customerNumber: contract.customerNumber,
         },
       },
     });

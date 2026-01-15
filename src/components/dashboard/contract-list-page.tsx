@@ -59,6 +59,7 @@ export function ContractListPage() {
 
       const transformedContracts: ContractRow[] = data.map((contract: any) => ({
         id: contract.id,
+        customerNumber: contract.customerNumber,
         customerId: contract.customerId,
         companyName: contract.companyName,
         productType: contract.productType,

@@ -14,6 +14,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 
 export interface ContractRow {
   id: string;
+  customerNumber?: string;
   customerId?: string;
   companyName: string;
   productType: 'ACCOUNTING' | 'PAYROLL' | 'COMPLIANCE' | 'HR';
@@ -62,6 +63,7 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead>Customer #</TableHead>
             <TableHead>Company Name</TableHead>
             <TableHead>Partner</TableHead>
             <TableHead>Product Type</TableHead>
@@ -75,7 +77,7 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
         <TableBody>
           {contracts.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="h-24 text-center text-gray-500">
+              <TableCell colSpan={9} className="h-24 text-center text-gray-500">
                 No contracts found
               </TableCell>
             </TableRow>
@@ -85,6 +87,9 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
                 key={contract.id}
                 className="hover:bg-gray-50"
               >
+                <TableCell className="font-mono text-sm text-gray-600">
+                  {contract.customerNumber || '-'}
+                </TableCell>
                 <TableCell className="font-medium">{contract.companyName}</TableCell>
                 <TableCell>
                   <Badge variant="outline">
