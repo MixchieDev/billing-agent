@@ -57,7 +57,10 @@ export function ContractListPage() {
 
       const data = await response.json();
 
-      const transformedContracts: ContractRow[] = data.map((contract: any) => ({
+      // Handle both array response and { contracts: [] } response
+      const contractList = Array.isArray(data) ? data : (data.contracts || []);
+
+      const transformedContracts: ContractRow[] = contractList.map((contract: any) => ({
         id: contract.id,
         customerNumber: contract.customerNumber,
         customerId: contract.customerId,

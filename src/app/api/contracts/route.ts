@@ -16,20 +16,40 @@ export async function GET(request: NextRequest) {
     const billingEntity = searchParams.get('billingEntity');
     const productType = searchParams.get('productType');
 
-    const contracts = await prisma.contract.findMany({
-      where: {
-        ...(status && { status: status as any }),
-        ...(billingEntity && { billingEntity: { code: billingEntity } }),
-        ...(productType && { productType: productType as any }),
-      },
-      include: {
-        billingEntity: true,
-        partner: true,
-      },
-      orderBy: { nextDueDate: 'asc' },
-    });
+    // Pagination params
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const skip = (page - 1) * limit;
 
-    return NextResponse.json(contracts);
+    // Build where clause
+    const where = {
+      ...(status && { status: status as any }),
+      ...(billingEntity && { billingEntity: { code: billingEntity } }),
+      ...(productType && { productType: productType as any }),
+    };
+
+    // Get contracts and total count in parallel
+    const [contracts, total] = await Promise.all([
+      prisma.contract.findMany({
+        where,
+        include: {
+          billingEntity: true,
+          partner: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.contract.count({ where }),
+    ]);
+
+    return NextResponse.json({
+      contracts,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (error) {
     console.error('Error fetching contracts:', error);
     return NextResponse.json(

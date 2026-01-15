@@ -249,6 +249,14 @@ model Contract {
   invoices           Invoice[]
   lineItems          InvoiceLineItem[]
   scheduledBillings  ScheduledBilling[]
+
+  // Performance indexes
+  @@index([status])
+  @@index([billingEntityId])
+  @@index([partnerId])
+  @@index([nextDueDate])
+  @@index([createdAt])
+  @@index([status, nextDueDate])  // Composite for billing queries
 }
 
 enum ProductType {
@@ -375,6 +383,14 @@ model Invoice {
   contracts              Contract[]              // For direct invoices
   scheduledBillingRuns   ScheduledBillingRun[]
   attachments            InvoiceAttachment[]
+
+  // Performance indexes
+  @@index([status])
+  @@index([companyId])
+  @@index([partnerId])
+  @@index([createdAt])
+  @@index([status, createdAt])  // Composite for filtered lists
+  @@index([paidAt])             // For payment reports
 }
 
 model InvoiceLineItem {
@@ -404,6 +420,8 @@ model InvoiceLineItem {
 
   invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   contract        Contract? @relation(fields: [contractId], references: [id])
+
+  @@index([contractId])
 }
 
 enum InvoiceStatus {
@@ -484,6 +502,10 @@ model AuditLog {
   createdAt   DateTime @default(now())
 
   user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([entityId, entityType])
 }
 
 // ==================== SYSTEM CONFIGURATION ====================

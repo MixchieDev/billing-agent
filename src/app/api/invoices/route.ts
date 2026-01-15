@@ -18,6 +18,11 @@ export async function GET(request: NextRequest) {
     const paidFrom = searchParams.get('paidFrom');
     const paidTo = searchParams.get('paidTo');
 
+    // Pagination params
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const skip = (page - 1) * limit;
+
     // Build date range filter for paidAt
     const paidAtFilter: { gte?: Date; lte?: Date } = {};
     if (paidFrom) {
@@ -30,25 +35,39 @@ export async function GET(request: NextRequest) {
       paidAtFilter.lte = endDate;
     }
 
-    // Get invoices based on filters
-    const invoices = await prisma.invoice.findMany({
-      where: {
-        ...(status && { status: status as any }),
-        ...(billingEntity && { company: { code: billingEntity } }),
-        ...(partner && { billingModel: partner as any }),
-        ...(Object.keys(paidAtFilter).length > 0 && { paidAt: paidAtFilter }),
-      },
-      include: {
-        company: true,
-        lineItems: true,
-        approvedBy: {
-          select: { name: true, email: true },
-        },
-      },
-      orderBy: { dueDate: 'asc' },
-    });
+    // Build where clause
+    const where = {
+      ...(status && { status: status as any }),
+      ...(billingEntity && { company: { code: billingEntity } }),
+      ...(partner && { billingModel: partner as any }),
+      ...(Object.keys(paidAtFilter).length > 0 && { paidAt: paidAtFilter }),
+    };
 
-    return NextResponse.json(invoices);
+    // Get invoices and total count in parallel
+    const [invoices, total] = await Promise.all([
+      prisma.invoice.findMany({
+        where,
+        include: {
+          company: true,
+          lineItems: true,
+          approvedBy: {
+            select: { name: true, email: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.invoice.count({ where }),
+    ]);
+
+    return NextResponse.json({
+      invoices,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (error) {
     console.error('Error fetching invoices:', error);
     return NextResponse.json(

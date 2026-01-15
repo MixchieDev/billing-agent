@@ -71,7 +71,9 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
         const contractsData = await contractsRes.json();
         const companiesData = await companiesRes.json();
 
-        setContracts(contractsData);
+        // Handle both array response and { contracts: [] } response
+        const contractsList = Array.isArray(contractsData) ? contractsData : (contractsData.contracts || []);
+        setContracts(contractsList);
         setBillingEntities(companiesData.filter((c: BillingEntity) => ['YOWI', 'ABBA'].includes(c.code)));
 
         // Fetch withholding presets
