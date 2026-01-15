@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { getSchedulerStatus } from '@/lib/scheduler';
 import { ScheduleStatus } from '@/generated/prisma';
 import {
   createScheduledBilling,
@@ -27,8 +26,19 @@ export async function GET(request: NextRequest) {
     const billingEntityId = searchParams.get('billingEntityId');
     const contractId = searchParams.get('contractId');
 
-    // Get scheduler status
-    const schedulerStatus = getSchedulerStatus();
+    // Get scheduler status (dynamic import to avoid node-cron in serverless)
+    let schedulerStatus = {
+      running: false,
+      config: { cronExpression: '0 8 * * *', enabled: true, daysBeforeDue: 15, timezone: 'Asia/Manila' },
+      lastRun: null,
+      nextRun: null,
+    };
+    try {
+      const { getSchedulerStatus } = await import('@/lib/scheduler');
+      schedulerStatus = getSchedulerStatus();
+    } catch (e) {
+      // Fallback for serverless - scheduler doesn't run there anyway
+    }
 
     // Get recent job runs (last 30 days)
     const thirtyDaysAgo = new Date();

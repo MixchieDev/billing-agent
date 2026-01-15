@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { triggerBillingJob, getSchedulerStatus } from '@/lib/scheduler';
 
 // Manual trigger for billing job
 export async function POST(request: NextRequest) {
@@ -16,6 +15,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Dynamic import to avoid node-cron issues in serverless
+    const { triggerBillingJob } = await import('@/lib/scheduler');
     const result = await triggerBillingJob();
 
     return NextResponse.json({
@@ -39,8 +40,21 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const status = getSchedulerStatus();
-    return NextResponse.json(status);
+    // Dynamic import to avoid node-cron issues in serverless
+    try {
+      const { getSchedulerStatus } = await import('@/lib/scheduler');
+      const status = getSchedulerStatus();
+      return NextResponse.json(status);
+    } catch (e) {
+      // Fallback for serverless
+      return NextResponse.json({
+        running: false,
+        config: { cronExpression: '0 8 * * *', enabled: true, daysBeforeDue: 15, timezone: 'Asia/Manila' },
+        lastRun: null,
+        nextRun: null,
+        note: 'Scheduler not available in serverless environment',
+      });
+    }
   } catch (error) {
     console.error('Error getting scheduler status:', error);
     return NextResponse.json(

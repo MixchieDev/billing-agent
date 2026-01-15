@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { clearSettingsCache } from '@/lib/settings';
-import { reloadScheduler } from '@/lib/scheduler';
 
 // Default settings
 const DEFAULT_SETTINGS = {
@@ -166,7 +165,13 @@ export async function POST(request: NextRequest) {
 
     if (schedulerSettingsUpdated) {
       console.log('[Settings API] Scheduler settings changed, reloading scheduler...');
-      await reloadScheduler();
+      // Dynamic import to avoid loading node-cron in serverless environment
+      try {
+        const { reloadScheduler } = await import('@/lib/scheduler');
+        await reloadScheduler();
+      } catch (e) {
+        console.log('[Settings API] Scheduler reload skipped (serverless environment)');
+      }
     }
 
     return NextResponse.json({
