@@ -349,7 +349,7 @@ export function InvoiceGenerator() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex-1 space-y-6 p-6">
       {/* Header */}
       <div>
         <h2 className="text-lg font-semibold text-gray-900">Invoice Generator</h2>
