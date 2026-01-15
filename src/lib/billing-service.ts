@@ -338,34 +338,27 @@ export async function bulkApproveInvoices(invoiceIds: string[], userId: string) 
   });
 }
 
-// Get invoice stats
+// Get invoice stats - optimized single query
 export async function getInvoiceStats() {
-  const [pending, approved, rejected, sent] = await Promise.all([
-    prisma.invoice.aggregate({
-      where: { status: InvoiceStatus.PENDING },
-      _count: true,
-      _sum: { netAmount: true },
-    }),
-    prisma.invoice.aggregate({
-      where: { status: InvoiceStatus.APPROVED },
-      _count: true,
-      _sum: { netAmount: true },
-    }),
-    prisma.invoice.count({
-      where: { status: InvoiceStatus.REJECTED },
-    }),
-    prisma.invoice.count({
-      where: { status: InvoiceStatus.SENT },
-    }),
-  ]);
+  // Single groupBy query instead of 4 separate queries
+  const statsByStatus = await prisma.invoice.groupBy({
+    by: ['status'],
+    _count: true,
+    _sum: { netAmount: true },
+  });
+
+  // Map results to expected format
+  const statsMap = new Map(
+    statsByStatus.map((s) => [s.status, { count: s._count, sum: Number(s._sum.netAmount || 0) }])
+  );
 
   return {
-    pending: pending._count,
-    approved: approved._count,
-    rejected,
-    sent,
-    totalPendingAmount: Number(pending._sum.netAmount || 0),
-    totalApprovedAmount: Number(approved._sum.netAmount || 0),
+    pending: statsMap.get(InvoiceStatus.PENDING)?.count || 0,
+    approved: statsMap.get(InvoiceStatus.APPROVED)?.count || 0,
+    rejected: statsMap.get(InvoiceStatus.REJECTED)?.count || 0,
+    sent: statsMap.get(InvoiceStatus.SENT)?.count || 0,
+    totalPendingAmount: statsMap.get(InvoiceStatus.PENDING)?.sum || 0,
+    totalApprovedAmount: statsMap.get(InvoiceStatus.APPROVED)?.sum || 0,
   };
 }
 

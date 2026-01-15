@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { Header } from '@/components/dashboard/header';
 import { StatsCards } from '@/components/dashboard/stats-cards';
 import { InvoiceFiltersComponent, InvoiceFilters } from '@/components/dashboard/invoice-filters';
 import { InvoiceTable, InvoiceRow } from '@/components/dashboard/invoice-table';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Play, Loader2 } from 'lucide-react';
+import { useInvoices, useStats } from '@/lib/hooks/use-api';
 
 const defaultFilters: InvoiceFilters = {
   billingEntity: '',
@@ -19,82 +20,49 @@ const defaultFilters: InvoiceFilters = {
 
 export default function DashboardPage() {
   const [filters, setFilters] = useState<InvoiceFilters>(defaultFilters);
-  const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
-  const [stats, setStats] = useState({
-    pending: 0,
-    approved: 0,
-    rejected: 0,
-    sent: 0,
-    totalPendingAmount: 0,
-    totalApprovedAmount: 0,
-  });
-  const [loading, setLoading] = useState(true);
   const [triggeringBilling, setTriggeringBilling] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // Fetch invoices
-  const fetchInvoices = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  // Use SWR for data fetching with caching
+  const { data: invoicesData, error: invoicesError, isLoading: invoicesLoading, mutate: mutateInvoices } = useInvoices();
+  const { data: statsData, error: statsError, mutate: mutateStats } = useStats();
 
-      const response = await fetch('/api/invoices');
-      if (!response.ok) throw new Error('Failed to fetch invoices');
+  // Transform invoices data
+  const invoices: InvoiceRow[] = useMemo(() => {
+    if (!invoicesData) return [];
+    const invoiceList = Array.isArray(invoicesData) ? invoicesData : (invoicesData.invoices || []);
+    return invoiceList.map((inv: any) => ({
+      id: inv.id,
+      billingNo: inv.billingNo,
+      customerName: inv.customerName,
+      productType: inv.lineItems?.[0]?.description?.includes('Payroll') ? 'PAYROLL' : 'ACCOUNTING',
+      serviceFee: Number(inv.serviceFee),
+      vatAmount: Number(inv.vatAmount),
+      netAmount: Number(inv.netAmount),
+      dueDate: new Date(inv.dueDate),
+      billingEntity: inv.company?.code || 'YOWI',
+      billingModel: inv.billingModel,
+      status: inv.status,
+    }));
+  }, [invoicesData]);
 
-      const data = await response.json();
+  // Stats with defaults
+  const stats = useMemo(() => ({
+    pending: statsData?.pending || 0,
+    approved: statsData?.approved || 0,
+    rejected: statsData?.rejected || 0,
+    sent: statsData?.sent || 0,
+    totalPendingAmount: statsData?.totalPendingAmount || 0,
+    totalApprovedAmount: statsData?.totalApprovedAmount || 0,
+  }), [statsData]);
 
-      // Handle both array response and { invoices: [] } response
-      const invoiceList = Array.isArray(data) ? data : (data.invoices || []);
+  const loading = invoicesLoading;
+  const error = invoicesError?.message || statsError?.message || null;
 
-      // Transform API data to InvoiceRow format
-      const transformedInvoices: InvoiceRow[] = invoiceList.map((inv: any) => ({
-        id: inv.id,
-        billingNo: inv.billingNo,
-        customerName: inv.customerName,
-        productType: inv.lineItems?.[0]?.description?.includes('Payroll') ? 'PAYROLL' : 'ACCOUNTING',
-        serviceFee: Number(inv.serviceFee),
-        vatAmount: Number(inv.vatAmount),
-        netAmount: Number(inv.netAmount),
-        dueDate: new Date(inv.dueDate),
-        billingEntity: inv.company?.code || 'YOWI',
-        billingModel: inv.billingModel,
-        status: inv.status,
-      }));
-
-      setInvoices(transformedInvoices);
-    } catch (err: any) {
-      setError(err.message);
-      console.error('Error fetching invoices:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Fetch stats
-  const fetchStats = useCallback(async () => {
-    try {
-      const response = await fetch('/api/stats');
-      if (!response.ok) throw new Error('Failed to fetch stats');
-
-      const data = await response.json();
-      setStats({
-        pending: data.pending || 0,
-        approved: data.approved || 0,
-        rejected: data.rejected || 0,
-        sent: data.sent || 0,
-        totalPendingAmount: data.totalPendingAmount || 0,
-        totalApprovedAmount: data.totalApprovedAmount || 0,
-      });
-    } catch (err) {
-      console.error('Error fetching stats:', err);
-    }
-  }, []);
-
-  // Initial load
-  useEffect(() => {
-    fetchInvoices();
-    fetchStats();
-  }, [fetchInvoices, fetchStats]);
+  // Refresh data
+  const handleRefresh = () => {
+    mutateInvoices();
+    mutateStats();
+  };
 
   // Approve invoice
   const handleApprove = async (id: string) => {
@@ -105,9 +73,9 @@ export default function DashboardPage() {
 
       if (!response.ok) throw new Error('Failed to approve invoice');
 
-      // Refresh data
-      await fetchInvoices();
-      await fetchStats();
+      // Refresh data (SWR will revalidate)
+      mutateInvoices();
+      mutateStats();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     }
@@ -128,8 +96,8 @@ export default function DashboardPage() {
       if (!response.ok) throw new Error('Failed to reject invoice');
 
       // Refresh data
-      await fetchInvoices();
-      await fetchStats();
+      mutateInvoices();
+      mutateStats();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     }
@@ -147,8 +115,8 @@ export default function DashboardPage() {
       if (!response.ok) throw new Error('Failed to bulk approve');
 
       // Refresh data
-      await fetchInvoices();
-      await fetchStats();
+      mutateInvoices();
+      mutateStats();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     }
@@ -172,8 +140,8 @@ export default function DashboardPage() {
       alert(`Billing run complete!\nProcessed: ${data.processed}\nErrors: ${data.errors?.length || 0}`);
 
       // Refresh data
-      await fetchInvoices();
-      await fetchStats();
+      mutateInvoices();
+      mutateStats();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     } finally {
@@ -199,8 +167,8 @@ export default function DashboardPage() {
       }
 
       // Refresh data
-      await fetchInvoices();
-      await fetchStats();
+      mutateInvoices();
+      mutateStats();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     }
@@ -214,11 +182,6 @@ export default function DashboardPage() {
   const handleView = (id: string) => {
     // Open invoice in new tab
     window.open(`/api/invoices/${id}/pdf`, '_blank');
-  };
-
-  const handleRefresh = () => {
-    fetchInvoices();
-    fetchStats();
   };
 
   // Filter invoices
@@ -289,7 +252,7 @@ export default function DashboardPage() {
           onEdit={handleEdit}
           onView={handleView}
           onBulkApprove={handleBulkApprove}
-          onSend={() => { fetchInvoices(); fetchStats(); }}
+          onSend={() => { mutateInvoices(); mutateStats(); }}
         />
 
         {/* Empty state */}

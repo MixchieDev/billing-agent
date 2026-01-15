@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Header } from '@/components/dashboard/header';
 import { InvoiceTable, InvoiceRow } from '@/components/dashboard/invoice-table';
 import { MarkPaidModal, InvoiceForPayment } from '@/components/dashboard/mark-paid-modal';
 import { InvoiceEditModal } from '@/components/dashboard/invoice-edit-modal';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Loader2, Search, X } from 'lucide-react';
+import { useInvoices } from '@/lib/hooks/use-api';
 
 interface InvoiceListPageProps {
   title: string;
@@ -16,9 +17,6 @@ interface InvoiceListPageProps {
 }
 
 export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: InvoiceListPageProps) {
-  const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<InvoiceForPayment | null>(null);
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
 
@@ -26,6 +24,36 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
   const [searchQuery, setSearchQuery] = useState('');
   const [entityFilter, setEntityFilter] = useState<'ALL' | 'YOWI' | 'ABBA'>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+
+  // Use SWR for data fetching with caching
+  const { data: invoicesData, error: invoicesError, isLoading, mutate } = useInvoices(
+    status && !showAllStatuses ? status : undefined
+  );
+
+  // Transform invoices data
+  const invoices: InvoiceRow[] = useMemo(() => {
+    if (!invoicesData) return [];
+    const invoiceList = Array.isArray(invoicesData) ? invoicesData : (invoicesData.invoices || []);
+    return invoiceList.map((inv: any) => ({
+      id: inv.id,
+      billingNo: inv.billingNo,
+      customerName: inv.customerName,
+      customerEmail: inv.customerEmail,
+      customerEmails: inv.customerEmails,
+      productType: inv.lineItems?.[0]?.description?.includes('Payroll') ? 'PAYROLL' : 'ACCOUNTING',
+      serviceFee: Number(inv.serviceFee),
+      vatAmount: Number(inv.vatAmount),
+      netAmount: Number(inv.netAmount),
+      dueDate: new Date(inv.dueDate),
+      createdAt: new Date(inv.createdAt),
+      billingEntity: inv.company?.code || 'YOWI',
+      billingModel: inv.billingModel,
+      status: inv.status,
+    }));
+  }, [invoicesData]);
+
+  const loading = isLoading;
+  const error = invoicesError?.message || null;
 
   // Filter invoices based on search and filters
   const filteredInvoices = useMemo(() => {
@@ -56,53 +84,8 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
     setStatusFilter('ALL');
   };
 
-  // Fetch invoices
-  const fetchInvoices = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const params = new URLSearchParams();
-      if (status && !showAllStatuses) {
-        params.set('status', status);
-      }
-
-      const url = `/api/invoices${params.toString() ? `?${params.toString()}` : ''}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Failed to fetch invoices');
-
-      const data = await response.json();
-      const invoiceList = Array.isArray(data) ? data : (data.invoices || []);
-
-      const transformedInvoices: InvoiceRow[] = invoiceList.map((inv: any) => ({
-        id: inv.id,
-        billingNo: inv.billingNo,
-        customerName: inv.customerName,
-        customerEmail: inv.customerEmail,
-        customerEmails: inv.customerEmails,
-        productType: inv.lineItems?.[0]?.description?.includes('Payroll') ? 'PAYROLL' : 'ACCOUNTING',
-        serviceFee: Number(inv.serviceFee),
-        vatAmount: Number(inv.vatAmount),
-        netAmount: Number(inv.netAmount),
-        dueDate: new Date(inv.dueDate),
-        createdAt: new Date(inv.createdAt),
-        billingEntity: inv.company?.code || 'YOWI',
-        billingModel: inv.billingModel,
-        status: inv.status,
-      }));
-
-      setInvoices(transformedInvoices);
-    } catch (err: any) {
-      setError(err.message);
-      console.error('Error fetching invoices:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [status, showAllStatuses]);
-
-  useEffect(() => {
-    fetchInvoices();
-  }, [fetchInvoices]);
+  // Refresh data using SWR mutate
+  const refreshData = () => mutate();
 
   // Approve invoice
   const handleApprove = async (id: string) => {
@@ -111,7 +94,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
         method: 'POST',
       });
       if (!response.ok) throw new Error('Failed to approve invoice');
-      await fetchInvoices();
+      mutate();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     }
@@ -132,7 +115,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
         const data = await response.json();
         throw new Error(data.details || data.error || 'Failed to reject invoice');
       }
-      await fetchInvoices();
+      mutate();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     }
@@ -147,7 +130,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
         body: JSON.stringify({ invoiceIds: ids }),
       });
       if (!response.ok) throw new Error('Failed to bulk approve');
-      await fetchInvoices();
+      mutate();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     }
@@ -190,7 +173,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
       throw new Error(error.error || 'Failed to mark as paid');
     }
 
-    await fetchInvoices();
+    mutate();
   };
 
   // Void invoice
@@ -208,7 +191,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
         const data = await response.json();
         throw new Error(data.details || data.error || 'Failed to void invoice');
       }
-      await fetchInvoices();
+      mutate();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     }
@@ -228,7 +211,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
               ({filteredInvoices.length}{hasActiveFilters ? ` of ${invoices.length}` : ''} invoice{filteredInvoices.length !== 1 ? 's' : ''})
             </span>
           </h2>
-          <Button variant="outline" onClick={fetchInvoices} disabled={loading}>
+          <Button variant="outline" onClick={refreshData} disabled={loading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
@@ -301,7 +284,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
           onEdit={handleEdit}
           onView={handleView}
           onBulkApprove={handleBulkApprove}
-          onSend={fetchInvoices}
+          onSend={refreshData}
           onMarkPaid={handleMarkPaid}
         />
 
@@ -336,7 +319,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
         invoiceId={editingInvoiceId}
         isOpen={!!editingInvoiceId}
         onClose={() => setEditingInvoiceId(null)}
-        onSave={fetchInvoices}
+        onSave={refreshData}
       />
     </div>
   );

@@ -44,12 +44,32 @@ export async function GET(request: NextRequest) {
     };
 
     // Get invoices and total count in parallel
+    // Optimized: only select needed fields to reduce payload
     const [invoices, total] = await Promise.all([
       prisma.invoice.findMany({
         where,
-        include: {
-          company: true,
-          lineItems: true,
+        select: {
+          id: true,
+          billingNo: true,
+          customerName: true,
+          customerEmail: true,
+          customerEmails: true,
+          serviceFee: true,
+          vatAmount: true,
+          netAmount: true,
+          dueDate: true,
+          createdAt: true,
+          billingModel: true,
+          status: true,
+          paidAt: true,
+          paidAmount: true,
+          company: {
+            select: { code: true },
+          },
+          lineItems: {
+            select: { description: true },
+            take: 1, // Only need first item for product type detection
+          },
           approvedBy: {
             select: { name: true, email: true },
           },
