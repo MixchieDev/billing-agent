@@ -193,7 +193,7 @@ export async function generateInvoice(
     for (const item of request.lineItems) {
       const itemCalc = calculateBilling(
         item.amount,
-        true, // VAT-inclusive
+        false, // VAT-exclusive (amount is net, VAT added on top)
         isVatClient,
         hasWithholding,
         withholdingRate,
@@ -222,7 +222,7 @@ export async function generateInvoice(
     // Single line item
     const calculation = calculateBilling(
       request.billingAmount,
-      true,
+      false, // VAT-exclusive (amount is net, VAT added on top)
       isVatClient,
       hasWithholding,
       withholdingRate,

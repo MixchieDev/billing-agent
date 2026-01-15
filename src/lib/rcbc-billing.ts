@@ -63,8 +63,8 @@ export async function getRcbcMonthSummary(monthStr: string): Promise<RcbcMonthSu
     };
   });
 
-  // Calculate billing amounts (VAT-inclusive, with withholding)
-  const calculation = calculateBilling(totalServiceFee, true, true, true);
+  // Calculate billing amounts (VAT-exclusive, with withholding)
+  const calculation = calculateBilling(totalServiceFee, false, true, true);
 
   // Format month label
   const monthLabel = startOfMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });

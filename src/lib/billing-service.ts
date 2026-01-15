@@ -181,7 +181,7 @@ export async function createInvoiceFromContract(params: CreateInvoiceParams) {
   const isVatClient = contract.vatType === VatType.VAT;
   const calculation = calculateBilling(
     params.billingAmount,
-    params.isVatInclusive ?? true,
+    params.isVatInclusive ?? false, // Default to VAT-exclusive (net amount)
     isVatClient,
     params.hasWithholding ?? false
   );
