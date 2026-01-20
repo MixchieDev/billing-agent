@@ -15,6 +15,7 @@ import {
   generateEmailBodyFromTemplate,
   generateEmailHtmlFromTemplate,
   EmailPlaceholderData,
+  EmailAttachment,
 } from './email-service';
 import { notifyInvoiceSent } from './notifications';
 import { validateEmails, formatCurrency } from './utils';
@@ -34,7 +35,7 @@ export interface AutoSendResult {
  */
 export async function autoSendInvoice(invoiceId: string): Promise<AutoSendResult> {
   try {
-    // Fetch invoice with company and line items (including contract for client company name)
+    // Fetch invoice with company, line items (including contract), and attachments
     const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
       include: {
@@ -44,6 +45,7 @@ export async function autoSendInvoice(invoiceId: string): Promise<AutoSendResult
             contract: true,
           },
         },
+        attachments: true,
       },
     });
 
@@ -136,6 +138,13 @@ export async function autoSendInvoice(invoiceId: string): Promise<AutoSendResult
     const body = generateEmailBodyFromTemplate(emailTemplate, placeholderData);
     const htmlBody = generateEmailHtmlFromTemplate(emailTemplate, placeholderData);
 
+    // Convert invoice attachments to email attachments
+    const additionalAttachments: EmailAttachment[] = invoice.attachments.map((att) => ({
+      filename: att.filename,
+      content: Buffer.from(att.data),
+      contentType: att.mimeType,
+    }));
+
     // Send email to all valid recipients
     const result = await sendBillingEmail(
       invoice.id,
@@ -144,7 +153,8 @@ export async function autoSendInvoice(invoiceId: string): Promise<AutoSendResult
       body,
       htmlBody,
       pdfBuffer,
-      `${billingNo}.pdf`
+      `${billingNo}.pdf`,
+      additionalAttachments.length > 0 ? additionalAttachments : undefined
     );
 
     if (!result.success) {
@@ -175,6 +185,7 @@ export async function autoSendInvoice(invoiceId: string): Promise<AutoSendResult
           invoiceNo: billingNo,
           sentTo: validEmails.join(', '),
           messageId: result.messageId,
+          attachmentCount: additionalAttachments.length,
           automated: true,
         },
       },
