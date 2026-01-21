@@ -794,7 +794,7 @@ export async function generateInvoicePdfLib(
       // Customer TIN if available
       if (invoice.customerTin) {
         y -= 14;
-        page.drawText(`TIN: ${invoice.customerTin}`, {
+        page.drawText(`TIN: ${sanitizeForPdf(invoice.customerTin)}`, {
           x: MARGIN_LEFT,
           y,
           size: 10,
@@ -918,7 +918,9 @@ export async function generateInvoicePdfLib(
 
     // Helper to wrap description text to multiple lines
     const wrapDescText = (text: string, maxWidth: number, fontSize: number = 9): string[] => {
-      const words = text.split(' ');
+      // Sanitize text first to remove characters that can't be encoded
+      const sanitizedText = sanitizeForPdf(text);
+      const words = sanitizedText.split(' ');
       const lines: string[] = [];
       let currentLine = '';
 
@@ -933,7 +935,7 @@ export async function generateInvoicePdfLib(
       }
       if (currentLine) lines.push(currentLine);
 
-      return lines.length > 0 ? lines : [text];
+      return lines.length > 0 ? lines : [sanitizedText];
     };
 
     // Calculate line item height based on description length
@@ -1094,7 +1096,7 @@ export async function generateInvoicePdfLib(
       });
 
       let payY = paymentY - 18;
-      page.drawText(`Bank: ${soaSettings.bankName}`, {
+      page.drawText(`Bank: ${sanitizeForPdf(soaSettings.bankName)}`, {
         x: MARGIN_LEFT + paymentBoxPadding,
         y: payY,
         size: 9,
@@ -1136,7 +1138,7 @@ export async function generateInvoicePdfLib(
 
       if (soaSettings.bankAccountNo) {
         payY -= 14;
-        page.drawText(`Account Number: ${soaSettings.bankAccountNo}`, {
+        page.drawText(`Account Number: ${sanitizeForPdf(soaSettings.bankAccountNo)}`, {
           x: MARGIN_LEFT + paymentBoxPadding,
           y: payY,
           size: 9,
@@ -1429,9 +1431,32 @@ export function formatPdfCurrency(amount: number): string {
   }).format(amount);
 }
 
+/**
+ * Sanitize text for PDF rendering with WinAnsi encoding.
+ * Replaces characters that cannot be encoded by standard PDF fonts.
+ */
+function sanitizeForPdf(text: string): string {
+  if (!text) return '';
+  return text
+    // Replace Philippine Peso symbol with PHP
+    .replace(/₱/g, 'PHP ')
+    // Remove any other characters outside WinAnsi range that might cause issues
+    .replace(/[\u0100-\u017F]/g, '') // Extended Latin characters
+    .replace(/[\u2000-\u206F]/g, ' ') // General punctuation (except spaces)
+    .replace(/[\u20A0-\u20CF]/g, '') // Currency symbols (except what WinAnsi supports)
+    .replace(/[\u2100-\u214F]/g, '') // Letterlike symbols
+    .replace(/[\u2190-\u21FF]/g, '') // Arrows
+    .replace(/[\u2200-\u22FF]/g, '') // Mathematical operators
+    // Keep basic ASCII and WinAnsi supported characters
+    .trim();
+}
+
 function wrapTextForPdf(text: string, font: any, fontSize: number, maxWidth: number): string[] {
+  // Sanitize text first to remove characters that can't be encoded
+  const sanitizedText = sanitizeForPdf(text);
+
   // First, handle explicit newlines in the text
-  const paragraphs = text.split(/\r?\n/);
+  const paragraphs = sanitizedText.split(/\r?\n/);
   const allLines: string[] = [];
 
   for (const paragraph of paragraphs) {
