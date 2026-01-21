@@ -703,10 +703,10 @@ export async function generateInvoicePdfLib(
   const firstPageAvailableHeight = PAGE_HEIGHT - MARGIN_TOP - firstPageHeaderHeight - BILL_TO_HEIGHT - MARGIN_BOTTOM - TABLE_HEADER_HEIGHT;
   const continuationAvailableHeight = PAGE_HEIGHT - MARGIN_TOP - continuationHeaderHeight - MARGIN_BOTTOM - TABLE_HEADER_HEIGHT;
 
-  const itemsOnFirstPageWithTotals = Math.floor((firstPageAvailableHeight - TOTALS_SECTION_HEIGHT) / LINE_ITEM_HEIGHT);
-  const itemsOnFirstPage = Math.floor(firstPageAvailableHeight / LINE_ITEM_HEIGHT);
-  const itemsOnContinuationPage = Math.floor(continuationAvailableHeight / LINE_ITEM_HEIGHT);
-  const itemsOnContinuationWithTotals = Math.floor((continuationAvailableHeight - TOTALS_SECTION_HEIGHT) / LINE_ITEM_HEIGHT);
+  const itemsOnFirstPageWithTotals = Math.max(0, Math.floor((firstPageAvailableHeight - TOTALS_SECTION_HEIGHT) / LINE_ITEM_HEIGHT));
+  const itemsOnFirstPage = Math.max(1, Math.floor(firstPageAvailableHeight / LINE_ITEM_HEIGHT));
+  const itemsOnContinuationPage = Math.max(1, Math.floor(continuationAvailableHeight / LINE_ITEM_HEIGHT));
+  const itemsOnContinuationWithTotals = Math.max(0, Math.floor((continuationAvailableHeight - TOTALS_SECTION_HEIGHT) / LINE_ITEM_HEIGHT));
 
   // Determine total pages needed and whether totals need a separate page
   let totalPages = 1;
