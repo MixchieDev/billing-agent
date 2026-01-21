@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatCurrency, formatDateShort, daysUntil } from '@/lib/utils';
+import { formatCurrency, formatDateShort, formatDateTime, daysUntil } from '@/lib/utils';
 import {
   Check,
   X,
@@ -26,6 +26,8 @@ import {
   ArrowUp,
   ArrowDown,
   Ban,
+  CreditCard,
+  History,
 } from 'lucide-react';
 import { SendInvoiceModal } from './send-invoice-modal';
 
@@ -60,6 +62,8 @@ interface InvoiceTableProps {
   onBulkApprove: (ids: string[]) => void;
   onSend?: (id: string) => void;
   onMarkPaid?: (invoice: InvoiceRow) => void;
+  onPayOnline?: (invoice: InvoiceRow) => void;
+  onViewHistory?: (invoice: InvoiceRow) => void;
   showBulkActions?: boolean;
 }
 
@@ -73,6 +77,8 @@ export function InvoiceTable({
   onBulkApprove,
   onSend,
   onMarkPaid,
+  onPayOnline,
+  onViewHistory,
   showBulkActions = true,
 }: InvoiceTableProps) {
   const [sendingInvoice, setSendingInvoice] = useState<InvoiceRow | null>(null);
@@ -323,7 +329,9 @@ export function InvoiceTable({
                 <TableCell className="text-right font-medium">
                   {formatCurrency(invoice.netAmount)}
                 </TableCell>
-                <TableCell>{formatDateShort(invoice.createdAt)}</TableCell>
+                <TableCell title={formatDateTime(invoice.createdAt)} className="cursor-help">
+                  {formatDateShort(invoice.createdAt)}
+                </TableCell>
                 <TableCell>{formatDateShort(invoice.dueDate)}</TableCell>
                 <TableCell>{getDaysUntilBadge(invoice.dueDate)}</TableCell>
                 <TableCell>
@@ -352,6 +360,16 @@ export function InvoiceTable({
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
+                    {onViewHistory && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onViewHistory(invoice)}
+                        title="View History"
+                      >
+                        <History className="h-4 w-4" />
+                      </Button>
+                    )}
                     {invoice.status === 'PENDING' && (
                       <>
                         <Button
@@ -425,6 +443,18 @@ export function InvoiceTable({
                           <Mail className="mr-1 h-4 w-4" />
                           Resend
                         </Button>
+                        {onPayOnline && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onPayOnline(invoice)}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            title="Pay Online via HitPay"
+                          >
+                            <CreditCard className="mr-1 h-4 w-4" />
+                            Pay Online
+                          </Button>
+                        )}
                         {onMarkPaid && (
                           <Button
                             size="sm"

@@ -5,6 +5,7 @@ import { Header } from '@/components/dashboard/header';
 import { InvoiceTable, InvoiceRow } from '@/components/dashboard/invoice-table';
 import { MarkPaidModal, InvoiceForPayment } from '@/components/dashboard/mark-paid-modal';
 import { InvoiceEditModal } from '@/components/dashboard/invoice-edit-modal';
+import { InvoiceAuditLogModal } from '@/components/dashboard/invoice-audit-log-modal';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Loader2, Search, X } from 'lucide-react';
 import { useInvoices } from '@/lib/hooks/use-api';
@@ -19,6 +20,7 @@ interface InvoiceListPageProps {
 export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: InvoiceListPageProps) {
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<InvoiceForPayment | null>(null);
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
+  const [selectedInvoiceForHistory, setSelectedInvoiceForHistory] = useState<{ id: string; billingNo: string | null; customerName: string } | null>(null);
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -197,6 +199,40 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
     }
   };
 
+  // Pay online via HitPay
+  const handlePayOnline = async (invoice: InvoiceRow) => {
+    try {
+      const response = await fetch(`/api/invoices/${invoice.id}/hitpay/create-payment`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to create payment request');
+      }
+
+      const data = await response.json();
+
+      if (data.checkoutUrl) {
+        // Open HitPay checkout in a new tab
+        window.open(data.checkoutUrl, '_blank');
+      } else {
+        throw new Error('No checkout URL returned');
+      }
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    }
+  };
+
+  // View invoice history
+  const handleViewHistory = (invoice: InvoiceRow) => {
+    setSelectedInvoiceForHistory({
+      id: invoice.id,
+      billingNo: invoice.billingNo,
+      customerName: invoice.customerName,
+    });
+  };
+
   return (
     <div className="flex flex-col">
       <Header title={title} subtitle={subtitle} />
@@ -286,6 +322,8 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
           onBulkApprove={handleBulkApprove}
           onSend={refreshData}
           onMarkPaid={handleMarkPaid}
+          onPayOnline={handlePayOnline}
+          onViewHistory={handleViewHistory}
         />
 
         {/* Empty state */}
@@ -320,6 +358,13 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
         isOpen={!!editingInvoiceId}
         onClose={() => setEditingInvoiceId(null)}
         onSave={refreshData}
+      />
+
+      {/* Invoice Audit Log Modal */}
+      <InvoiceAuditLogModal
+        invoice={selectedInvoiceForHistory}
+        isOpen={!!selectedInvoiceForHistory}
+        onClose={() => setSelectedInvoiceForHistory(null)}
       />
     </div>
   );

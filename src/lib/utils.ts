@@ -37,6 +37,20 @@ export function formatDateShort(date: Date | string | null | undefined): string 
   });
 }
 
+// Full date and time formatting (e.g., "January 21, 2026, 2:30 PM")
+export function formatDateTime(date: Date | string | null | undefined): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleString('en-PH', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
 // Calculate days until a date
 export function daysUntil(date: Date | string | null | undefined): number {
   if (!date) return 0;
