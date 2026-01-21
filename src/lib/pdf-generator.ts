@@ -690,11 +690,9 @@ export async function generateInvoicePdfLib(
   }
 
   // Space needed for totals, payment details, remarks, and signatures section
-  // Payment details box ~100px, totals box ~115px, signatures ~50px, gaps ~30px
-  // They sit side by side (payment left, totals right) so we use the max height
-  const PAYMENT_TOTALS_HEIGHT = 130; // These are side by side
-  const SIGNATURES_HEIGHT = 55;
-  const TOTALS_SECTION_HEIGHT = PAYMENT_TOTALS_HEIGHT + estimatedRemarksHeight + SIGNATURES_HEIGHT + 30; // +30 for gaps
+  const BASE_TOTALS_SECTION_HEIGHT = 180;
+  const SIGNATURES_HEIGHT = 60;
+  const TOTALS_SECTION_HEIGHT = BASE_TOTALS_SECTION_HEIGHT + estimatedRemarksHeight + SIGNATURES_HEIGHT;
   const BILL_TO_HEIGHT = 90;
 
   // Calculate available space
