@@ -6,7 +6,7 @@ import { notifyInvoicePaid } from '@/lib/notifications';
 
 interface MarkPaidRequest {
   paidAmount: number;
-  paymentMethod: 'CASH' | 'BANK_TRANSFER' | 'CHECK';
+  paymentMethod: 'CASH' | 'BANK_TRANSFER' | 'CHECK' | 'HITPAY';
   paymentReference?: string;
   paidAt?: string; // ISO date string, defaults to now
 }
@@ -48,10 +48,10 @@ export async function POST(
       );
     }
 
-    const validMethods = ['CASH', 'BANK_TRANSFER', 'CHECK'];
+    const validMethods = ['CASH', 'BANK_TRANSFER', 'CHECK', 'HITPAY'];
     if (!validMethods.includes(body.paymentMethod)) {
       return NextResponse.json(
-        { error: 'Invalid payment method. Must be CASH, BANK_TRANSFER, or CHECK' },
+        { error: 'Invalid payment method. Must be CASH, BANK_TRANSFER, CHECK, or HITPAY' },
         { status: 400 }
       );
     }

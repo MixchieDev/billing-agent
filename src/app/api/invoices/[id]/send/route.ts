@@ -17,6 +17,7 @@ import {
 import { InvoiceStatus } from '@/generated/prisma';
 import { notifyInvoiceSent } from '@/lib/notifications';
 import { validateEmails, formatCurrency } from '@/lib/utils';
+import { createPaymentRequest } from '@/lib/hitpay-service';
 
 export async function POST(
   request: NextRequest,
@@ -34,6 +35,15 @@ export async function POST(
     }
 
     const { id } = await params;
+
+    // Parse request body for options
+    let includePaymentLink = false;
+    try {
+      const body = await request.json();
+      includePaymentLink = body.includePaymentLink === true;
+    } catch {
+      // No body or invalid JSON - default to no payment link
+    }
 
     const invoice = await prisma.invoice.findUnique({
       where: { id },
@@ -112,6 +122,43 @@ export async function POST(
     // This is the actual client company (e.g., for Globe Innove invoices)
     const clientCompanyName = invoice.lineItems?.[0]?.contract?.companyName || invoice.customerName;
 
+    // Create payment link if requested
+    let paymentUrl: string | undefined;
+    if (includePaymentLink) {
+      try {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const redirectUrl = `${appUrl}/payment/success?invoice=${invoice.id}`;
+
+        const paymentRequest = await createPaymentRequest({
+          amount: Number(invoice.netAmount),
+          currency: 'PHP',
+          referenceNumber: billingNo,
+          email: validEmails[0],
+          name: invoice.customerName,
+          purpose: `Invoice ${billingNo}`,
+          redirectUrl,
+          paymentMethods: ['qrph', 'gcash', 'card', 'grabpay', 'paymaya'],
+        });
+
+        // Store payment request in database
+        await prisma.hitpayPaymentRequest.create({
+          data: {
+            invoiceId: invoice.id,
+            hitpayRequestId: paymentRequest.id,
+            checkoutUrl: paymentRequest.url,
+            amount: Number(invoice.netAmount),
+            currency: 'PHP',
+            status: 'PENDING',
+          },
+        });
+
+        paymentUrl = paymentRequest.url;
+      } catch (paymentError) {
+        console.error('Failed to create payment link:', paymentError);
+        // Continue without payment link - don't fail the send
+      }
+    }
+
     // Build placeholder data
     const placeholderData: EmailPlaceholderData = {
       customerName: invoice.customerName,
@@ -122,6 +169,7 @@ export async function POST(
       periodEnd: formatDate(invoice.periodEnd),
       companyName: invoice.company?.name || 'YAHSHUA-ABBA',
       clientCompanyName,
+      paymentUrl,
     };
 
     const subject = generateEmailSubjectFromTemplate(emailTemplate, placeholderData);
@@ -174,6 +222,8 @@ export async function POST(
           sentTo: validEmails.join(', '),
           messageId: result.messageId,
           attachmentCount: additionalAttachments.length,
+          includePaymentLink,
+          paymentUrl: paymentUrl || null,
         },
       },
     });

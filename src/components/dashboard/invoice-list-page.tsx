@@ -51,6 +51,10 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
       billingEntity: inv.company?.code || 'YOWI',
       billingModel: inv.billingModel,
       status: inv.status,
+      // Follow-up tracking fields
+      followUpEnabled: inv.followUpEnabled ?? true,
+      followUpCount: inv.followUpCount ?? 0,
+      lastFollowUpLevel: inv.lastFollowUpLevel ?? 0,
     }));
   }, [invoicesData]);
 
@@ -233,6 +237,38 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
     });
   };
 
+  // Send follow-up email
+  const handleSendFollowUp = async (invoice: InvoiceRow) => {
+    const nextLevel = (invoice.lastFollowUpLevel ?? 0) + 1;
+    const levelDescriptions: Record<number, string> = {
+      1: 'Gentle Reminder',
+      2: 'Firm Reminder',
+      3: 'Final Notice',
+    };
+
+    const confirmed = window.confirm(
+      `Send follow-up email (Level ${nextLevel}: ${levelDescriptions[nextLevel]}) for invoice ${invoice.billingNo || invoice.id.slice(0, 8)} to ${invoice.customerName}?`
+    );
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/invoices/${invoice.id}/follow-up`, {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send follow-up');
+      }
+
+      alert(`Follow-up Level ${data.level} sent successfully!`);
+      mutate();
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    }
+  };
+
   return (
     <div className="flex flex-col">
       <Header title={title} subtitle={subtitle} />
@@ -324,6 +360,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
           onMarkPaid={handleMarkPaid}
           onPayOnline={handlePayOnline}
           onViewHistory={handleViewHistory}
+          onSendFollowUp={handleSendFollowUp}
         />
 
         {/* Empty state */}

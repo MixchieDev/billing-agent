@@ -28,6 +28,7 @@ import {
   Ban,
   CreditCard,
   History,
+  MailWarning,
 } from 'lucide-react';
 import { SendInvoiceModal } from './send-invoice-modal';
 
@@ -50,6 +51,10 @@ export interface InvoiceRow {
   billingModel: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SENT' | 'PAID' | 'VOID';
   emailStatus?: string;
+  // Follow-up tracking fields
+  followUpEnabled?: boolean;
+  followUpCount?: number;
+  lastFollowUpLevel?: number;
 }
 
 interface InvoiceTableProps {
@@ -64,6 +69,7 @@ interface InvoiceTableProps {
   onMarkPaid?: (invoice: InvoiceRow) => void;
   onPayOnline?: (invoice: InvoiceRow) => void;
   onViewHistory?: (invoice: InvoiceRow) => void;
+  onSendFollowUp?: (invoice: InvoiceRow) => void;
   showBulkActions?: boolean;
 }
 
@@ -79,6 +85,7 @@ export function InvoiceTable({
   onMarkPaid,
   onPayOnline,
   onViewHistory,
+  onSendFollowUp,
   showBulkActions = true,
 }: InvoiceTableProps) {
   const [sendingInvoice, setSendingInvoice] = useState<InvoiceRow | null>(null);
@@ -443,6 +450,33 @@ export function InvoiceTable({
                           <Mail className="mr-1 h-4 w-4" />
                           Resend
                         </Button>
+                        {onSendFollowUp && invoice.followUpEnabled !== false && daysUntil(invoice.dueDate) < 0 && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onSendFollowUp(invoice)}
+                            disabled={(invoice.lastFollowUpLevel ?? 0) >= 3}
+                            className={`${
+                              (invoice.lastFollowUpLevel ?? 0) >= 3
+                                ? 'text-gray-400 cursor-not-allowed'
+                                : 'text-orange-600 hover:text-orange-700 hover:bg-orange-50'
+                            }`}
+                            title={
+                              (invoice.lastFollowUpLevel ?? 0) >= 3
+                                ? 'Maximum follow-ups reached (3/3)'
+                                : `Send follow-up level ${(invoice.lastFollowUpLevel ?? 0) + 1}`
+                            }
+                          >
+                            <MailWarning className="mr-1 h-4 w-4" />
+                            Follow-up
+                            <Badge
+                              variant="secondary"
+                              className="ml-1 px-1 py-0 text-xs"
+                            >
+                              {invoice.lastFollowUpLevel ?? 0}/3
+                            </Badge>
+                          </Button>
+                        )}
                         {onPayOnline && (
                           <Button
                             size="sm"

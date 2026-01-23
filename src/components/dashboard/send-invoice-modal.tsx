@@ -15,6 +15,7 @@ import {
   FileSpreadsheet,
   File,
   AlertCircle,
+  CreditCard,
 } from 'lucide-react';
 
 interface Attachment {
@@ -50,6 +51,7 @@ export function SendInvoiceModal({ isOpen, onClose, invoice, onSent }: SendInvoi
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [includePaymentLink, setIncludePaymentLink] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch existing attachments
@@ -159,6 +161,10 @@ export function SendInvoiceModal({ isOpen, onClose, invoice, onSent }: SendInvoi
     try {
       const res = await fetch(`/api/invoices/${invoice.id}/send`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ includePaymentLink }),
       });
 
       if (!res.ok) {
@@ -343,6 +349,21 @@ export function SendInvoiceModal({ isOpen, onClose, invoice, onSent }: SendInvoi
                 </p>
               </div>
             )}
+          </div>
+
+          {/* Payment link option */}
+          <div className="flex items-center gap-3 rounded-lg bg-blue-50 px-4 py-3">
+            <input
+              type="checkbox"
+              id="includePaymentLink"
+              checked={includePaymentLink}
+              onChange={(e) => setIncludePaymentLink(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="includePaymentLink" className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <CreditCard className="h-4 w-4 text-blue-500" />
+              Include payment link (HitPay)
+            </label>
           </div>
         </div>
 

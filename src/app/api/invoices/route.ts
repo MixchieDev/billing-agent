@@ -63,6 +63,10 @@ export async function GET(request: NextRequest) {
           status: true,
           paidAt: true,
           paidAmount: true,
+          // Follow-up tracking fields
+          followUpEnabled: true,
+          followUpCount: true,
+          lastFollowUpLevel: true,
           company: {
             select: { code: true },
           },

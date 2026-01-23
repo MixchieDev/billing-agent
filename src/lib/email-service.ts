@@ -34,6 +34,8 @@ export interface EmailPlaceholderData {
   periodEnd: string;
   companyName: string;
   clientCompanyName: string; // The actual client company name (from contract)
+  paymentUrl?: string; // HitPay checkout URL for online payment
+  daysOverdue?: string; // For follow-up emails
 }
 
 // Additional email attachment (for invoice attachments from database)
@@ -140,9 +142,27 @@ export async function getEmailTemplateForPartner(partnerId: string | null): Prom
   }
 }
 
+// Get follow-up email template by escalation level (1, 2, or 3)
+export async function getFollowUpTemplate(level: number): Promise<EmailTemplateContent | null> {
+  try {
+    // Find follow-up template for this level
+    const template = await prisma.emailTemplate.findFirst({
+      where: {
+        templateType: 'FOLLOW_UP',
+        followUpLevel: level,
+      },
+    });
+
+    return template;
+  } catch (error) {
+    console.error('[Email Service] Failed to fetch follow-up template:', error);
+    return null;
+  }
+}
+
 // Replace placeholders in template text
 export function replacePlaceholders(text: string, data: EmailPlaceholderData): string {
-  return text
+  let result = text
     .replace(/\{\{customerName\}\}/g, data.customerName)
     .replace(/\{\{billingNo\}\}/g, data.billingNo)
     .replace(/\{\{dueDate\}\}/g, data.dueDate)
@@ -151,6 +171,13 @@ export function replacePlaceholders(text: string, data: EmailPlaceholderData): s
     .replace(/\{\{periodEnd\}\}/g, data.periodEnd)
     .replace(/\{\{companyName\}\}/g, data.companyName)
     .replace(/\{\{clientCompanyName\}\}/g, data.clientCompanyName);
+
+  // Add daysOverdue placeholder for follow-up emails
+  if (data.daysOverdue !== undefined) {
+    result = result.replace(/\{\{daysOverdue\}\}/g, data.daysOverdue);
+  }
+
+  return result;
 }
 
 // Generate email subject from template
@@ -198,6 +225,22 @@ export function generateEmailHtmlFromTemplate(
     // Convert newlines to HTML breaks
     const formatHtml = (text: string) => text.replace(/\n/g, '<br>');
 
+    // Generate payment button HTML if payment URL is available
+    const paymentButtonHtml = data.paymentUrl ? `
+    <div style="margin: 30px 0; text-align: center;">
+      <p style="margin-bottom: 15px; color: #333;">Pay your invoice securely online:</p>
+      <a href="${data.paymentUrl}"
+         style="display: inline-block; background-color: #2563eb; color: #ffffff;
+                padding: 14px 32px; text-decoration: none; border-radius: 6px;
+                font-weight: bold; font-size: 16px;">
+        Pay Now - ${data.totalAmount}
+      </a>
+      <p style="margin-top: 12px; font-size: 12px; color: #666;">
+        Secure payment powered by HitPay. Pay with GCash, QRPH, credit/debit cards, and more.
+      </p>
+    </div>
+    ` : '';
+
     return `
 <!DOCTYPE html>
 <html>
@@ -215,6 +258,7 @@ export function generateEmailHtmlFromTemplate(
   <div class="container">
     <p class="greeting">${formatHtml(greeting)}</p>
     <div class="body">${formatHtml(body)}</div>
+    ${paymentButtonHtml}
     <div class="signature">${formatHtml(closing)}</div>
   </div>
 </body>

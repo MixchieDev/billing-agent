@@ -84,6 +84,24 @@ export default function SettingsPage() {
   const [newPreset, setNewPreset] = useState<WithholdingPreset>({ rate: 0, code: '', label: '' });
   const [savingTax, setSavingTax] = useState(false);
 
+  // Follow-up templates state
+  interface FollowUpTemplate {
+    id?: string;
+    name: string;
+    subject: string;
+    greeting: string;
+    body: string;
+    closing: string;
+    level: number;
+  }
+  const [followUpTemplates, setFollowUpTemplates] = useState<FollowUpTemplate[]>([
+    { name: 'Follow-up Level 1 - Gentle Reminder', subject: 'Reminder: Invoice {{billingNo}} - Payment Due', greeting: 'Dear {{customerName}},', body: 'This is a friendly reminder that invoice {{billingNo}} for {{totalAmount}} was due on {{dueDate}} ({{daysOverdue}} days ago).\n\nIf you have already made the payment, please disregard this message and kindly send us your proof of payment.', closing: 'Thank you for your continued business.\n\nBest regards,\n{{companyName}} Billing Team', level: 1 },
+    { name: 'Follow-up Level 2 - Firm Reminder', subject: 'Second Notice: Invoice {{billingNo}} - Payment Overdue', greeting: 'Dear {{customerName}},', body: 'This is a follow-up regarding invoice {{billingNo}} for {{totalAmount}}, which was due on {{dueDate}} and is now {{daysOverdue}} days overdue.\n\nPlease arrange for payment at your earliest convenience.', closing: 'Thank you for your prompt attention.\n\nBest regards,\n{{companyName}} Billing Team', level: 2 },
+    { name: 'Follow-up Level 3 - Final Notice', subject: 'URGENT: Final Notice - Invoice {{billingNo}}', greeting: 'Dear {{customerName}},', body: 'This is our final notice regarding invoice {{billingNo}} for {{totalAmount}}, which is now {{daysOverdue}} days past the due date.\n\nImmediate payment is required. Please contact us if you need to discuss payment arrangements.', closing: 'Sincerely,\n{{companyName}} Billing Team', level: 3 },
+  ]);
+  const [followUpLoading, setFollowUpLoading] = useState(false);
+  const [savingFollowUp, setSavingFollowUp] = useState(false);
+
   // Fetch settings
   const fetchSettings = async () => {
     try {
@@ -172,11 +190,101 @@ export default function SettingsPage() {
     }
   };
 
+  // Fetch follow-up templates
+  const fetchFollowUpTemplates = async () => {
+    try {
+      setFollowUpLoading(true);
+      const response = await fetch('/api/email-templates');
+      if (!response.ok) throw new Error('Failed to fetch templates');
+      const data = await response.json();
+
+      // Filter follow-up templates (templateType === 'FOLLOW_UP')
+      const followUpTpls = data.filter((t: any) => t.templateType === 'FOLLOW_UP');
+
+      // Map to our state structure
+      if (followUpTpls.length > 0) {
+        const mapped = [1, 2, 3].map((level) => {
+          const existing = followUpTpls.find((t: any) => t.followUpLevel === level);
+          if (existing) {
+            return {
+              id: existing.id,
+              name: existing.name,
+              subject: existing.subject,
+              greeting: existing.greeting,
+              body: existing.body,
+              closing: existing.closing,
+              level,
+            };
+          }
+          // Return default if not found
+          return followUpTemplates.find((t) => t.level === level)!;
+        });
+        setFollowUpTemplates(mapped);
+      }
+    } catch (err: any) {
+      console.error('Error fetching follow-up templates:', err);
+    } finally {
+      setFollowUpLoading(false);
+    }
+  };
+
+  // Save follow-up templates
+  const saveFollowUpTemplates = async () => {
+    try {
+      setSavingFollowUp(true);
+      setError(null);
+      setSuccess(null);
+
+      for (const template of followUpTemplates) {
+        const method = template.id ? 'PUT' : 'POST';
+        const url = template.id
+          ? `/api/email-templates/${template.id}`
+          : '/api/email-templates';
+
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: template.name,
+            subject: template.subject,
+            greeting: template.greeting,
+            body: template.body,
+            closing: template.closing,
+            templateType: 'FOLLOW_UP',
+            followUpLevel: template.level,
+            isDefault: false,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to save template');
+        }
+
+        // Update template ID if newly created
+        if (!template.id) {
+          const savedData = await response.json();
+          template.id = savedData.id;
+        }
+      }
+
+      setSuccess('Follow-up templates saved successfully');
+      fetchFollowUpTemplates(); // Refresh
+    } catch (err: any) {
+      console.error('Error saving follow-up templates:', err);
+      setError(err.message || 'Failed to save follow-up templates');
+    } finally {
+      setSavingFollowUp(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'templates') {
       fetchTemplates();
     } else if (activeTab === 'companies') {
       fetchCompanies();
+    } else if (activeTab === 'follow-up') {
+      fetchFollowUpTemplates();
     }
   }, [activeTab]);
 
@@ -428,6 +536,7 @@ export default function SettingsPage() {
     { id: 'tax', label: 'Tax' },
     { id: 'scheduler', label: 'Scheduler' },
     { id: 'email', label: 'Email Templates' },
+    { id: 'follow-up', label: 'Follow-up Emails' },
   ];
 
   // Render template editor card
@@ -1178,6 +1287,137 @@ export default function SettingsPage() {
                   )}
                   Save Settings
                 </Button>
+              </div>
+            )}
+
+            {/* Follow-up Emails Tab */}
+            {activeTab === 'follow-up' && (
+              <div className="space-y-8">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Follow-up Email Templates</h3>
+                  <p className="text-sm text-gray-600 mb-6">
+                    Configure email templates for follow-up reminders. Each level represents an escalation stage for unpaid invoices.
+                  </p>
+                </div>
+
+                {followUpLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Available Placeholders */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                      <h4 className="font-medium text-blue-900 mb-2">Available Placeholders</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {['{{customerName}}', '{{billingNo}}', '{{dueDate}}', '{{totalAmount}}', '{{daysOverdue}}', '{{companyName}}'].map((placeholder) => (
+                          <code key={placeholder} className="bg-white px-2 py-1 rounded text-sm text-blue-800 border border-blue-200">
+                            {placeholder}
+                          </code>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Template Editors */}
+                    {followUpTemplates.map((template, index) => (
+                      <div key={template.level} className="border rounded-lg p-6 space-y-4">
+                        <div className="flex items-center gap-3 mb-4">
+                          <span className={`inline-flex items-center justify-center h-8 w-8 rounded-full text-white font-bold text-sm ${
+                            template.level === 1 ? 'bg-yellow-500' :
+                            template.level === 2 ? 'bg-orange-500' :
+                            'bg-red-500'
+                          }`}>
+                            {template.level}
+                          </span>
+                          <div>
+                            <h4 className="font-semibold text-gray-900">
+                              {template.level === 1 ? 'Gentle Reminder' :
+                               template.level === 2 ? 'Firm Reminder' :
+                               'Final Notice'}
+                            </h4>
+                            <p className="text-xs text-gray-500">
+                              {template.level === 1 ? 'First follow-up for overdue invoices' :
+                               template.level === 2 ? 'Second reminder with firmer tone' :
+                               'Final notice before escalation'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Subject */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                          <input
+                            type="text"
+                            value={template.subject}
+                            onChange={(e) => {
+                              const updated = [...followUpTemplates];
+                              updated[index].subject = e.target.value;
+                              setFollowUpTemplates(updated);
+                            }}
+                            className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+
+                        {/* Greeting */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Greeting</label>
+                          <input
+                            type="text"
+                            value={template.greeting}
+                            onChange={(e) => {
+                              const updated = [...followUpTemplates];
+                              updated[index].greeting = e.target.value;
+                              setFollowUpTemplates(updated);
+                            }}
+                            className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+
+                        {/* Body */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Body</label>
+                          <textarea
+                            rows={4}
+                            value={template.body}
+                            onChange={(e) => {
+                              const updated = [...followUpTemplates];
+                              updated[index].body = e.target.value;
+                              setFollowUpTemplates(updated);
+                            }}
+                            className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+
+                        {/* Closing */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Closing</label>
+                          <textarea
+                            rows={2}
+                            value={template.closing}
+                            onChange={(e) => {
+                              const updated = [...followUpTemplates];
+                              updated[index].closing = e.target.value;
+                              setFollowUpTemplates(updated);
+                            }}
+                            className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Save Button */}
+                    <div className="flex justify-end pt-4 border-t">
+                      <Button onClick={saveFollowUpTemplates} disabled={savingFollowUp}>
+                        {savingFollowUp ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="mr-2 h-4 w-4" />
+                        )}
+                        Save Follow-up Templates
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

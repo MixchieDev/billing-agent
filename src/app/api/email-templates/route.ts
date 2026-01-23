@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, subject, greeting, body: bodyText, closing, isDefault } = body;
+    const { name, subject, greeting, body: bodyText, closing, isDefault, templateType, followUpLevel } = body;
 
     // Validate required fields
     if (!name || !subject || !greeting || !bodyText || !closing) {
@@ -61,15 +61,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check for duplicate name
-    const existing = await prisma.emailTemplate.findUnique({
-      where: { name },
-    });
-    if (existing) {
-      return NextResponse.json(
-        { error: 'A template with this name already exists' },
-        { status: 400 }
-      );
+    // For follow-up templates, check by templateType + followUpLevel instead of name
+    if (templateType === 'FOLLOW_UP' && followUpLevel) {
+      const existingFollowUp = await prisma.emailTemplate.findFirst({
+        where: { templateType: 'FOLLOW_UP', followUpLevel },
+      });
+      if (existingFollowUp) {
+        // Update existing follow-up template instead of creating duplicate
+        const updated = await prisma.emailTemplate.update({
+          where: { id: existingFollowUp.id },
+          data: { name, subject, greeting, body: bodyText, closing },
+        });
+        return NextResponse.json(updated, { status: 200 });
+      }
+    } else {
+      // Check for duplicate name for non-follow-up templates
+      const existing = await prisma.emailTemplate.findUnique({
+        where: { name },
+      });
+      if (existing) {
+        return NextResponse.json(
+          { error: 'A template with this name already exists' },
+          { status: 400 }
+        );
+      }
     }
 
     // If setting as default, unset other defaults
@@ -88,6 +103,8 @@ export async function POST(request: NextRequest) {
         body: bodyText,
         closing,
         isDefault: isDefault || false,
+        templateType: templateType || 'BILLING',
+        followUpLevel: followUpLevel || null,
       },
       include: {
         partners: {
