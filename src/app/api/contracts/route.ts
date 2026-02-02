@@ -28,9 +28,43 @@ export async function GET(request: NextRequest) {
       ...(productType && { productType: productType as any }),
     };
 
-    // Get contracts and total count in parallel
-    const [contracts, total] = await Promise.all([
-      prisma.contract.findMany({
+    // Check if minimal fields requested (for dropdowns/selects)
+    const minimal = searchParams.get('minimal') === 'true';
+
+    // Get total count
+    const total = await prisma.contract.count({ where });
+
+    // Get contracts - use separate queries for TypeScript
+    let contracts;
+    if (minimal) {
+      contracts = await prisma.contract.findMany({
+        where,
+        select: {
+          id: true,
+          companyName: true,
+          productType: true,
+          monthlyFee: true,
+          billingAmount: true,
+          email: true,
+          emails: true,
+          tin: true,
+          vatType: true,
+          billingEntityId: true,
+          paymentPlan: true,
+          billingEntity: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      });
+    } else {
+      contracts = await prisma.contract.findMany({
         where,
         include: {
           billingEntity: true,
@@ -39,9 +73,8 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
-      }),
-      prisma.contract.count({ where }),
-    ]);
+      });
+    }
 
     return NextResponse.json({
       contracts,

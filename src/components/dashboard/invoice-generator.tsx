@@ -180,8 +180,8 @@ export function InvoiceGenerator() {
     const fetchData = async () => {
       try {
         const [contractsRes, companiesRes, settingsRes] = await Promise.all([
-          fetch('/api/contracts?status=ACTIVE'),
-          fetch('/api/companies'),
+          fetch('/api/contracts?status=ACTIVE&minimal=true'),
+          fetch('/api/companies?minimal=true'),
           fetch('/api/settings?category=tax'),
         ]);
 

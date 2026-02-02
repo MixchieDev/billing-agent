@@ -10,6 +10,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const minimal = searchParams.get('minimal') === 'true';
+
+    if (minimal) {
+      // Lightweight query for dropdowns
+      const companies = await prisma.company.findMany({
+        select: {
+          id: true,
+          code: true,
+          name: true,
+        },
+        orderBy: { code: 'asc' },
+      });
+      return NextResponse.json(companies);
+    }
+
+    // Full query with relations
     const companies = await prisma.company.findMany({
       include: {
         signatories: true,
