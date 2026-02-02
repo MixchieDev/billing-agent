@@ -22,6 +22,7 @@ import {
   Landmark,
   Handshake,
   FilePlus,
+  History,
 } from 'lucide-react';
 
 const navigation = [
@@ -41,6 +42,7 @@ const navigation = [
 
 const adminNavigation = [
   { name: 'Users', href: '/dashboard/users', icon: UserCog },
+  { name: 'Audit Logs', href: '/dashboard/audit-logs', icon: History },
 ];
 
 export function Sidebar() {
