@@ -137,6 +137,9 @@ model Partner {
   invoices        Invoice[]
   company         Company        @relation(fields: [companyId], references: [id])
   emailTemplate   EmailTemplate? @relation(fields: [emailTemplateId], references: [id])
+
+  @@index([companyId])
+  @@index([billingModel])
 }
 
 model EmailTemplate {
@@ -291,6 +294,10 @@ model Invoice {
   @@index([createdAt])
   @@index([status, createdAt])
   @@index([paidAt])
+  @@index([companyId, status])
+  @@index([dueDate])
+  @@index([emailStatus])
+  @@index([followUpEnabled, status])
 }
 
 model InvoiceLineItem {
@@ -375,6 +382,8 @@ model FollowUpLog {
 
   @@index([invoiceId])
   @@index([sentAt])
+  @@index([invoiceId, level])
+  @@index([status])
 }
 
 model AuditLog {
@@ -391,6 +400,9 @@ model AuditLog {
   @@index([userId])
   @@index([createdAt])
   @@index([entityId, entityType])
+  @@index([entityType, createdAt])
+  @@index([action])
+  @@index([action, createdAt])
 }
 
 model SystemConfig {
