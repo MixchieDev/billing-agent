@@ -146,8 +146,8 @@ export function parseContractsCSV(csvContent: string): ParseResult<ContractCSVRo
     skippedRows: 0,
   };
 
-  // Required columns
-  const requiredColumns = ['customerid', 'companyname', 'producttype', 'partner', 'billingentity', 'monthlyfee'];
+  // Required columns (customerId is optional — auto-generated if missing)
+  const requiredColumns = ['companyname', 'producttype', 'partner', 'billingentity', 'monthlyfee'];
   const missingColumns = requiredColumns.filter(col => !headers.includes(col));
   if (missingColumns.length > 0) {
     result.success = false;
@@ -185,26 +185,14 @@ export function parseContractsCSV(csvContent: string): ParseResult<ContractCSVRo
     const monthlyFee = parseNumber(getValue('monthlyfee'));
 
     // Validate required fields
-    if (!customerId) rowErrors.push('Missing customerId');
     if (!companyName) rowErrors.push('Missing companyName');
     if (!productType) rowErrors.push('Missing productType');
     if (!partner) rowErrors.push('Missing partner');
     if (!billingEntity) rowErrors.push('Missing billingEntity');
     if (monthlyFee <= 0) rowErrors.push('Invalid monthlyFee');
 
-    // Note: productType validation is done at the import route level using settings-backed types
-
-    // Validate partner
-    const validPartners = ['Direct-YOWI', 'Direct-ABBA', 'Globe'];
-    if (partner && !validPartners.includes(partner)) {
-      rowErrors.push(`Invalid partner: ${partner}. Must be one of: ${validPartners.join(', ')}`);
-    }
-
-    // Validate billingEntity
-    const validEntities = ['YOWI', 'ABBA'];
-    if (billingEntity && !validEntities.includes(billingEntity.toUpperCase())) {
-      rowErrors.push(`Invalid billingEntity: ${billingEntity}. Must be one of: ${validEntities.join(', ')}`);
-    }
+    // Note: partner, billingEntity, and productType validation is done at the import route level
+    // using actual database lookups and settings-backed types
 
     if (rowErrors.length > 0) {
       result.errors.push({ row: i + 1, message: rowErrors.join('; ') });

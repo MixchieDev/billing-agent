@@ -348,7 +348,7 @@ model RcbcEndClient {
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  ratePerEmployee Decimal  @default(0) @db.Decimal(10, 2)
+  ratePerEmployee Decimal  @default(0) @db.Decimal(20, 10)
 
   @@unique([name, month])
 }

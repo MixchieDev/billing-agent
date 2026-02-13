@@ -31,6 +31,12 @@ export function ContractListPage() {
   const [error, setError] = useState<string | null>(null);
   const { data: productTypes } = useProductTypes();
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const limit = 50;
+
   // Modal states
   const [showFormModal, setShowFormModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -49,11 +55,13 @@ export function ContractListPage() {
       setError(null);
 
       const params = new URLSearchParams();
+      params.set('page', String(page));
+      params.set('limit', String(limit));
       if (statusFilter) params.set('status', statusFilter);
       if (billingEntityFilter) params.set('billingEntity', billingEntityFilter);
       if (productTypeFilter) params.set('productType', productTypeFilter);
 
-      const url = `/api/contracts${params.toString() ? `?${params.toString()}` : ''}`;
+      const url = `/api/contracts?${params.toString()}`;
       const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch contracts');
 
@@ -61,6 +69,10 @@ export function ContractListPage() {
 
       // Handle both array response and { contracts: [] } response
       const contractList = Array.isArray(data) ? data : (data.contracts || []);
+      if (!Array.isArray(data)) {
+        setTotal(data.total || contractList.length);
+        setTotalPages(data.totalPages || 1);
+      }
 
       const transformedContracts: ContractRow[] = contractList.map((contract: any) => ({
         id: contract.id,
@@ -87,7 +99,7 @@ export function ContractListPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, billingEntityFilter, productTypeFilter]);
+  }, [statusFilter, billingEntityFilter, productTypeFilter, page]);
 
   const fetchPartnersAndCompanies = async () => {
     try {
@@ -170,7 +182,7 @@ export function ContractListPage() {
               {loading && <Loader2 className="ml-2 inline h-4 w-4 animate-spin" />}
             </h2>
             <span className="text-sm text-gray-500">
-              ({contracts.length} contract{contracts.length !== 1 ? 's' : ''})
+              ({total} contract{total !== 1 ? 's' : ''})
             </span>
           </div>
 
@@ -178,7 +190,7 @@ export function ContractListPage() {
             {/* Filters */}
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
               className={selectClassName}
             >
               <option value="">All Statuses</option>
@@ -190,17 +202,18 @@ export function ContractListPage() {
 
             <select
               value={billingEntityFilter}
-              onChange={(e) => setBillingEntityFilter(e.target.value)}
+              onChange={(e) => { setBillingEntityFilter(e.target.value); setPage(1); }}
               className={selectClassName}
             >
               <option value="">All Entities</option>
-              <option value="YOWI">YOWI</option>
-              <option value="ABBA">ABBA</option>
+              {companies.map(c => (
+                <option key={c.code} value={c.code}>{c.code}</option>
+              ))}
             </select>
 
             <select
               value={productTypeFilter}
-              onChange={(e) => setProductTypeFilter(e.target.value)}
+              onChange={(e) => { setProductTypeFilter(e.target.value); setPage(1); }}
               className={selectClassName}
             >
               <option value="">All Products</option>
@@ -239,6 +252,36 @@ export function ContractListPage() {
           onEdit={handleEditContract}
           onDelete={handleDeleteContract}
         />
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between pb-16">
+            <p className="text-sm text-gray-500">
+              Showing {(page - 1) * limit + 1}–{Math.min(page * limit, total)} of {total} contracts
+            </p>
+            <div className="flex items-center gap-2 mr-16">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1 || loading}
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-gray-700">
+                Page {page} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages || loading}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Empty state */}
         {!loading && contracts.length === 0 && !error && (
