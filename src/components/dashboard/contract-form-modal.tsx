@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { X, Loader2, Save } from 'lucide-react';
 import { MultiEmailInput } from '@/components/ui/multi-email-input';
 import { parseEmails, joinEmails } from '@/lib/utils';
+import { useProductTypes } from '@/lib/hooks/use-api';
 
 interface Partner {
   id: string;
@@ -52,7 +53,6 @@ interface ContractFormModalProps {
   companies: Company[];
 }
 
-const productTypes = ['ACCOUNTING', 'PAYROLL', 'COMPLIANCE', 'HR'];
 const statusOptions = ['ACTIVE', 'INACTIVE', 'STOPPED', 'NOT_STARTED'];
 const vatTypes = ['VAT', 'NON_VAT'];
 const billingTypes = ['RECURRING', 'ONE_TIME'];
@@ -69,12 +69,14 @@ export function ContractFormModal({
   const isEditing = !!contract;
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { data: productTypes } = useProductTypes();
 
   // Form state
+  const defaultProductType = productTypes?.[0]?.value || 'ACCOUNTING';
   const [formData, setFormData] = useState({
     customerId: '',
     companyName: '',
-    productType: 'ACCOUNTING',
+    productType: defaultProductType,
     partner: '',
     billingEntity: 'YOWI',
     monthlyFee: '',
@@ -264,8 +266,8 @@ export function ContractFormModal({
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
               >
-                {productTypes.map(pt => (
-                  <option key={pt} value={pt}>{pt}</option>
+                {(productTypes || []).map(pt => (
+                  <option key={pt.value} value={pt.value}>{pt.label}</option>
                 ))}
               </select>
             </div>

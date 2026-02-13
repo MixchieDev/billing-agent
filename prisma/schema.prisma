@@ -162,7 +162,7 @@ model Contract {
   id                String             @id @default(cuid())
   customerId        String?
   companyName       String
-  productType       ProductType
+  productType       String
   revenueModel      String?
   partnerId         String?
   monthlyFee        Decimal            @db.Decimal(15, 2)
@@ -271,6 +271,7 @@ model Invoice {
   voidReason            String?
   voidedAt              DateTime?
   voidedById            String?
+  productType           String?
   followUpEnabled       Boolean                @default(true)
   followUpCount         Int                    @default(0)
   lastFollowUpAt        DateTime?
@@ -548,13 +549,6 @@ enum BillingModel {
   DIRECT
   GLOBE_INNOVE
   RCBC_CONSOLIDATED
-}
-
-enum ProductType {
-  ACCOUNTING
-  PAYROLL
-  COMPLIANCE
-  HR
 }
 
 enum ContractStatus {

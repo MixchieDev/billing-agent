@@ -60,14 +60,8 @@ export async function GET(request: NextRequest) {
 
     // Transform invoices to YTO CSV format
     const csvData: InvoiceCsvData[] = invoices.map((invoice) => {
-      // Get product type from line items or default
-      const productType = invoice.lineItems[0]?.description?.includes('Payroll')
-        ? 'PAYROLL'
-        : invoice.lineItems[0]?.description?.includes('Compliance')
-        ? 'COMPLIANCE'
-        : invoice.lineItems[0]?.description?.includes('HR')
-        ? 'HR'
-        : 'ACCOUNTING';
+      // Use stored product type, fallback to first line item description
+      const productType = invoice.productType || invoice.lineItems[0]?.description || 'ACCOUNTING';
 
       // Determine customer code based on billing model
       let customerCode = invoice.customerName;
@@ -110,7 +104,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Generate CSV
-    const csvContent = generateYtoCsv(csvData);
+    const csvContent = await generateYtoCsv(csvData);
 
     // Generate filename
     const entity = billingEntity || 'ALL';

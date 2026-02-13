@@ -3,7 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { parseContractsCSV, generateContractsTemplate } from '@/lib/csv-parser';
-import { ProductType, ContractStatus, VatType, BillingType } from '@/generated/prisma';
+import { ContractStatus, VatType, BillingType } from '@/generated/prisma';
+import { getProductTypes } from '@/lib/settings';
 
 // GET - Download template
 export async function GET() {
@@ -68,13 +69,9 @@ export async function POST(request: NextRequest) {
       errors: [] as { row: number; message: string }[],
     };
 
-    // Product type mapping
-    const productTypeMap: Record<string, ProductType> = {
-      'ACCOUNTING': ProductType.ACCOUNTING,
-      'PAYROLL': ProductType.PAYROLL,
-      'COMPLIANCE': ProductType.COMPLIANCE,
-      'HR': ProductType.HR,
-    };
+    // Fetch valid product types from settings
+    const configuredTypes = await getProductTypes();
+    const validProductTypes = configuredTypes.map(t => t.value);
 
     // Status mapping
     const statusMap: Record<string, ContractStatus> = {
@@ -115,7 +112,7 @@ export async function POST(request: NextRequest) {
         const contractData = {
           customerId: row.customerId,
           companyName: row.companyName,
-          productType: productTypeMap[row.productType] || ProductType.ACCOUNTING,
+          productType: validProductTypes.includes(row.productType) ? row.productType : (validProductTypes[0] || 'ACCOUNTING'),
           partnerId: partner.id,
           billingEntityId: company.id,
           monthlyFee: row.monthlyFee,

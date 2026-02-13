@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Loader2, Search, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useProductTypes } from '@/lib/hooks/use-api';
 
 interface Contract {
   id: string;
@@ -36,6 +37,7 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [billingEntities, setBillingEntities] = useState<BillingEntity[]>([]);
   const [loading, setLoading] = useState(true);
+  const { data: productTypesConfig } = useProductTypes();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -156,16 +158,9 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
           setHasWithholding(false);
         }
 
-        // Auto-fill description from product type
-        const productTypeDescriptions: Record<string, string> = {
-          'PAYROLL': 'Monthly Payroll Services',
-          'ACCOUNTING': 'Monthly Accounting Services',
-          'HR': 'Monthly HR Services',
-          'TAX': 'Tax Compliance Services',
-          'AUDIT': 'Audit Services',
-          'CONSULTING': 'Consulting Services',
-        };
-        const defaultDesc = productTypeDescriptions[contract.productType] || `${contract.productType} Services`;
+        // Auto-fill description from product type using settings
+        const ptConfig = productTypesConfig?.find(t => t.value === contract.productType);
+        const defaultDesc = ptConfig ? `${ptConfig.label} Services` : `${contract.productType} Services`;
         setDescription(defaultDesc);
       }
     }

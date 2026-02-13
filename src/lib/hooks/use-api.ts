@@ -48,6 +48,11 @@ export function useCompanies(options?: SWRConfiguration) {
   return useSWR('/api/companies', fetcher, { ...defaultConfig, ...options });
 }
 
+// Hook for fetching product types
+export function useProductTypes(options?: SWRConfiguration) {
+  return useSWR<{ value: string; label: string }[]>('/api/product-types', fetcher, { ...defaultConfig, ...options });
+}
+
 // Generic hook for any API endpoint
 export function useApi<T = any>(url: string | null, options?: SWRConfiguration) {
   return useSWR<T>(url, fetcher, { ...defaultConfig, ...options });

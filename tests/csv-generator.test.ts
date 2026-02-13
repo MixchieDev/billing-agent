@@ -4,6 +4,16 @@
 
 import { generateYtoCsv, InvoiceCsvData } from '@/lib/csv-generator';
 
+// Mock settings to return default product types
+jest.mock('@/lib/settings', () => ({
+  getProductTypes: jest.fn().mockResolvedValue([
+    { value: 'ACCOUNTING', label: 'Accounting' },
+    { value: 'PAYROLL', label: 'Payroll' },
+    { value: 'COMPLIANCE', label: 'Compliance' },
+    { value: 'HR', label: 'HR' },
+  ]),
+}));
+
 describe('generateYtoCsv', () => {
   const baseMockInvoice: InvoiceCsvData = {
     invoiceNo: '',
@@ -20,8 +30,8 @@ describe('generateYtoCsv', () => {
   };
 
   describe('CSV header generation', () => {
-    it('generates CSV with correct headers', () => {
-      const csv = generateYtoCsv([baseMockInvoice]);
+    it('generates CSV with correct headers', async () => {
+      const csv = await generateYtoCsv([baseMockInvoice]);
       const lines = csv.split('\n');
       const headers = lines[0];
 
@@ -45,8 +55,8 @@ describe('generateYtoCsv', () => {
   });
 
   describe('Date formatting', () => {
-    it('formats dates in MM/DD/YYYY format for YTO import', () => {
-      const csv = generateYtoCsv([baseMockInvoice]);
+    it('formats dates in MM/DD/YYYY format for YTO import', async () => {
+      const csv = await generateYtoCsv([baseMockInvoice]);
       const lines = csv.split('\n');
       const dataRow = lines[1];
 
@@ -58,8 +68,8 @@ describe('generateYtoCsv', () => {
   });
 
   describe('Single invoice generation', () => {
-    it('generates correct row for VAT client', () => {
-      const csv = generateYtoCsv([baseMockInvoice]);
+    it('generates correct row for VAT client', async () => {
+      const csv = await generateYtoCsv([baseMockInvoice]);
       const lines = csv.split('\n');
       const dataRow = lines[1];
 
@@ -72,13 +82,13 @@ describe('generateYtoCsv', () => {
       expect(dataRow).toContain('Yes'); // Taxable
     });
 
-    it('generates correct row for NON-VAT client', () => {
+    it('generates correct row for NON-VAT client', async () => {
       const nonVatInvoice: InvoiceCsvData = {
         ...baseMockInvoice,
         vatType: 'NON_VAT',
         grossAmount: 10000,
       };
-      const csv = generateYtoCsv([nonVatInvoice]);
+      const csv = await generateYtoCsv([nonVatInvoice]);
       const lines = csv.split('\n');
       const dataRow = lines[1];
 
@@ -88,32 +98,32 @@ describe('generateYtoCsv', () => {
   });
 
   describe('Product type to location mapping', () => {
-    it('maps ACCOUNTING to Accounting location', () => {
-      const csv = generateYtoCsv([baseMockInvoice]);
+    it('maps ACCOUNTING to Accounting location', async () => {
+      const csv = await generateYtoCsv([baseMockInvoice]);
       expect(csv).toContain('Accounting');
     });
 
-    it('maps PAYROLL to Payroll location', () => {
+    it('maps PAYROLL to Payroll location', async () => {
       const payrollInvoice = { ...baseMockInvoice, productType: 'PAYROLL' };
-      const csv = generateYtoCsv([payrollInvoice]);
+      const csv = await generateYtoCsv([payrollInvoice]);
       expect(csv).toContain('Payroll');
     });
 
-    it('maps COMPLIANCE to Compliance location', () => {
+    it('maps COMPLIANCE to Compliance location', async () => {
       const complianceInvoice = { ...baseMockInvoice, productType: 'COMPLIANCE' };
-      const csv = generateYtoCsv([complianceInvoice]);
+      const csv = await generateYtoCsv([complianceInvoice]);
       expect(csv).toContain('Compliance');
     });
 
-    it('maps HR to HR location', () => {
+    it('maps HR to HR location', async () => {
       const hrInvoice = { ...baseMockInvoice, productType: 'HR' };
-      const csv = generateYtoCsv([hrInvoice]);
+      const csv = await generateYtoCsv([hrInvoice]);
       expect(csv).toContain(',HR,');
     });
   });
 
   describe('Consolidated invoices with line items', () => {
-    it('generates multiple rows for invoice with line items', () => {
+    it('generates multiple rows for invoice with line items', async () => {
       const consolidatedInvoice: InvoiceCsvData = {
         ...baseMockInvoice,
         lineItems: [
@@ -134,7 +144,7 @@ describe('generateYtoCsv', () => {
         ],
       };
 
-      const csv = generateYtoCsv([consolidatedInvoice]);
+      const csv = await generateYtoCsv([consolidatedInvoice]);
       const lines = csv.split('\n');
 
       // Should have header + 2 data rows
@@ -147,14 +157,14 @@ describe('generateYtoCsv', () => {
   });
 
   describe('Multiple invoices', () => {
-    it('generates correct number of rows for multiple invoices', () => {
+    it('generates correct number of rows for multiple invoices', async () => {
       const invoices: InvoiceCsvData[] = [
         baseMockInvoice,
         { ...baseMockInvoice, customerCode: 'CLIENT 2' },
         { ...baseMockInvoice, customerCode: 'CLIENT 3' },
       ];
 
-      const csv = generateYtoCsv(invoices);
+      const csv = await generateYtoCsv(invoices);
       const lines = csv.split('\n');
 
       // Header + 3 data rows
@@ -163,23 +173,23 @@ describe('generateYtoCsv', () => {
   });
 
   describe('Default values', () => {
-    it('includes default Accounts Receivable value', () => {
-      const csv = generateYtoCsv([baseMockInvoice]);
+    it('includes default Accounts Receivable value', async () => {
+      const csv = await generateYtoCsv([baseMockInvoice]);
       expect(csv).toContain('"Accounts Receivable - Trade"');
     });
 
-    it('includes default Sales Account Code', () => {
-      const csv = generateYtoCsv([baseMockInvoice]);
+    it('includes default Sales Account Code', async () => {
+      const csv = await generateYtoCsv([baseMockInvoice]);
       expect(csv).toContain('"5200200 - Sale of Services"');
     });
 
-    it('sets Service to Yes', () => {
-      const csv = generateYtoCsv([baseMockInvoice]);
+    it('sets Service to Yes', async () => {
+      const csv = await generateYtoCsv([baseMockInvoice]);
       expect(csv).toContain(',Yes,'); // Service field
     });
 
-    it('sets Quantity to 1', () => {
-      const csv = generateYtoCsv([baseMockInvoice]);
+    it('sets Quantity to 1', async () => {
+      const csv = await generateYtoCsv([baseMockInvoice]);
       const lines = csv.split('\n');
       const dataRow = lines[1].split(',');
       const quantityIndex = 13; // 0-indexed position of Quantity
@@ -188,28 +198,28 @@ describe('generateYtoCsv', () => {
   });
 
   describe('Special character handling', () => {
-    it('properly escapes customer names with commas', () => {
+    it('properly escapes customer names with commas', async () => {
       const invoiceWithComma = {
         ...baseMockInvoice,
         customerCode: 'COMPANY, INC.',
       };
-      const csv = generateYtoCsv([invoiceWithComma]);
+      const csv = await generateYtoCsv([invoiceWithComma]);
       expect(csv).toContain('"COMPANY, INC."');
     });
 
-    it('properly escapes descriptions with quotes', () => {
+    it('properly escapes descriptions with quotes', async () => {
       const invoiceWithQuotes = {
         ...baseMockInvoice,
         description: 'Service for "Special" project',
       };
-      const csv = generateYtoCsv([invoiceWithQuotes]);
+      const csv = await generateYtoCsv([invoiceWithQuotes]);
       expect(csv).toContain('Service for "Special" project');
     });
   });
 
   describe('Empty invoice handling', () => {
-    it('returns only headers for empty array', () => {
-      const csv = generateYtoCsv([]);
+    it('returns only headers for empty array', async () => {
+      const csv = await generateYtoCsv([]);
       const lines = csv.split('\n');
       expect(lines.length).toBe(1); // Only header row
     });

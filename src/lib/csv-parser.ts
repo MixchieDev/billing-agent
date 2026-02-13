@@ -192,11 +192,7 @@ export function parseContractsCSV(csvContent: string): ParseResult<ContractCSVRo
     if (!billingEntity) rowErrors.push('Missing billingEntity');
     if (monthlyFee <= 0) rowErrors.push('Invalid monthlyFee');
 
-    // Validate productType
-    const validProductTypes = ['ACCOUNTING', 'PAYROLL', 'COMPLIANCE', 'HR'];
-    if (productType && !validProductTypes.includes(productType.toUpperCase())) {
-      rowErrors.push(`Invalid productType: ${productType}. Must be one of: ${validProductTypes.join(', ')}`);
-    }
+    // Note: productType validation is done at the import route level using settings-backed types
 
     // Validate partner
     const validPartners = ['Direct-YOWI', 'Direct-ABBA', 'Globe'];

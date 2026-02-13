@@ -32,6 +32,14 @@ const DEFAULTS: Record<string, any> = {
   ],
   'tax.defaultWithholdingRate': 0.02,
   'tax.defaultWithholdingCode': 'WC160',
+
+  // Product Types
+  'productTypes.list': [
+    { value: 'ACCOUNTING', label: 'Accounting' },
+    { value: 'PAYROLL', label: 'Payroll' },
+    { value: 'COMPLIANCE', label: 'Compliance' },
+    { value: 'HR', label: 'HR' },
+  ],
 };
 
 // Cache for settings (refreshed every 5 minutes)
@@ -345,4 +353,19 @@ export async function getDefaultWithholdingRate(): Promise<number> {
  */
 export async function getDefaultWithholdingCode(): Promise<string> {
   return await getSetting('tax.defaultWithholdingCode') ?? 'WC160';
+}
+
+// ==================== PRODUCT TYPE SETTINGS ====================
+
+export interface ProductTypeConfig {
+  value: string;
+  label: string;
+}
+
+/**
+ * Get configured product types
+ */
+export async function getProductTypes(): Promise<ProductTypeConfig[]> {
+  const types = await getSetting('productTypes.list');
+  return types || DEFAULTS['productTypes.list'];
 }

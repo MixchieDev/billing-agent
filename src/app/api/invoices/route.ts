@@ -60,6 +60,7 @@ export async function GET(request: NextRequest) {
           dueDate: true,
           createdAt: true,
           billingModel: true,
+          productType: true,
           status: true,
           paidAt: true,
           paidAmount: true,

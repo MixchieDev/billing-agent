@@ -17,7 +17,7 @@ export interface ContractRow {
   customerNumber?: string;
   customerId?: string;
   companyName: string;
-  productType: 'ACCOUNTING' | 'PAYROLL' | 'COMPLIANCE' | 'HR';
+  productType: string;
   monthlyFee: number;
   status: 'ACTIVE' | 'INACTIVE' | 'STOPPED' | 'NOT_STARTED';
   nextDueDate: Date | null;

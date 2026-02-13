@@ -62,22 +62,20 @@ const YTO_DEFAULTS = {
   defaultDistribution: 1,
 };
 
-// Map product type to YTO location
-function mapProductTypeToLocation(productType: string): string {
-  const map: Record<string, string> = {
-    ACCOUNTING: 'Accounting',
-    PAYROLL: 'Payroll',
-    COMPLIANCE: 'Compliance',
-    HR: 'HR',
-  };
-  return map[productType] || productType;
+import { getProductTypes } from './settings';
+
+// Map product type to YTO location using settings-backed labels
+async function mapProductTypeToLocation(productType: string): Promise<string> {
+  const types = await getProductTypes();
+  const config = types.find(t => t.value === productType);
+  return config?.label || productType;
 }
 
 // Line item type
 type LineItem = NonNullable<InvoiceCsvData['lineItems']>[number];
 
 // Generate a single YTO CSV row
-function generateRow(data: InvoiceCsvData, lineItem?: LineItem): YtoImportRow {
+async function generateRow(data: InvoiceCsvData, lineItem?: LineItem): Promise<YtoImportRow> {
   const isLineItem = !!lineItem;
 
   return {
@@ -85,7 +83,7 @@ function generateRow(data: InvoiceCsvData, lineItem?: LineItem): YtoImportRow {
     date: formatDateYto(data.statementDate),
     dueDate: formatDateYto(data.dueDate),
     customerCode: data.customerCode,
-    location: mapProductTypeToLocation(data.productType),
+    location: await mapProductTypeToLocation(data.productType),
     accountsReceivable: YTO_DEFAULTS.accountsReceivable,
     withholdingTax: data.withholdingCode || '',
     poNo: '',
@@ -107,7 +105,7 @@ function generateRow(data: InvoiceCsvData, lineItem?: LineItem): YtoImportRow {
 }
 
 // Generate CSV content from invoice data
-export function generateYtoCsv(invoices: InvoiceCsvData[]): string {
+export async function generateYtoCsv(invoices: InvoiceCsvData[]): Promise<string> {
   const headers = [
     'Invoice No.',
     'Date',
@@ -139,11 +137,11 @@ export function generateYtoCsv(invoices: InvoiceCsvData[]): string {
     // If invoice has line items (like RCBC consolidated), generate row per line item
     if (invoice.lineItems && invoice.lineItems.length > 0) {
       for (const lineItem of invoice.lineItems) {
-        rows.push(generateRow(invoice, lineItem));
+        rows.push(await generateRow(invoice, lineItem));
       }
     } else {
       // Single row for direct billing
-      rows.push(generateRow(invoice));
+      rows.push(await generateRow(invoice));
     }
   }
 
@@ -182,10 +180,10 @@ export function generateYtoCsv(invoices: InvoiceCsvData[]): string {
 }
 
 // Generate CSV for RCBC consolidated billing
-export function generateRcbcConsolidatedCsv(
+export async function generateRcbcConsolidatedCsv(
   month: Date,
   endClients: { name: string; employeeCount: number; ratePerEmployee: number }[]
-): string {
+): Promise<string> {
   const baseRate = 44.64; // Base rate per employee before VAT
 
   const invoice: InvoiceCsvData = {

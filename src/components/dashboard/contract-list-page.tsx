@@ -8,6 +8,7 @@ import { CSVImportModal } from '@/components/dashboard/csv-import-modal';
 import { DeleteConfirmationModal } from '@/components/dashboard/delete-confirmation-modal';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Loader2, Upload, Plus } from 'lucide-react';
+import { useProductTypes } from '@/lib/hooks/use-api';
 
 interface Partner {
   id: string;
@@ -28,6 +29,7 @@ export function ContractListPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { data: productTypes } = useProductTypes();
 
   // Modal states
   const [showFormModal, setShowFormModal] = useState(false);
@@ -202,10 +204,9 @@ export function ContractListPage() {
               className={selectClassName}
             >
               <option value="">All Products</option>
-              <option value="ACCOUNTING">Accounting</option>
-              <option value="PAYROLL">Payroll</option>
-              <option value="COMPLIANCE">Compliance</option>
-              <option value="HR">HR</option>
+              {(productTypes || []).map(pt => (
+                <option key={pt.value} value={pt.value}>{pt.label}</option>
+              ))}
             </select>
 
             <Button variant="outline" onClick={fetchContracts} disabled={loading}>

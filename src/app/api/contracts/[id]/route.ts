@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { ProductType, ContractStatus, VatType, BillingType } from '@/generated/prisma';
+import { ContractStatus, VatType, BillingType } from '@/generated/prisma';
 
 // GET single contract
 export async function GET(
@@ -190,14 +190,6 @@ export async function PUT(
       billingEntityId = company.id;
     }
 
-    // Map productType to enum
-    const productTypeMap: Record<string, ProductType> = {
-      'ACCOUNTING': ProductType.ACCOUNTING,
-      'PAYROLL': ProductType.PAYROLL,
-      'COMPLIANCE': ProductType.COMPLIANCE,
-      'HR': ProductType.HR,
-    };
-
     // Map status to enum
     const statusMap: Record<string, ContractStatus> = {
       'ACTIVE': ContractStatus.ACTIVE,
@@ -216,7 +208,7 @@ export async function PUT(
     if (body.customerId !== undefined) updateData.customerId = body.customerId;
     if (body.companyName !== undefined) updateData.companyName = body.companyName;
     if (body.productType !== undefined) {
-      updateData.productType = productTypeMap[body.productType?.toUpperCase()] || existingContract.productType;
+      updateData.productType = body.productType?.toUpperCase() || existingContract.productType;
     }
     if (body.monthlyFee !== undefined) updateData.monthlyFee = body.monthlyFee;
     if (body.paymentPlan !== undefined) updateData.paymentPlan = body.paymentPlan || null;

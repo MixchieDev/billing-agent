@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Filter, X } from 'lucide-react';
+import { useProductTypes } from '@/lib/hooks/use-api';
 
 export interface InvoiceFilters {
   billingEntity: string;
@@ -27,6 +28,7 @@ export function InvoiceFiltersComponent({
   onClear,
 }: InvoiceFiltersProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const { data: productTypes } = useProductTypes();
 
   const handleChange = (key: keyof InvoiceFilters, value: string) => {
     onFilterChange({ ...filters, [key]: value });
@@ -100,10 +102,9 @@ export function InvoiceFiltersComponent({
               onChange={(e) => handleChange('productType', e.target.value)}
             >
               <option value="">All Types</option>
-              <option value="ACCOUNTING">Accounting</option>
-              <option value="PAYROLL">Payroll</option>
-              <option value="COMPLIANCE">Compliance</option>
-              <option value="HR">HR</option>
+              {(productTypes || []).map(pt => (
+                <option key={pt.value} value={pt.value}>{pt.label}</option>
+              ))}
             </Select>
           </div>
 

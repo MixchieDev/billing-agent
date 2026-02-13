@@ -7,7 +7,7 @@ import {
   updateNextBillingDate,
   checkExistingInvoiceForPeriod,
 } from './scheduled-billing-service';
-import { getVatRate } from './settings';
+import { getVatRate, getProductTypes } from './settings';
 import { format } from 'date-fns';
 
 // ==================== TYPES ====================
@@ -102,6 +102,7 @@ export async function generateInvoice(
   let billingModel: BillingModel = BillingModel.DIRECT;
   let contractId: string | null = null;
   let description = request.description || 'Professional Services';
+  let invoiceProductType: string | null = null;
 
   if (request.contractId) {
     // Generate from contract
@@ -115,6 +116,7 @@ export async function generateInvoice(
     }
 
     contractId = contract.id;
+    invoiceProductType = contract.productType;
     customerTin = contract.tin;
 
     // Determine recipient based on partner billing model
@@ -145,9 +147,11 @@ export async function generateInvoice(
       customerEmail = customerEmails?.split(',')[0]?.trim() || null;  // First email for legacy
     }
 
-    // Use product type as default description if not provided
+    // Use product type label as default description if not provided
     if (!request.description) {
-      description = contract.productType.charAt(0) + contract.productType.slice(1).toLowerCase();
+      const productTypes = await getProductTypes();
+      const ptConfig = productTypes.find(t => t.value === contract.productType);
+      description = ptConfig?.label || contract.productType.charAt(0) + contract.productType.slice(1).toLowerCase();
     }
   } else if (request.customBillTo) {
     // Custom billing details
@@ -263,6 +267,7 @@ export async function generateInvoice(
       billingNo,
       companyId: request.billingEntityId,
       partnerId,
+      productType: invoiceProductType,
       customerName,
       attention,
       customerAddress,

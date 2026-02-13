@@ -34,7 +34,7 @@ export default function DashboardPage() {
       id: inv.id,
       billingNo: inv.billingNo,
       customerName: inv.customerName,
-      productType: inv.lineItems?.[0]?.description?.includes('Payroll') ? 'PAYROLL' : 'ACCOUNTING',
+      productType: inv.productType || inv.lineItems?.[0]?.description || 'ACCOUNTING',
       serviceFee: Number(inv.serviceFee),
       vatAmount: Number(inv.vatAmount),
       netAmount: Number(inv.netAmount),

@@ -1,6 +1,7 @@
 import prisma from './prisma';
 import { calculateBilling, getBillingEntity, generateBillingNo } from './utils';
 import { BillingModel, InvoiceStatus, ContractStatus, VatType, BillingFrequency } from '@/generated/prisma';
+import { getProductTypes } from './settings';
 
 // Map contract paymentPlan string to BillingFrequency enum
 function mapPaymentPlanToFrequency(paymentPlan: string | null | undefined): BillingFrequency {
@@ -215,6 +216,11 @@ export async function createInvoiceFromContract(params: CreateInvoiceParams) {
   // Determine billing frequency from contract's paymentPlan
   const billingFrequency = mapPaymentPlanToFrequency(contract.paymentPlan);
 
+  // Look up product type label for line item description
+  const productTypes = await getProductTypes();
+  const productTypeConfig = productTypes.find(t => t.value === contract.productType);
+  const productTypeLabel = productTypeConfig?.label || contract.productType.charAt(0) + contract.productType.slice(1).toLowerCase();
+
   // Create the invoice
   const invoice = await prisma.invoice.create({
     data: {
@@ -226,6 +232,7 @@ export async function createInvoiceFromContract(params: CreateInvoiceParams) {
       customerAddress,
       customerEmail,
       customerTin: contract.tin,
+      productType: contract.productType,
       statementDate: new Date(),
       dueDate: contract.nextDueDate || new Date(),
       periodStart: params.periodStart,
@@ -251,7 +258,7 @@ export async function createInvoiceFromContract(params: CreateInvoiceParams) {
         create: {
           contractId: contract.id,
           date: new Date(),
-          description: contract.productType.charAt(0) + contract.productType.slice(1).toLowerCase(),
+          description: productTypeLabel,
           quantity: 1,
           unitPrice: calculation.serviceFee,
           serviceFee: calculation.serviceFee,

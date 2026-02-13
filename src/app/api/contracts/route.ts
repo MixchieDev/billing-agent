@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { ProductType, ContractStatus, VatType, BillingType } from '@/generated/prisma';
+import { ContractStatus, VatType, BillingType } from '@/generated/prisma';
+import { getProductTypes } from '@/lib/settings';
 
 export async function GET(request: NextRequest) {
   try {
@@ -146,15 +147,16 @@ export async function POST(request: NextRequest) {
     const nextNo = company.nextContractNo || 1;
     const customerNumber = `${prefix}-${String(nextNo).padStart(4, '0')}`;
 
-    // Map productType to enum
-    const productTypeMap: Record<string, ProductType> = {
-      'ACCOUNTING': ProductType.ACCOUNTING,
-      'PAYROLL': ProductType.PAYROLL,
-      'COMPLIANCE': ProductType.COMPLIANCE,
-      'HR': ProductType.HR,
-    };
-
-    const productType = productTypeMap[body.productType?.toUpperCase()] || ProductType.ACCOUNTING;
+    // Validate productType against configured types
+    const configuredTypes = await getProductTypes();
+    const validValues = configuredTypes.map(t => t.value);
+    const productType = body.productType?.toUpperCase() || validValues[0] || 'ACCOUNTING';
+    if (!validValues.includes(productType)) {
+      return NextResponse.json(
+        { error: `Invalid product type: ${body.productType}. Valid types: ${validValues.join(', ')}` },
+        { status: 400 }
+      );
+    }
 
     // Map status to enum
     const statusMap: Record<string, ContractStatus> = {

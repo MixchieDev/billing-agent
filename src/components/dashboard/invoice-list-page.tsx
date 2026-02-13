@@ -42,7 +42,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
       customerName: inv.customerName,
       customerEmail: inv.customerEmail,
       customerEmails: inv.customerEmails,
-      productType: inv.lineItems?.[0]?.description?.includes('Payroll') ? 'PAYROLL' : 'ACCOUNTING',
+      productType: inv.productType || inv.lineItems?.[0]?.description || 'ACCOUNTING',
       serviceFee: Number(inv.serviceFee),
       vatAmount: Number(inv.vatAmount),
       netAmount: Number(inv.netAmount),

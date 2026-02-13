@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Header } from '@/components/dashboard/header';
 import { Button } from '@/components/ui/button';
-import { Save, Loader2, RefreshCw, Palette, Building2, Plus, Trash2, Percent } from 'lucide-react';
+import { Save, Loader2, RefreshCw, Palette, Building2, Plus, Trash2, Percent, Package } from 'lucide-react';
 import { EmailTemplatesPage } from '@/components/dashboard/email-templates-page';
 
 interface Setting {
@@ -83,6 +83,16 @@ export default function SettingsPage() {
   const [defaultWithholdingCode, setDefaultWithholdingCode] = useState<string>('WC160');
   const [newPreset, setNewPreset] = useState<WithholdingPreset>({ rate: 0, code: '', label: '' });
   const [savingTax, setSavingTax] = useState(false);
+
+  // Product types state
+  interface ProductTypeItem {
+    value: string;
+    label: string;
+  }
+  const [productTypes, setProductTypes] = useState<ProductTypeItem[]>([]);
+  const [newProductType, setNewProductType] = useState<ProductTypeItem>({ value: '', label: '' });
+  const [savingProductTypes, setSavingProductTypes] = useState(false);
+  const [productTypesLoading, setProductTypesLoading] = useState(false);
 
   // Follow-up templates state
   interface FollowUpTemplate {
@@ -285,6 +295,8 @@ export default function SettingsPage() {
       fetchCompanies();
     } else if (activeTab === 'follow-up') {
       fetchFollowUpTemplates();
+    } else if (activeTab === 'productTypes') {
+      fetchProductTypes();
     }
   }, [activeTab]);
 
@@ -437,6 +449,74 @@ export default function SettingsPage() {
     }
   };
 
+  // Fetch product types
+  const fetchProductTypes = async () => {
+    try {
+      setProductTypesLoading(true);
+      const response = await fetch('/api/product-types');
+      if (!response.ok) throw new Error('Failed to fetch product types');
+      const data = await response.json();
+      setProductTypes(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setProductTypesLoading(false);
+    }
+  };
+
+  const addProductType = () => {
+    if (!newProductType.value || !newProductType.label) {
+      setError('Please fill in both value and label');
+      return;
+    }
+
+    const upperValue = newProductType.value.toUpperCase().replace(/\s+/g, '_');
+
+    if (productTypes.some(pt => pt.value === upperValue)) {
+      setError('A product type with this value already exists');
+      return;
+    }
+
+    setProductTypes([...productTypes, { value: upperValue, label: newProductType.label }]);
+    setNewProductType({ value: '', label: '' });
+    setError(null);
+    setSuccess(null);
+  };
+
+  const removeProductType = (index: number) => {
+    setProductTypes(prev => prev.filter((_, i) => i !== index));
+    setSuccess(null);
+  };
+
+  const saveProductTypes = async () => {
+    try {
+      setSavingProductTypes(true);
+      setError(null);
+      setSuccess(null);
+
+      if (productTypes.length === 0) {
+        setError('At least one product type is required');
+        return;
+      }
+
+      const response = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          settings: [{ key: 'productTypes.list', value: productTypes }],
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to save product types');
+
+      setSuccess('Product types saved successfully!');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSavingProductTypes(false);
+    }
+  };
+
   // Update a setting value locally
   const updateSetting = (key: string, value: any) => {
     setSettings((prev) =>
@@ -534,6 +614,7 @@ export default function SettingsPage() {
     { id: 'templates', label: 'Invoice Templates' },
     { id: 'companies', label: 'Companies' },
     { id: 'tax', label: 'Tax' },
+    { id: 'productTypes', label: 'Product Types' },
     { id: 'scheduler', label: 'Scheduler' },
     { id: 'email', label: 'Email Templates' },
     { id: 'follow-up', label: 'Follow-up Emails' },
@@ -1253,6 +1334,112 @@ export default function SettingsPage() {
                       <Save className="mr-2 h-4 w-4" />
                     )}
                     Save Tax Settings
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Product Types Tab */}
+            {activeTab === 'productTypes' && (
+              <div className="space-y-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-4 pb-2 border-b">
+                    <Package className="h-5 w-5 text-purple-600" />
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Product Types
+                    </h3>
+                  </div>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Configure the product types available when creating contracts. Changes will apply to new contracts and forms.
+                  </p>
+
+                  {productTypesLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                    </div>
+                  ) : (
+                    <>
+                      {/* Existing Product Types */}
+                      <div className="space-y-3">
+                        {productTypes.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500">
+                            No product types configured. Add one below.
+                          </div>
+                        ) : (
+                          productTypes.map((pt, index) => (
+                            <div
+                              key={pt.value}
+                              className="flex items-center justify-between p-4 rounded-lg border border-gray-200 bg-gray-50"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="text-sm font-mono font-bold text-gray-900 bg-gray-200 px-2 py-1 rounded">
+                                  {pt.value}
+                                </div>
+                                <div className="font-medium text-gray-900">{pt.label}</div>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => removeProductType(index)}
+                                className="text-red-600 hover:bg-red-50"
+                                disabled={productTypes.length <= 1}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      {/* Add New Product Type */}
+                      <div className="pt-4 border-t mt-4">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Add New Product Type</h4>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Value (stored in DB)
+                            </label>
+                            <input
+                              type="text"
+                              value={newProductType.value}
+                              onChange={(e) => setNewProductType({ ...newProductType, value: e.target.value.toUpperCase().replace(/\s+/g, '_') })}
+                              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                              placeholder="e.g., BOOKKEEPING"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Label (display name)
+                            </label>
+                            <input
+                              type="text"
+                              value={newProductType.label}
+                              onChange={(e) => setNewProductType({ ...newProductType, label: e.target.value })}
+                              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                              placeholder="e.g., Bookkeeping"
+                            />
+                          </div>
+                          <div className="flex items-end">
+                            <Button onClick={addProductType} className="w-full">
+                              <Plus className="mr-2 h-4 w-4" />
+                              Add Type
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Save Button */}
+                <div className="pt-4 border-t flex justify-end">
+                  <Button onClick={saveProductTypes} disabled={savingProductTypes}>
+                    {savingProductTypes ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-2 h-4 w-4" />
+                    )}
+                    Save Product Types
                   </Button>
                 </div>
               </div>
