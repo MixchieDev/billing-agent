@@ -65,6 +65,7 @@ export function daysUntil(date: Date | string | null | undefined): number {
 // Billing calculation utilities
 export interface BillingCalculation {
   serviceFee: number;
+  discountAmount: number;
   vatAmount: number;
   grossAmount: number;
   withholdingTax: number;
@@ -77,7 +78,9 @@ export function calculateBilling(
   isVatClient: boolean = true,
   hasWithholding: boolean = false,
   withholdingRate: number = 0.02,  // Configurable rate (default 2%)
-  vatRate: number = 0.12  // Configurable VAT rate (default 12%)
+  vatRate: number = 0.12,  // Configurable VAT rate (default 12%)
+  discountType?: 'PERCENTAGE' | 'FIXED' | null,
+  discountValue?: number
 ): BillingCalculation {
   let serviceFee: number;
   let vatAmount: number;
@@ -87,24 +90,33 @@ export function calculateBilling(
 
   if (isVatClient) {
     if (isVatInclusive) {
-      // VAT-inclusive: amount already includes VAT
       serviceFee = amount / (1 + vatRate);
-      vatAmount = serviceFee * vatRate;
     } else {
-      // VAT-exclusive: add VAT to amount
       serviceFee = amount;
-      vatAmount = serviceFee * vatRate;
     }
   } else {
-    // Non-VAT client
     serviceFee = amount;
+  }
+
+  // Apply discount before VAT calculation
+  let discountAmount = 0;
+  if (discountType === 'PERCENTAGE' && discountValue) {
+    discountAmount = serviceFee * discountValue;
+  } else if (discountType === 'FIXED' && discountValue) {
+    discountAmount = discountValue;
+  }
+  const adjustedFee = serviceFee - discountAmount;
+
+  if (isVatClient) {
+    vatAmount = adjustedFee * vatRate;
+  } else {
     vatAmount = 0;
   }
 
-  grossAmount = serviceFee + vatAmount;
+  grossAmount = adjustedFee + vatAmount;
 
   if (hasWithholding) {
-    withholdingTax = serviceFee * withholdingRate;
+    withholdingTax = adjustedFee * withholdingRate;
   } else {
     withholdingTax = 0;
   }
@@ -113,6 +125,7 @@ export function calculateBilling(
 
   return {
     serviceFee: Math.round(serviceFee * 100) / 100,
+    discountAmount: Math.round(discountAmount * 100) / 100,
     vatAmount: Math.round(vatAmount * 100) / 100,
     grossAmount: Math.round(grossAmount * 100) / 100,
     withholdingTax: Math.round(withholdingTax * 100) / 100,

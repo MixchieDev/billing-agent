@@ -438,21 +438,21 @@ export async function generateInvoicePdfLib(
   const LINE_ITEM_HEIGHT = 20;
   const TABLE_HEADER_HEIGHT = 25;
 
-  // Table column positions (improved alignment)
+  // Table column positions — spread across full content width
   const COL_ITEM = MARGIN_LEFT;
   const COL_ITEM_WIDTH = 25;
   const COL_DESC = MARGIN_LEFT + 28;
-  const COL_DESC_WIDTH = 175;  // Max width for description text
-  const COL_QTY = 210;
+  const COL_DESC_WIDTH = 170;  // Max width for description text wrapping
+  const COL_QTY = 250;
   const COL_QTY_WIDTH = 30;
-  const COL_PRICE = 245;
-  const COL_PRICE_WIDTH = 65;
-  const COL_TAX = 315;
+  const COL_PRICE = 285;
+  const COL_PRICE_WIDTH = 75;
+  const COL_TAX = 365;
   const COL_TAX_WIDTH = 35;
-  const COL_WTAX = 355;
-  const COL_WTAX_WIDTH = 55;
-  const COL_AMOUNT = 415;
-  const COL_AMOUNT_WIDTH = 90;
+  const COL_WTAX = 403;
+  const COL_WTAX_WIDTH = 70;
+  const COL_AMOUNT = 478;
+  const COL_AMOUNT_WIDTH = 84;
 
   // Check if invoice has withholding tax
   const invoiceHasWithholding = Number(invoice.withholdingTax) > 0;
@@ -807,7 +807,7 @@ export async function generateInvoicePdfLib(
       const rightX = PAGE_WIDTH - MARGIN_RIGHT;
       let rightY = billToY;
       const boxWidth = 200; // Wider box for 10-digit invoice numbers
-      const boxHeight = 70;
+      const boxHeight = 75;
       const boxX = rightX - boxWidth;
 
       // Invoice number box with subtle background
@@ -833,22 +833,22 @@ export async function generateInvoicePdfLib(
       });
 
       // Dynamic font size for invoice number to fit in box
-      let invoiceNoFontSize = 16;
+      let invoiceNoFontSize = 13;
       let invoiceNoWidth = fontBold.widthOfTextAtSize(invoiceNo, invoiceNoFontSize);
       // Reduce font size if too wide for box (with 20px padding)
-      while (invoiceNoWidth > boxWidth - 20 && invoiceNoFontSize > 10) {
+      while (invoiceNoWidth > boxWidth - 20 && invoiceNoFontSize > 9) {
         invoiceNoFontSize -= 1;
         invoiceNoWidth = fontBold.widthOfTextAtSize(invoiceNo, invoiceNoFontSize);
       }
       page.drawText(invoiceNo, {
         x: boxX + (boxWidth - invoiceNoWidth) / 2,
-        y: rightY - 18,
+        y: rightY - 16,
         size: invoiceNoFontSize,
         font: fontBold,
         color: rgb(0, 0, 0),
       });
 
-      // Date and Due Date (better aligned)
+      // Date and Due Date
       const dateStr = new Date(invoice.statementDate || invoice.createdAt).toLocaleDateString('en-PH', { month: '2-digit', day: '2-digit', year: 'numeric' });
       const dueDateStr = new Date(invoice.dueDate).toLocaleDateString('en-PH', { month: '2-digit', day: '2-digit', year: 'numeric' });
 
@@ -856,7 +856,7 @@ export async function generateInvoicePdfLib(
       const dateLabelWidth = font.widthOfTextAtSize(dateLabel, 9);
       page.drawText(dateLabel, {
         x: boxX + (boxWidth - dateLabelWidth) / 2,
-        y: rightY - 38,
+        y: rightY - 34,
         size: 9,
         font,
         color: rgb(0.3, 0.3, 0.3),
@@ -866,13 +866,16 @@ export async function generateInvoicePdfLib(
       const dueDateLabelWidth = font.widthOfTextAtSize(dueDateLabel, 9);
       page.drawText(dueDateLabel, {
         x: boxX + (boxWidth - dueDateLabelWidth) / 2,
-        y: rightY - 52,
+        y: rightY - 48,
         size: 9,
         font,
         color: rgb(0.3, 0.3, 0.3),
       });
 
-      y -= 50; // Space after bill to section
+      // Ensure y clears below the invoice details box
+      // Table header draws upward to y+20, so y must be at least boxBottom - 20 - gap
+      const boxBottomY = billToY - boxHeight + 15;
+      y = Math.min(y, boxBottomY - 20) - 10;
     }
 
     // Determine if this page has line items or is a totals-only page
@@ -952,7 +955,17 @@ export async function generateInvoicePdfLib(
         for (let i = 0; i < itemsThisPage && currentItemIndex < lineItems.length; i++) {
           const item = lineItems[currentItemIndex];
           const itemNum = currentItemIndex + 1;
-          const desc = item.description || 'Professional Services';
+          // Append discount info to description if item has a discount
+          let desc = item.description || 'Professional Services';
+          if (Number(item.discountAmount) > 0 && item.discountType) {
+            if (item.discountType === 'PERCENTAGE') {
+              const pctVal = Number(item.discountValue) * 100;
+              const pctStr = pctVal % 1 === 0 ? pctVal.toFixed(0) : pctVal.toFixed(1);
+              desc += ` (${pctStr}% disc.)`;
+            } else {
+              desc += ' (disc.)';
+            }
+          }
           const qty = item.quantity || 1;
           const price = Number(item.unitPrice);
           const vatRateDisplay = invoice.vatType === 'VAT' ? `${(vatRate * 100).toFixed(0)}%` : '0%';
@@ -1168,9 +1181,12 @@ export async function generateInvoicePdfLib(
       const totalsRightEdge = PAGE_WIDTH - MARGIN_RIGHT - 10;
       let totY = paymentY;
 
-      // Calculate box height based on whether withholding tax is present
+      // Calculate box height based on content
       const hasWithholding = Number(invoice.withholdingTax) > 0;
-      const totalsBoxHeight = hasWithholding ? 115 : 100;
+      const hasDiscount = Number(invoice.discountAmount) > 0;
+      let totalsBoxHeight = 100; // base: subtotal + VAT + gross + separator + total
+      if (hasWithholding) totalsBoxHeight += 16;
+      if (hasDiscount) totalsBoxHeight += 16;
 
       // Totals box with accent border
       page.drawRectangle({
@@ -1191,6 +1207,15 @@ export async function generateInvoicePdfLib(
       const subtotalWidth = font.widthOfTextAtSize(subtotalText, 10);
       page.drawText(subtotalText, { x: totalsRightEdge - subtotalWidth, y: totY, size: 10, font, color: rgb(0.1, 0.1, 0.1) });
       totY -= 16;
+
+      // Discount (sum of per-item discounts)
+      if (hasDiscount) {
+        page.drawText('Discount:', { x: labelX, y: totY, size: 10, font, color: rgb(0.35, 0.35, 0.35) });
+        const discText = `(${formatPdfCurrency(Number(invoice.discountAmount))})`;
+        const discWidth = font.widthOfTextAtSize(discText, 10);
+        page.drawText(discText, { x: totalsRightEdge - discWidth, y: totY, size: 10, font, color: rgb(0.75, 0.15, 0.15) });
+        totY -= 16;
+      }
 
       // VAT
       const vatRatePercent = (vatRate * 100).toFixed(0);

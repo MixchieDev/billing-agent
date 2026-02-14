@@ -23,8 +23,8 @@ export async function POST(request: NextRequest) {
     if (!body.billingEntityId) {
       return NextResponse.json({ error: 'billingEntityId is required' }, { status: 400 });
     }
-    if (!body.billingAmount || body.billingAmount <= 0) {
-      return NextResponse.json({ error: 'billingAmount must be greater than 0' }, { status: 400 });
+    if (body.billingAmount === undefined || body.billingAmount === null) {
+      return NextResponse.json({ error: 'billingAmount is required' }, { status: 400 });
     }
     if (!body.dueDate) {
       return NextResponse.json({ error: 'dueDate is required' }, { status: 400 });
@@ -67,11 +67,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse line items if provided (for multi-month billing)
-    const lineItems = body.lineItems?.map((item: { description: string; amount: number; periodStart?: string; periodEnd?: string }) => ({
+    const lineItems = body.lineItems?.map((item: { description: string; amount: number; periodStart?: string; periodEnd?: string; discountType?: string; discountValue?: number }) => ({
       description: item.description,
       amount: item.amount,
       periodStart: item.periodStart ? new Date(item.periodStart) : undefined,
       periodEnd: item.periodEnd ? new Date(item.periodEnd) : undefined,
+      discountType: item.discountType || null,
+      discountValue: item.discountValue || undefined,
     }));
 
     // Build request

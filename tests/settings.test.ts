@@ -91,7 +91,7 @@ describe('Settings Module', () => {
 
       expect(result['email.enabled']).toBe(false); // From DB
       expect(result['scheduler.enabled']).toBe(false); // Default
-      expect(result['general.vatRate']).toBe(0.12); // Default
+      expect(result['tax.vatRate']).toBe(0.12); // Default
     });
 
     it('caches results for subsequent calls', async () => {
@@ -113,7 +113,7 @@ describe('Settings Module', () => {
       const result = await getAllSettings();
 
       expect(result['scheduler.enabled']).toBe(false);
-      expect(result['general.vatRate']).toBe(0.12);
+      expect(result['tax.vatRate']).toBe(0.12);
     });
   });
 

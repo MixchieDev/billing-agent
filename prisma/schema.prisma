@@ -267,6 +267,7 @@ model Invoice {
   updatedAt             DateTime               @updatedAt
   partnerId             String?
   withholdingRate       Decimal?               @db.Decimal(5, 4)
+  discountAmount        Decimal?               @db.Decimal(15, 2)  // Sum of all line item discounts
   customerEmails        String?
   voidReason            String?
   voidedAt              DateTime?
@@ -317,6 +318,9 @@ model InvoiceLineItem {
   amount         Decimal   @db.Decimal(15, 2)
   endClientName  String?
   employeeCount  Int?
+  discountType   String?
+  discountValue  Decimal?  @db.Decimal(15, 4)
+  discountAmount Decimal?  @db.Decimal(15, 2)
   sortOrder      Int       @default(0)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt

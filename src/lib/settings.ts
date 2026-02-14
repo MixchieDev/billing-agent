@@ -14,6 +14,7 @@ const DEFAULTS: Record<string, any> = {
   'soa.reviewedBy': 'RUTH MICHELLE C. BAYRON',
 
   // Scheduler Settings
+  'scheduler.enabled': false,
   'scheduler.cronExpression': '0 8 * * *',
   'scheduler.daysBeforeDue': 15,
 
@@ -185,15 +186,18 @@ function getSOASettingsDefaults(companyCode: 'YOWI' | 'ABBA'): {
  * Get scheduler settings
  */
 export async function getSchedulerSettings(): Promise<{
+  enabled: boolean;
   cronExpression: string;
   daysBeforeDue: number;
 }> {
   const settings = await getSettings([
+    'scheduler.enabled',
     'scheduler.cronExpression',
     'scheduler.daysBeforeDue',
   ]);
 
   return {
+    enabled: settings['scheduler.enabled'],
     cronExpression: settings['scheduler.cronExpression'],
     daysBeforeDue: settings['scheduler.daysBeforeDue'],
   };

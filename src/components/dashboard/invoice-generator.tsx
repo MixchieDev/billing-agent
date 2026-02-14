@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { FileText, Send, Loader2, CheckCircle, AlertCircle, Calendar } from 'lucide-react';
+import { FileText, Send, Loader2, CheckCircle, AlertCircle, Calendar, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MultiEmailInput } from '@/components/ui/multi-email-input';
 import { parseEmails, joinEmails } from '@/lib/utils';
@@ -75,6 +75,17 @@ export function InvoiceGenerator() {
   const [remarks, setRemarks] = useState<string>('');
   const [showPreview, setShowPreview] = useState(false);
   const [paymentPlan, setPaymentPlan] = useState<'Monthly' | 'Quarterly' | 'Annual' | 'Custom'>('Monthly');
+
+  // Custom ad-hoc line items (with per-item discount)
+  const [customLineItems, setCustomLineItems] = useState<{
+    description: string; amount: string;
+    discountType: 'NONE' | 'PERCENTAGE' | 'FIXED'; discountValue: string;
+  }[]>([]);
+
+  // Per-period discount (synced with billingPeriods length)
+  const [periodDiscounts, setPeriodDiscounts] = useState<
+    { type: 'NONE' | 'PERCENTAGE' | 'FIXED'; value: string }[]
+  >([]);
 
   // Billing period selection (month/year)
   const currentDate = new Date();
@@ -170,17 +181,44 @@ export function InvoiceGenerator() {
     return periods;
   }, [billingStartMonth, billingEndMonth, paymentPlan]);
 
-  // Calculate total billing amount
-  const totalBillingAmount = billingPeriods.reduce(
-    (sum, period) => sum + parseFloat(monthlyRate || '0') * period.multiplier,
-    0
-  );
+  // Sync periodDiscounts array with billingPeriods length
+  useEffect(() => {
+    setPeriodDiscounts((prev) => {
+      if (prev.length === billingPeriods.length) return prev;
+      const next = billingPeriods.map((_, idx) => prev[idx] || { type: 'NONE' as const, value: '' });
+      return next;
+    });
+  }, [billingPeriods.length]);
+
+  // Helper: compute discount amount for an item
+  const calcItemDiscount = (amount: number, discType: string, discVal: string) => {
+    if (discType === 'PERCENTAGE') return amount * (parseFloat(discVal || '0') / 100);
+    if (discType === 'FIXED') return parseFloat(discVal || '0');
+    return 0;
+  };
+
+  // Calculate total billing amount with per-item discounts
+  const rate = parseFloat(monthlyRate || '0');
+  const periodBillingAmount = billingPeriods.reduce((sum, period, idx) => {
+    const orig = rate * period.multiplier;
+    const disc = calcItemDiscount(orig, periodDiscounts[idx]?.type || 'NONE', periodDiscounts[idx]?.value || '');
+    return sum + orig - disc;
+  }, 0);
+  const periodOriginalTotal = billingPeriods.reduce((sum, p) => sum + rate * p.multiplier, 0);
+  const customItemsTotal = customLineItems.reduce((sum, item) => {
+    const orig = parseFloat(item.amount || '0');
+    const disc = calcItemDiscount(orig, item.discountType, item.discountValue);
+    return sum + orig - disc;
+  }, 0);
+  const customOriginalTotal = customLineItems.reduce((sum, item) => sum + parseFloat(item.amount || '0'), 0);
+  const totalDiscount = (periodOriginalTotal - periodBillingAmount) + (customOriginalTotal - customItemsTotal);
+  const totalBillingAmount = periodBillingAmount + customItemsTotal;
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [contractsRes, companiesRes, settingsRes] = await Promise.all([
-          fetch('/api/contracts?status=ACTIVE&minimal=true'),
+          fetch('/api/contracts?status=ACTIVE&minimal=true&limit=1000'),
           fetch('/api/companies?minimal=true'),
           fetch('/api/settings?category=tax'),
         ]);
@@ -246,22 +284,49 @@ export function InvoiceGenerator() {
     setResult(null);
 
     try {
-      // Build line items from billing periods (amount = monthlyRate * multiplier)
-      const lineItems = billingPeriods.map((period) => ({
-        description: `${description || 'Services'} - ${period.label}`,
-        amount: parseFloat(monthlyRate || '0') * period.multiplier,
-        periodStart: period.startDate.toISOString(),
-        periodEnd: period.endDate.toISOString(),
-      }));
+      // Build line items from billing periods with per-item discount (skip if rate is zero)
+      const rate = parseFloat(monthlyRate || '0');
+      const periodItems = rate > 0 ? billingPeriods.map((period, idx) => {
+        const pd = periodDiscounts[idx];
+        return {
+          description: `${description || 'Services'} - ${period.label}`,
+          amount: rate * period.multiplier,
+          periodStart: period.startDate.toISOString(),
+          periodEnd: period.endDate.toISOString(),
+          discountType: pd?.type !== 'NONE' && pd?.type ? pd.type : undefined,
+          discountValue: pd?.type === 'PERCENTAGE' ? parseFloat(pd.value || '0') / 100
+            : pd?.type === 'FIXED' ? parseFloat(pd.value || '0')
+            : undefined,
+        };
+      }) : [];
 
-      // For single line item, use the formatted description with period label
-      const singleItemDescription = lineItems.length === 1
-        ? lineItems[0].description
-        : description || undefined;
+      // Build custom line items with per-item discount (filter out empty/zero entries)
+      const validCustomItems = customLineItems
+        .filter((item) => item.description.trim() && parseFloat(item.amount || '0') !== 0)
+        .map((item) => ({
+          description: item.description.trim(),
+          amount: parseFloat(item.amount),
+          discountType: item.discountType !== 'NONE' ? item.discountType : undefined,
+          discountValue: item.discountType === 'PERCENTAGE' ? parseFloat(item.discountValue || '0') / 100
+            : item.discountType === 'FIXED' ? parseFloat(item.discountValue || '0')
+            : undefined,
+        }));
+
+      // Merge all line items
+      const allLineItems = [...periodItems, ...validCustomItems];
+
+      // For single period item with no custom items, use formatted description
+      const singleItemDescription =
+        allLineItems.length === 1 && validCustomItems.length === 0 && periodItems.length === 1
+          ? periodItems[0].description
+          : description || undefined;
+
+      // billingAmount = sum of original line item amounts (before per-item discounts)
+      const originalTotal = periodItems.reduce((s, i) => s + i.amount, 0) + validCustomItems.reduce((s, i) => s + i.amount, 0);
 
       const requestBody: any = {
         billingEntityId,
-        billingAmount: totalBillingAmount,
+        billingAmount: originalTotal,
         dueDate,
         vatType,
         hasWithholding,
@@ -271,10 +336,11 @@ export function InvoiceGenerator() {
         sendImmediately: autoApprove && sendImmediately,
         description: singleItemDescription,
         remarks: remarks || undefined,
-        lineItems: lineItems.length > 1 ? lineItems : undefined,
-        // For single month, use overall period
-        periodStart: billingPeriods[0]?.startDate.toISOString(),
-        periodEnd: billingPeriods[billingPeriods.length - 1]?.endDate.toISOString(),
+        lineItems: allLineItems.length > 1 || validCustomItems.length > 0
+          ? allLineItems
+          : undefined,
+        periodStart: periodItems.length > 0 ? billingPeriods[0]?.startDate.toISOString() : undefined,
+        periodEnd: periodItems.length > 0 ? billingPeriods[billingPeriods.length - 1]?.endDate.toISOString() : undefined,
       };
 
       if (useCustomBillTo) {
@@ -311,6 +377,8 @@ export function InvoiceGenerator() {
         setRemarks('');
         setAutoApprove(false);
         setSendImmediately(false);
+        setCustomLineItems([]);
+        setPeriodDiscounts([]);
       } else {
         setResult({
           success: false,
@@ -328,12 +396,32 @@ export function InvoiceGenerator() {
   };
 
   const isFormValid = () => {
-    if (!billingEntityId || !monthlyRate || parseFloat(monthlyRate) <= 0 || !dueDate) {
+    if (!billingEntityId || !dueDate) {
       return false;
     }
-    if (billingPeriods.length === 0) {
+
+    // Check for valid line item sources
+    const hasValidPeriodItems = parseFloat(monthlyRate || '0') > 0 && billingPeriods.length > 0;
+    const validCustom = customLineItems.filter(
+      (item) => item.description.trim() && parseFloat(item.amount || '0') !== 0
+    );
+    const hasValidCustomItems = validCustom.length > 0;
+
+    // Must have at least one source of line items
+    if (!hasValidPeriodItems && !hasValidCustomItems) {
       return false;
     }
+
+    // Any partially-filled custom item blocks submission
+    const hasInvalidCustomItem = customLineItems.some(
+      (item) =>
+        (item.description.trim() || item.amount) &&
+        (!item.description.trim() || !item.amount || parseFloat(item.amount) === 0)
+    );
+    if (hasInvalidCustomItem) {
+      return false;
+    }
+
     if (useCustomBillTo) {
       return !!customBillTo.name;
     }
@@ -491,7 +579,7 @@ export function InvoiceGenerator() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Monthly Rate *</label>
+                <label className="block text-sm font-medium text-gray-700">Monthly Rate</label>
                 <input
                   type="number"
                   value={monthlyRate}
@@ -555,31 +643,195 @@ export function InvoiceGenerator() {
                 </div>
               </div>
 
-              {/* Preview of line items */}
-              {billingPeriods.length > 0 && (
+              {/* Preview of line items with per-item discount */}
+              {billingPeriods.length > 0 && parseFloat(monthlyRate || '0') > 0 && (
                 <div className="mt-3 rounded-lg bg-gray-50 p-3">
                   <div className="text-xs font-medium text-gray-500 mb-2">
-                    Line Items Preview ({billingPeriods.length} {billingPeriods.length === 1 ? 'item' : 'items'}) - {paymentPlan}
+                    Line Items ({billingPeriods.length} {billingPeriods.length === 1 ? 'item' : 'items'}) - {paymentPlan}
                   </div>
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {billingPeriods.map((period, idx) => (
-                      <div key={idx} className="flex justify-between text-sm">
-                        <span className="text-gray-600">{description || 'Services'} - {period.label}</span>
-                        <span className="font-medium text-gray-900">
-                          {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(parseFloat(monthlyRate || '0') * period.multiplier)}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {billingPeriods.map((period, idx) => {
+                      const orig = rate * period.multiplier;
+                      const disc = calcItemDiscount(orig, periodDiscounts[idx]?.type || 'NONE', periodDiscounts[idx]?.value || '');
+                      return (
+                        <div key={idx} className="rounded border border-gray-200 bg-white p-2 space-y-1">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-600">{description || 'Services'} - {period.label}</span>
+                            <span className="font-medium text-gray-900">
+                              {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(orig)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={periodDiscounts[idx]?.type || 'NONE'}
+                              onChange={(e) => {
+                                const next = [...periodDiscounts];
+                                next[idx] = { type: e.target.value as 'NONE' | 'PERCENTAGE' | 'FIXED', value: '' };
+                                setPeriodDiscounts(next);
+                              }}
+                              className="rounded border border-gray-200 px-2 py-1 text-xs"
+                            >
+                              <option value="NONE">No Discount</option>
+                              <option value="PERCENTAGE">% Discount</option>
+                              <option value="FIXED">Fixed Discount</option>
+                            </select>
+                            {periodDiscounts[idx]?.type !== 'NONE' && periodDiscounts[idx]?.type && (
+                              <input
+                                type="number"
+                                value={periodDiscounts[idx]?.value || ''}
+                                onChange={(e) => {
+                                  const next = [...periodDiscounts];
+                                  next[idx] = { ...next[idx], value: e.target.value };
+                                  setPeriodDiscounts(next);
+                                }}
+                                placeholder={periodDiscounts[idx]?.type === 'PERCENTAGE' ? '15' : '5000'}
+                                min="0"
+                                max={periodDiscounts[idx]?.type === 'PERCENTAGE' ? '100' : undefined}
+                                step={periodDiscounts[idx]?.type === 'PERCENTAGE' ? '0.5' : '0.01'}
+                                className="w-20 rounded border border-gray-200 px-2 py-1 text-xs"
+                              />
+                            )}
+                            {disc > 0 && (
+                              <span className="text-xs text-red-600 ml-auto">
+                                -{new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(disc)}
+                                {' = '}
+                                <span className="font-medium">{new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(orig - disc)}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                   <div className="mt-2 pt-2 border-t flex justify-between">
-                    <span className="text-sm font-medium text-gray-700">Total</span>
+                    <span className="text-sm font-medium text-gray-700">
+                      {customLineItems.length > 0 ? 'Period Subtotal' : 'Total'}
+                    </span>
                     <span className="text-lg font-bold text-blue-600">
-                      {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(totalBillingAmount)}
+                      {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(periodBillingAmount)}
                     </span>
                   </div>
                 </div>
               )}
             </div>
+
+            {/* Additional Line Items */}
+            <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700">Additional Line Items</span>
+                <button
+                  type="button"
+                  onClick={() => setCustomLineItems([...customLineItems, { description: '', amount: '', discountType: 'NONE' as const, discountValue: '' }])}
+                  className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Item
+                </button>
+              </div>
+
+              {customLineItems.length === 0 && (
+                <p className="text-xs text-gray-400">No additional items. Click &quot;Add Item&quot; to include extra charges.</p>
+              )}
+
+              {customLineItems.map((item, idx) => (
+                <div key={idx} className="rounded border border-gray-200 bg-white p-2 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        value={item.description}
+                        onChange={(e) => setCustomLineItems(customLineItems.map((it, i) => i === idx ? { ...it, description: e.target.value } : it))}
+                        placeholder="Description"
+                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="w-32">
+                      <input
+                        type="number"
+                        value={item.amount}
+                        onChange={(e) => setCustomLineItems(customLineItems.map((it, i) => i === idx ? { ...it, amount: e.target.value } : it))}
+                        placeholder="Amount"
+                        step="0.01"
+                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCustomLineItems(customLineItems.filter((_, i) => i !== idx))}
+                      className="mt-1 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      title="Remove item"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {parseFloat(item.amount || '0') > 0 && (
+                    <div className="flex items-center gap-2 pl-1">
+                      <select
+                        value={item.discountType}
+                        onChange={(e) => setCustomLineItems(customLineItems.map((it, i) => i === idx ? { ...it, discountType: e.target.value as 'NONE' | 'PERCENTAGE' | 'FIXED', discountValue: '' } : it))}
+                        className="rounded border border-gray-200 px-2 py-1 text-xs"
+                      >
+                        <option value="NONE">No Discount</option>
+                        <option value="PERCENTAGE">% Discount</option>
+                        <option value="FIXED">Fixed Discount</option>
+                      </select>
+                      {item.discountType !== 'NONE' && (
+                        <input
+                          type="number"
+                          value={item.discountValue}
+                          onChange={(e) => setCustomLineItems(customLineItems.map((it, i) => i === idx ? { ...it, discountValue: e.target.value } : it))}
+                          placeholder={item.discountType === 'PERCENTAGE' ? '10' : '1000'}
+                          min="0"
+                          max={item.discountType === 'PERCENTAGE' ? '100' : undefined}
+                          step={item.discountType === 'PERCENTAGE' ? '0.5' : '0.01'}
+                          className="w-20 rounded border border-gray-200 px-2 py-1 text-xs"
+                        />
+                      )}
+                      {(() => {
+                        const amt = parseFloat(item.amount || '0');
+                        const d = calcItemDiscount(amt, item.discountType, item.discountValue);
+                        return d > 0 ? (
+                          <span className="text-xs text-red-600 ml-auto">
+                            -{new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(d)}
+                            {' = '}
+                            <span className="font-medium">{new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amt - d)}</span>
+                          </span>
+                        ) : null;
+                      })()}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {customLineItems.length > 0 && customItemsTotal !== 0 && (
+                <div className="flex justify-between text-sm pt-2 border-t border-gray-100">
+                  <span className="text-gray-500">Additional items subtotal</span>
+                  <span className="font-medium text-gray-900">
+                    {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(customItemsTotal)}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Grand Total (when additional items or discount exist) */}
+            {(customLineItems.length > 0 || totalDiscount > 0) && (
+              <div className="rounded-lg bg-blue-50 p-3 space-y-1">
+                {totalDiscount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Total Discount</span>
+                    <span className="font-medium text-red-600">
+                      -{new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(totalDiscount)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-semibold text-gray-700">Grand Total</span>
+                  <span className="text-lg font-bold text-blue-600">
+                    {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(totalBillingAmount)}
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700">Description</label>
@@ -757,7 +1009,9 @@ export function InvoiceGenerator() {
 
               {/* Line Items */}
               <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-2">Line Items ({paymentPlan})</h3>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">
+                  Line Items ({(parseFloat(monthlyRate || '0') > 0 ? billingPeriods.length : 0) + customLineItems.filter(i => i.description.trim() && parseFloat(i.amount || '0') !== 0).length} items)
+                </h3>
                 <div className="rounded-lg border overflow-hidden">
                   <table className="w-full">
                     <thead className="bg-gray-50">
@@ -767,20 +1021,77 @@ export function InvoiceGenerator() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {billingPeriods.map((period, idx) => (
-                        <tr key={idx}>
-                          <td className="px-4 py-3 text-sm text-gray-900">
-                            {description || 'Services'} - {period.label}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                            {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(parseFloat(monthlyRate || '0') * period.multiplier)}
-                          </td>
-                        </tr>
-                      ))}
+                      {parseFloat(monthlyRate || '0') > 0 && billingPeriods.map((period, idx) => {
+                        const orig = rate * period.multiplier;
+                        const pd = periodDiscounts[idx];
+                        const disc = calcItemDiscount(orig, pd?.type || 'NONE', pd?.value || '');
+                        const discLabel = pd?.type === 'PERCENTAGE' ? ` (${pd.value}% disc.)` : pd?.type === 'FIXED' && disc > 0 ? ' (disc.)' : '';
+                        return (
+                          <tr key={`period-${idx}`}>
+                            <td className="px-4 py-3 text-sm text-gray-900">
+                              {description || 'Services'} - {period.label}
+                              {discLabel && <span className="text-red-600 text-xs">{discLabel}</span>}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-right">
+                              {disc > 0 ? (
+                                <span>
+                                  <span className="text-gray-400 line-through text-xs mr-1">{new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(orig)}</span>
+                                  <span className="text-gray-900">{new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(orig - disc)}</span>
+                                </span>
+                              ) : (
+                                <span className="text-gray-900">{new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(orig)}</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {customLineItems
+                        .filter((item) => item.description.trim() && parseFloat(item.amount || '0') !== 0)
+                        .map((item, idx) => {
+                          const amt = parseFloat(item.amount);
+                          const disc = calcItemDiscount(amt, item.discountType, item.discountValue);
+                          const discLabel = item.discountType === 'PERCENTAGE' ? ` (${item.discountValue}% disc.)` : item.discountType === 'FIXED' && disc > 0 ? ' (disc.)' : '';
+                          return (
+                            <tr key={`custom-${idx}`} className="bg-amber-50/50">
+                              <td className="px-4 py-3 text-sm text-gray-900">
+                                {item.description}
+                                {discLabel && <span className="text-red-600 text-xs">{discLabel}</span>}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-right">
+                                {disc > 0 ? (
+                                  <span>
+                                    <span className="text-gray-400 line-through text-xs mr-1">{new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amt)}</span>
+                                    <span className="text-gray-900">{new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amt - disc)}</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-900">{new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amt)}</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                     <tfoot className="bg-gray-50">
+                      {totalDiscount > 0 && (
+                        <>
+                          <tr>
+                            <td className="px-4 py-2 text-sm text-gray-600">Subtotal (before discounts)</td>
+                            <td className="px-4 py-2 text-sm text-gray-600 text-right">
+                              {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(periodOriginalTotal + customOriginalTotal)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="px-4 py-2 text-sm text-red-600">Total Discount</td>
+                            <td className="px-4 py-2 text-sm text-red-600 text-right">
+                              ({new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(totalDiscount)})
+                            </td>
+                          </tr>
+                        </>
+                      )}
                       <tr>
-                        <td className="px-4 py-3 text-sm font-semibold text-gray-900">Total</td>
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                          {totalDiscount > 0 ? 'Net Amount' : 'Total'}
+                        </td>
                         <td className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">
                           {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(totalBillingAmount)}
                         </td>

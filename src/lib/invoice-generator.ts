@@ -26,6 +26,8 @@ export interface LineItemInput {
   amount: number;
   periodStart?: Date;
   periodEnd?: Date;
+  discountType?: 'PERCENTAGE' | 'FIXED' | null;
+  discountValue?: number;
 }
 
 export interface GenerateInvoiceRequest {
@@ -183,6 +185,9 @@ export async function generateInvoice(
     vatAmount: number;
     withholdingTax: number;
     amount: number;
+    discountType?: string | null;
+    discountValue?: number | null;
+    discountAmount?: number | null;
   }> = [];
 
   // Calculate totals
@@ -191,6 +196,8 @@ export async function generateInvoice(
   let totalWithholdingTax = 0;
   let totalNetAmount = 0;
   let totalGrossAmount = 0;
+
+  let totalDiscountAmount = 0;
 
   if (request.lineItems && request.lineItems.length > 0) {
     // Multiple line items (multi-month billing)
@@ -201,7 +208,9 @@ export async function generateInvoice(
         isVatClient,
         hasWithholding,
         withholdingRate,
-        vatRate
+        vatRate,
+        item.discountType,
+        item.discountValue
       );
 
       lineItemsToCreate.push({
@@ -214,9 +223,13 @@ export async function generateInvoice(
         vatAmount: itemCalc.vatAmount,
         withholdingTax: itemCalc.withholdingTax,
         amount: itemCalc.netAmount,
+        discountType: itemCalc.discountAmount > 0 ? (item.discountType || null) : null,
+        discountValue: itemCalc.discountAmount > 0 ? item.discountValue : null,
+        discountAmount: itemCalc.discountAmount > 0 ? itemCalc.discountAmount : null,
       });
 
       totalServiceFee += itemCalc.serviceFee;
+      totalDiscountAmount += itemCalc.discountAmount;
       totalVatAmount += itemCalc.vatAmount;
       totalWithholdingTax += itemCalc.withholdingTax;
       totalNetAmount += itemCalc.netAmount;
@@ -283,6 +296,7 @@ export async function generateInvoice(
       grossAmount: totalGrossAmount,
       withholdingTax: totalWithholdingTax,
       netAmount: totalNetAmount,
+      discountAmount: totalDiscountAmount > 0 ? totalDiscountAmount : null,
       vatType: request.vatType ?? VatType.VAT,
       hasWithholding: hasWithholding,
       withholdingCode: hasWithholding ? withholdingCode : null,

@@ -24,9 +24,14 @@ const mockInitEmailServiceFromEnv = jest.fn();
 jest.mock('@/lib/email-service', () => ({
   sendBillingEmail: mockSendBillingEmail,
   initEmailServiceFromEnv: mockInitEmailServiceFromEnv,
-  generateEmailSubject: jest.fn((billingNo, customerName) => `Bill No. ${billingNo} | ${customerName}`),
-  generateEmailBody: jest.fn(() => 'Test email body'),
-  generateEmailHtml: jest.fn(() => '<p>Test email body</p>'),
+  getEmailTemplateForPartner: jest.fn(() => Promise.resolve({
+    subject: 'Bill No. {{billingNo}} | {{customerName}}',
+    body: 'Test email body',
+    html: '<p>Test email body</p>',
+  })),
+  generateEmailSubjectFromTemplate: jest.fn((template, data) => `Bill No. ${data?.billingNo || ''} | ${data?.customerName || ''}`),
+  generateEmailBodyFromTemplate: jest.fn(() => 'Test email body'),
+  generateEmailHtmlFromTemplate: jest.fn(() => '<p>Test email body</p>'),
 }));
 
 // Mock PDF generator
@@ -44,6 +49,21 @@ jest.mock('@/lib/settings', () => ({
     preparedBy: 'Test Preparer',
     reviewedBy: 'Test Reviewer',
   })),
+  getInvoiceTemplate: jest.fn(() => Promise.resolve({
+    primaryColor: '#2563eb',
+    secondaryColor: '#1e40af',
+    footerBgColor: '#dbeafe',
+    invoiceTitle: 'Invoice',
+    footerText: 'Powered by: YAHSHUA',
+    showDisclaimer: true,
+  })),
+  clearTemplateCache: jest.fn(),
+}));
+
+// Mock utils (validateEmails and formatCurrency used by auto-send)
+jest.mock('@/lib/utils', () => ({
+  validateEmails: jest.fn((emails: string) => ({ valid: emails ? [emails] : [], invalid: [] })),
+  formatCurrency: jest.fn((n: number) => `PHP ${n?.toLocaleString()}`),
 }));
 
 // ==================== TEST DATA ====================
@@ -112,10 +132,12 @@ const createMockInvoice = (overrides = {}) => ({
   invoiceNo: null,
   billingNo: 'S-2026-00001',
   companyId: 'company-1',
+  partnerId: null,
   customerName: 'Test Company',
   attention: 'John Doe',
   customerAddress: 'Test Address',
   customerEmail: 'john@test.com',
+  customerEmails: null,
   customerTin: '123-456-789',
   statementDate: new Date(),
   dueDate: new Date(),
@@ -161,6 +183,7 @@ const createMockInvoice = (overrides = {}) => ({
     id: 'line-1',
     invoiceId: 'invoice-1',
     contractId: 'contract-1',
+    contract: mockContract,
     date: new Date(),
     reference: null,
     description: 'ACCOUNTING Service Fee',
@@ -177,6 +200,7 @@ const createMockInvoice = (overrides = {}) => ({
     createdAt: new Date(),
     updatedAt: new Date(),
   }],
+  attachments: [],
   ...overrides,
 });
 
