@@ -6,6 +6,7 @@ import {
   HitpayWebhookPayload,
 } from '@/lib/hitpay-service';
 import { notifyInvoicePaid } from '@/lib/notifications';
+import { notifyNexusPayment } from '@/lib/bridge-nexus-sync';
 
 /**
  * POST /api/webhooks/hitpay
@@ -144,6 +145,9 @@ export async function POST(request: NextRequest) {
       paidAmount: Number(paymentDetails.amount),
       paymentMethod: `HitPay (${paymentDetails.paymentMethod || 'Online'})`,
     });
+
+    // Bridge: Notify Nexus of payment (fire-and-forget)
+    notifyNexusPayment(paymentRequest.invoice.id).catch(() => {});
 
     console.log('Payment processed successfully:', {
       invoiceId: paymentRequest.invoice.id,
