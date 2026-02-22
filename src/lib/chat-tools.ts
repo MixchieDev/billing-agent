@@ -396,7 +396,76 @@ export const chatToolDefinitions = [
       required: [],
     },
   },
+  {
+    name: 'query_crm',
+    description: 'Query the CRM (Nexus) system for leads, agreements, contacts, or companies. Use this when users ask about CRM data, sales pipeline, agreements, or client contact information.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        entity: {
+          type: 'string',
+          description: 'What to query',
+          enum: ['leads', 'agreements', 'contacts', 'companies', 'products'],
+        },
+        searchTerm: {
+          type: 'string',
+          description: 'Search term to filter results (optional)',
+        },
+      },
+      required: ['entity'],
+    },
+  },
+  {
+    name: 'query_smart_support',
+    description: 'Query the Smart Support system for client issues and support tickets. Use this when users ask about support issues, tickets, or client problems.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        entity: {
+          type: 'string',
+          description: 'What to query',
+          enum: ['issues', 'clients', 'products'],
+        },
+        searchTerm: {
+          type: 'string',
+          description: 'Search term to filter results (optional)',
+        },
+      },
+      required: ['entity'],
+    },
+  },
 ];
+
+// Cross-system query tools
+async function queryCrmNexus(entity: string, searchTerm?: string): Promise<unknown> {
+  const { getNexusBridgeHeaders, getNexusConvexUrl } = await import('./bridge-auth');
+  const headers = getNexusBridgeHeaders();
+  const url = getNexusConvexUrl('/bridge/query');
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ entity, searchTerm, organizationId: process.env.NEXUS_ORGANIZATION_ID || '' }),
+  });
+
+  if (!response.ok) return { error: `CRM returned ${response.status}` };
+  return response.json();
+}
+
+async function querySmartSupport(entity: string, searchTerm?: string): Promise<unknown> {
+  const ssUrl = process.env.SMART_SUPPORT_CONVEX_URL;
+  const ssKey = process.env.SMART_SUPPORT_BRIDGE_API_KEY;
+  if (!ssUrl || !ssKey) return { error: 'Smart Support not configured' };
+
+  const response = await fetch(`${ssUrl}/bridge/query`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${ssKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ entity, searchTerm }),
+  });
+
+  if (!response.ok) return { error: `Smart Support returned ${response.status}` };
+  return response.json();
+}
 
 // Execute a tool by name
 export async function executeTool(
@@ -421,6 +490,10 @@ export async function executeTool(
         args.entity as string | undefined,
         args.month as string | undefined
       );
+    case 'query_crm':
+      return queryCrmNexus(args.entity as string, args.searchTerm as string | undefined);
+    case 'query_smart_support':
+      return querySmartSupport(args.entity as string, args.searchTerm as string | undefined);
     default:
       throw new Error(`Unknown tool: ${toolName}`);
   }

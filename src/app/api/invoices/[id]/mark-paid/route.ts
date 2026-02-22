@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { notifyInvoicePaid } from '@/lib/notifications';
+import { notifyNexusPayment } from '@/lib/bridge-nexus-sync';
 
 interface MarkPaidRequest {
   paidAmount: number;
@@ -119,6 +120,9 @@ export async function POST(
       paidAmount: body.paidAmount,
       paymentMethod: body.paymentMethod,
     });
+
+    // Bridge: Notify Nexus of payment (fire-and-forget)
+    notifyNexusPayment(id).catch(() => {});
 
     return NextResponse.json(updatedInvoice);
   } catch (error) {

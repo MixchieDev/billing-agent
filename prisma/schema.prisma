@@ -5,7 +5,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -208,6 +207,7 @@ model Contract {
   lineItems         InvoiceLineItem[]
   scheduledBillings ScheduledBilling[]
   invoices          Invoice[]          @relation("ContractToInvoice")
+  bridgeMappings    BridgeMapping[]
 
   @@index([status])
   @@index([billingEntityId])
@@ -641,4 +641,19 @@ enum HitpayPaymentStatus {
   PENDING
   COMPLETED
   FAILED
+}
+
+model BridgeMapping {
+  id                String   @id @default(cuid())
+  nexusAgreementId  String   @unique
+  nexusOrganizationId String
+  contractId        String
+  syncStatus        String   @default("success")
+  syncError         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  contract          Contract @relation(fields: [contractId], references: [id])
+
+  @@index([contractId])
+  @@index([nexusAgreementId])
 }
