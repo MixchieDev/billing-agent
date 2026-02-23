@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import {
   verifyWebhookSignature,
   getPaymentDetailsFromWebhook,
@@ -58,19 +58,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Find the payment request by HitPay request ID
-    const paymentRequest = await prisma.hitpayPaymentRequest.findUnique({
-      where: { hitpayRequestId: paymentDetails.paymentRequestId },
-      include: {
-        invoice: {
-          select: {
-            id: true,
-            billingNo: true,
-            customerName: true,
-            status: true,
-            netAmount: true,
-          },
-        },
-      },
+    const paymentRequest = await convexClient.query(api.hitpayPaymentRequests.getByHitpayRequestId, {
+      hitpayRequestId: paymentDetails.paymentRequestId,
     });
 
     if (!paymentRequest) {
@@ -81,77 +70,84 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get the invoice
+    const invoice = await convexClient.query(api.invoices.getById, {
+      id: paymentRequest.invoiceId,
+    });
+
+    if (!invoice) {
+      console.error('Invoice not found for payment request:', paymentRequest._id);
+      return NextResponse.json(
+        { error: 'Invoice not found' },
+        { status: 404 }
+      );
+    }
+
     // Check if already processed (idempotency)
     if (paymentRequest.status === 'COMPLETED') {
-      console.log('Payment already processed:', paymentRequest.id);
+      console.log('Payment already processed:', paymentRequest._id);
       return NextResponse.json({ received: true, alreadyProcessed: true });
     }
 
     // Check if invoice is already paid
-    if (paymentRequest.invoice.status === 'PAID') {
-      console.log('Invoice already paid:', paymentRequest.invoice.id);
+    if (invoice.status === 'PAID') {
+      console.log('Invoice already paid:', invoice._id);
       return NextResponse.json({ received: true, alreadyPaid: true });
     }
 
-    // Update payment request and invoice in a transaction
-    await prisma.$transaction(async (tx) => {
-      // Update payment request
-      await tx.hitpayPaymentRequest.update({
-        where: { id: paymentRequest.id },
-        data: {
-          status: 'COMPLETED',
-          paidAt: new Date(),
-          paymentMethod: paymentDetails.paymentMethod,
-          paymentReference: paymentDetails.paymentReference,
-        },
-      });
+    // Update payment request
+    await convexClient.mutation(api.hitpayPaymentRequests.update, {
+      id: paymentRequest._id,
+      data: {
+        status: 'COMPLETED',
+        paidAt: Date.now(),
+        paymentMethod: paymentDetails.paymentMethod,
+        paymentReference: paymentDetails.paymentReference,
+      },
+    });
 
-      // Update invoice to PAID
-      await tx.invoice.update({
-        where: { id: paymentRequest.invoice.id },
-        data: {
-          status: 'PAID',
-          paidAt: new Date(),
-          paidAmount: Number(paymentDetails.amount),
-          paymentMethod: 'HITPAY',
-          paymentReference: paymentDetails.paymentReference,
-        },
-      });
+    // Update invoice to PAID
+    await convexClient.mutation(api.invoices.update, {
+      id: invoice._id,
+      data: {
+        status: 'PAID',
+        paidAt: Date.now(),
+        paidAmount: Number(paymentDetails.amount),
+        paymentMethod: 'HITPAY',
+        paymentReference: paymentDetails.paymentReference,
+      },
+    });
 
-      // Create audit log
-      await tx.auditLog.create({
-        data: {
-          userId: null, // System action
-          action: 'INVOICE_PAID',
-          entityType: 'Invoice',
-          entityId: paymentRequest.invoice.id,
-          details: {
-            billingNo: paymentRequest.invoice.billingNo,
-            paidAmount: paymentDetails.amount,
-            paymentMethod: 'HITPAY',
-            hitpayPaymentType: paymentDetails.paymentMethod,
-            paymentReference: paymentDetails.paymentReference,
-            source: 'hitpay_webhook',
-          },
-        },
-      });
+    // Create audit log
+    await convexClient.mutation(api.auditLogs.create, {
+      action: 'INVOICE_PAID',
+      entityType: 'Invoice',
+      entityId: invoice._id,
+      details: {
+        billingNo: invoice.billingNo,
+        paidAmount: paymentDetails.amount,
+        paymentMethod: 'HITPAY',
+        hitpayPaymentType: paymentDetails.paymentMethod,
+        paymentReference: paymentDetails.paymentReference,
+        source: 'hitpay_webhook',
+      },
     });
 
     // Send notification (outside transaction)
     await notifyInvoicePaid({
-      id: paymentRequest.invoice.id,
-      billingNo: paymentRequest.invoice.billingNo,
-      customerName: paymentRequest.invoice.customerName,
+      id: invoice._id,
+      billingNo: invoice.billingNo,
+      customerName: invoice.customerName,
       paidAmount: Number(paymentDetails.amount),
       paymentMethod: `HitPay (${paymentDetails.paymentMethod || 'Online'})`,
     });
 
     // Bridge: Notify Nexus of payment (fire-and-forget)
-    notifyNexusPayment(paymentRequest.invoice.id).catch(() => {});
+    notifyNexusPayment(invoice._id).catch(() => {});
 
     console.log('Payment processed successfully:', {
-      invoiceId: paymentRequest.invoice.id,
-      billingNo: paymentRequest.invoice.billingNo,
+      invoiceId: invoice._id,
+      billingNo: invoice.billingNo,
       amount: paymentDetails.amount,
     });
 

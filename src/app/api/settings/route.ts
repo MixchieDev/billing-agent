@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { clearSettingsCache } from '@/lib/settings';
 
 // Default settings
@@ -51,10 +51,12 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category');
 
     // Fetch settings from database
-    const dbSettings = await prisma.settings.findMany({
-      where: category ? { category } : undefined,
-      orderBy: { key: 'asc' },
-    });
+    const dbSettings = await convexClient.query(api.settings.list, {});
+
+    // Filter by category if specified
+    const filteredDbSettings = category
+      ? dbSettings.filter((s: any) => s.category === category)
+      : dbSettings;
 
     // Merge with defaults (DB values override defaults)
     const settingsMap: Record<string, any> = {};
@@ -73,12 +75,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Then override with DB values
-    for (const setting of dbSettings) {
-      settingsMap[setting.key] = {
-        key: setting.key,
-        value: setting.value,
-        category: setting.category,
-        description: setting.description,
+    for (const setting of filteredDbSettings) {
+      settingsMap[(setting as any).key] = {
+        key: (setting as any).key,
+        value: (setting as any).value,
+        category: (setting as any).category,
+        description: (setting as any).description,
         isDefault: false,
       };
     }
@@ -130,29 +132,23 @@ export async function POST(request: NextRequest) {
       const category = defaultConfig?.category || 'general';
       const description = defaultConfig?.description || '';
 
-      const result = await prisma.settings.upsert({
-        where: { key },
-        update: { value, updatedAt: new Date() },
-        create: {
-          key,
-          value,
-          category,
-          description,
-        },
+      const result = await convexClient.mutation(api.settings.upsert, {
+        key,
+        value,
+        category,
+        description,
       });
 
       results.push(result);
     }
 
     // Log the action
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'SETTINGS_UPDATED',
-        entityType: 'Settings',
-        entityId: 'bulk',
-        details: { updatedKeys: settings.map((s: any) => s.key) },
-      },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'SETTINGS_UPDATED',
+      entityType: 'Settings',
+      entityId: 'bulk',
+      details: { updatedKeys: settings.map((s: any) => s.key) },
     });
 
     // Clear settings cache so new values take effect

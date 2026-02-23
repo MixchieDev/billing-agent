@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
-import { resumeSchedule } from '@/lib/scheduled-billing-service';
+import { convexClient, api } from '@/lib/convex';
 
 /**
  * POST /api/scheduled-billings/[id]/resume
@@ -21,9 +20,8 @@ export async function POST(
     const { id } = await params;
 
     // Check if exists
-    const existing = await prisma.scheduledBilling.findUnique({
-      where: { id },
-      select: { id: true, status: true, contract: { select: { companyName: true } } },
+    const existing = await convexClient.query(api.scheduledBillings.getById, {
+      id: id as any,
     });
 
     if (!existing) {
@@ -38,18 +36,19 @@ export async function POST(
       return NextResponse.json({ error: 'Cannot resume an ended schedule' }, { status: 400 });
     }
 
-    const scheduledBilling = await resumeSchedule(id);
+    const scheduledBilling = await convexClient.mutation(api.scheduledBillings.update, {
+      id: id as any,
+      data: { status: 'ACTIVE' },
+    });
 
     // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: (session.user as { id: string }).id,
-        action: 'SCHEDULED_BILLING_RESUMED',
-        entityType: 'ScheduledBilling',
-        entityId: id,
-        details: {
-          companyName: existing.contract.companyName,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: (session.user as { id: string }).id as any,
+      action: 'SCHEDULED_BILLING_RESUMED',
+      entityType: 'ScheduledBilling',
+      entityId: id,
+      details: {
+        companyName: existing.contract?.companyName,
       },
     });
 

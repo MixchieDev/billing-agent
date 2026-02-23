@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
-import { ProductType, ContractStatus, VatType, BillingType } from '@/generated/prisma';
+import { convexClient, api } from '@/lib/convex';
+import { ProductType, ContractStatus, VatType, BillingType } from '@/lib/enums';
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,60 +21,25 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const skip = (page - 1) * limit;
 
-    // Build where clause
-    const where = {
-      ...(status && { status: status as any }),
-      ...(billingEntity && { billingEntity: { code: billingEntity } }),
-      ...(productType && { productType: productType as any }),
-    };
+    // Get all contracts with optional status filter
+    const allContracts = await convexClient.query(api.contracts.list, {
+      ...(status ? { status } : {}),
+    });
 
-    // Check if minimal fields requested (for dropdowns/selects)
-    const minimal = searchParams.get('minimal') === 'true';
-
-    // Get total count
-    const total = await prisma.contract.count({ where });
-
-    // Get contracts - use separate queries for TypeScript
-    let contracts;
-    if (minimal) {
-      contracts = await prisma.contract.findMany({
-        where,
-        select: {
-          id: true,
-          companyName: true,
-          productType: true,
-          monthlyFee: true,
-          billingAmount: true,
-          email: true,
-          emails: true,
-          tin: true,
-          vatType: true,
-          billingEntityId: true,
-          paymentPlan: true,
-          billingEntity: {
-            select: {
-              id: true,
-              code: true,
-              name: true,
-            },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-      });
-    } else {
-      contracts = await prisma.contract.findMany({
-        where,
-        include: {
-          billingEntity: true,
-          partner: true,
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-      });
+    // Apply additional filters client-side
+    let filtered = allContracts;
+    if (billingEntity) {
+      filtered = filtered.filter((c: any) => c.billingEntity?.code === billingEntity);
     }
+    if (productType) {
+      filtered = filtered.filter((c: any) => c.productType === productType);
+    }
+
+    const total = filtered.length;
+
+    // Sort by createdAt desc and paginate
+    filtered.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+    const contracts = filtered.slice(skip, skip + limit);
 
     return NextResponse.json({
       contracts,
@@ -118,8 +83,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Find the partner
-    const partner = await prisma.partner.findUnique({
-      where: { code: body.partner },
+    const partner = await convexClient.query(api.partners.getByCode, {
+      code: body.partner,
     });
 
     if (!partner) {
@@ -130,8 +95,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Find the billing entity (company)
-    const company = await prisma.company.findUnique({
-      where: { code: body.billingEntity },
+    const company = await convexClient.query(api.companies.getByCode, {
+      code: body.billingEntity,
     });
 
     if (!company) {
@@ -154,7 +119,7 @@ export async function POST(request: NextRequest) {
       'HR': ProductType.HR,
     };
 
-    const productType = productTypeMap[body.productType?.toUpperCase()] || ProductType.ACCOUNTING;
+    const mappedProductType = productTypeMap[body.productType?.toUpperCase()] || ProductType.ACCOUNTING;
 
     // Map status to enum
     const statusMap: Record<string, ContractStatus> = {
@@ -164,7 +129,7 @@ export async function POST(request: NextRequest) {
       'NOT_STARTED': ContractStatus.NOT_STARTED,
     };
 
-    const status = statusMap[body.status?.toUpperCase()] || ContractStatus.ACTIVE;
+    const mappedStatus = statusMap[body.status?.toUpperCase()] || ContractStatus.ACTIVE;
 
     // Map vatType to enum
     const vatType = body.vatType?.toUpperCase() === 'NON_VAT' ? VatType.NON_VAT : VatType.VAT;
@@ -173,24 +138,24 @@ export async function POST(request: NextRequest) {
     const billingType = body.billingType?.toUpperCase() === 'ONE_TIME' ? BillingType.ONE_TIME : BillingType.RECURRING;
 
     // Create the contract
-    const contract = await prisma.contract.create({
+    const contractId = await convexClient.mutation(api.contracts.create, {
       data: {
         customerNumber,
         customerId: body.customerId || null,
         companyName: body.companyName,
-        productType,
-        partnerId: partner.id,
-        billingEntityId: company.id,
+        productType: mappedProductType,
+        partnerId: partner._id,
+        billingEntityId: company._id,
         monthlyFee: body.monthlyFee,
         paymentPlan: body.paymentPlan || null,
-        contractStart: body.contractStart ? new Date(body.contractStart) : null,
-        nextDueDate: body.nextDueDate ? new Date(body.nextDueDate) : null,
-        status,
+        contractStart: body.contractStart ? new Date(body.contractStart).getTime() : null,
+        nextDueDate: body.nextDueDate ? new Date(body.nextDueDate).getTime() : null,
+        status: mappedStatus,
         vatType,
         billingType,
         contactPerson: body.contactPerson || null,
         email: body.email || null,
-        emails: body.emails || body.email || null,  // Support both, prefer emails
+        emails: body.emails || body.email || null,
         address: body.address || null,
         tin: body.tin || null,
         mobile: body.mobile || null,
@@ -199,29 +164,25 @@ export async function POST(request: NextRequest) {
         billingDayOfMonth: body.billingDayOfMonth || null,
         autoApprove: body.autoApprove ?? false,
       },
-      include: {
-        billingEntity: true,
-        partner: true,
-      },
     });
 
     // Increment company's next contract number
-    await prisma.company.update({
-      where: { id: company.id },
-      data: { nextContractNo: { increment: 1 } },
+    await convexClient.mutation(api.companies.incrementContractNo, {
+      id: company._id,
     });
 
+    // Get the created contract
+    const contract = await convexClient.query(api.contracts.getById, { id: contractId });
+
     // Audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'CONTRACT_CREATED',
-        entityType: 'Contract',
-        entityId: contract.id,
-        details: {
-          contractName: contract.companyName,
-          customerNumber: contract.customerNumber,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'CONTRACT_CREATED',
+      entityType: 'Contract',
+      entityId: contractId,
+      details: {
+        contractName: body.companyName,
+        customerNumber,
       },
     });
 

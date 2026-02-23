@@ -1,22 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 
 // File constraints
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file
 const MAX_TOTAL_SIZE = 15 * 1024 * 1024; // 15MB total per invoice
 const MAX_FILES = 5;
-const ALLOWED_TYPES = [
-  'application/pdf',
-  'image/png',
-  'image/jpeg',
-  'image/jpg',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-];
 const ALLOWED_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx', 'xls', 'xlsx'];
 
 // GET - List attachments for an invoice
@@ -33,30 +23,30 @@ export async function GET(
     const { id } = await params;
 
     // Check if invoice exists
-    const invoice = await prisma.invoice.findUnique({
-      where: { id },
-      select: { id: true },
+    const invoice = await convexClient.query(api.invoices.getById, {
+      id: id as any,
     });
 
     if (!invoice) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
-    // Get attachments (exclude data to reduce response size)
-    const attachments = await prisma.invoiceAttachment.findMany({
-      where: { invoiceId: id },
-      select: {
-        id: true,
-        filename: true,
-        mimeType: true,
-        size: true,
-        uploadedAt: true,
-        uploadedBy: true,
-      },
-      orderBy: { uploadedAt: 'asc' },
+    // Get attachments
+    const attachments = await convexClient.query(api.invoiceAttachments.listByInvoiceId, {
+      invoiceId: id as any,
     });
 
-    return NextResponse.json(attachments);
+    // Transform for response (exclude data to reduce response size)
+    const result = attachments.map((a: any) => ({
+      id: a._id,
+      filename: a.filename,
+      mimeType: a.mimeType,
+      size: a.size,
+      uploadedAt: a.uploadedAt,
+      uploadedBy: a.uploadedBy,
+    }));
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching attachments:', error);
     return NextResponse.json(
@@ -85,9 +75,8 @@ export async function POST(
     const { id } = await params;
 
     // Check if invoice exists
-    const invoice = await prisma.invoice.findUnique({
-      where: { id },
-      select: { id: true },
+    const invoice = await convexClient.query(api.invoices.getById, {
+      id: id as any,
     });
 
     if (!invoice) {
@@ -95,13 +84,12 @@ export async function POST(
     }
 
     // Get existing attachments to check limits
-    const existingAttachments = await prisma.invoiceAttachment.findMany({
-      where: { invoiceId: id },
-      select: { size: true },
+    const existingAttachments = await convexClient.query(api.invoiceAttachments.listByInvoiceId, {
+      invoiceId: id as any,
     });
 
     const currentCount = existingAttachments.length;
-    const currentTotalSize = existingAttachments.reduce((sum, a) => sum + a.size, 0);
+    const currentTotalSize = existingAttachments.reduce((sum: number, a: any) => sum + a.size, 0);
 
     if (currentCount >= MAX_FILES) {
       return NextResponse.json(
@@ -143,40 +131,51 @@ export async function POST(
       );
     }
 
-    // Validate MIME type (with fallback for some browsers)
-    const mimeType = file.type || getMimeTypeFromExtension(extension);
-    if (!ALLOWED_TYPES.includes(mimeType)) {
+    // Get upload URL from Convex storage
+    const uploadUrl = await convexClient.mutation(api.invoiceAttachments.generateUploadUrl, {});
+
+    // Upload file to Convex storage
+    const arrayBuffer = await file.arrayBuffer();
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': file.type || getMimeTypeFromExtension(extension),
+      },
+      body: arrayBuffer,
+    });
+
+    if (!uploadResponse.ok) {
       return NextResponse.json(
-        { error: 'File type not allowed' },
-        { status: 400 }
+        { error: 'Failed to upload file to storage' },
+        { status: 500 }
       );
     }
 
-    // Read file data
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const { storageId } = await uploadResponse.json();
 
     // Create attachment record
-    const attachment = await prisma.invoiceAttachment.create({
-      data: {
-        invoiceId: id,
-        filename: file.name,
-        mimeType,
-        size: file.size,
-        data: buffer,
-        uploadedBy: session.user.id,
-      },
-      select: {
-        id: true,
-        filename: true,
-        mimeType: true,
-        size: true,
-        uploadedAt: true,
-        uploadedBy: true,
-      },
+    const mimeType = file.type || getMimeTypeFromExtension(extension);
+    const attachmentId = await convexClient.mutation(api.invoiceAttachments.create, {
+      invoiceId: id as any,
+      filename: file.name,
+      mimeType,
+      size: file.size,
+      storageId,
+      uploadedBy: session.user.id,
     });
 
-    return NextResponse.json(attachment, { status: 201 });
+    const attachment = await convexClient.query(api.invoiceAttachments.getById, {
+      id: attachmentId,
+    });
+
+    return NextResponse.json({
+      id: attachment?._id,
+      filename: attachment?.filename,
+      mimeType: attachment?.mimeType,
+      size: attachment?.size,
+      uploadedAt: attachment?.uploadedAt,
+      uploadedBy: attachment?.uploadedBy,
+    }, { status: 201 });
   } catch (error) {
     console.error('Error uploading attachment:', error);
     return NextResponse.json(

@@ -1,6 +1,5 @@
 // Follow-up email service for sent invoices
-import prisma from './prisma';
-import { EmailStatus } from '@/generated/prisma';
+import { convexClient, api } from '@/lib/convex';
 import {
   initEmailServiceFromEnv,
   getFollowUpTemplate,
@@ -33,17 +32,7 @@ const MAX_FOLLOW_UP_LEVEL = 3;
  * Check if a follow-up can be sent for an invoice
  */
 export async function canSendFollowUp(invoiceId: string): Promise<CanSendFollowUpResult> {
-  const invoice = await prisma.invoice.findUnique({
-    where: { id: invoiceId },
-    select: {
-      id: true,
-      status: true,
-      followUpEnabled: true,
-      lastFollowUpLevel: true,
-      customerEmail: true,
-      customerEmails: true,
-    },
-  });
+  const invoice = await convexClient.query(api.invoices.getById, { id: invoiceId as any });
 
   if (!invoice) {
     return { canSend: false, reason: 'Invoice not found' };
@@ -74,10 +63,10 @@ export async function canSendFollowUp(invoiceId: string): Promise<CanSendFollowU
 /**
  * Calculate days overdue for an invoice
  */
-export function calculateDaysOverdue(dueDate: Date): number {
+export function calculateDaysOverdue(dueDate: number | Date): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const due = new Date(dueDate);
+  const due = typeof dueDate === 'number' ? new Date(dueDate) : new Date(dueDate);
   due.setHours(0, 0, 0, 0);
   const diffTime = today.getTime() - due.getTime();
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
@@ -106,15 +95,7 @@ export async function sendFollowUpEmail(
   const level = canSendResult.nextLevel!;
 
   // Fetch invoice with all needed relations
-  const invoice = await prisma.invoice.findUnique({
-    where: { id: invoiceId },
-    include: {
-      company: true,
-      partner: true,
-      lineItems: true,
-      attachments: true,
-    },
-  });
+  const invoice = await convexClient.query(api.invoices.getByIdFull, { id: invoiceId as any });
 
   if (!invoice) {
     return { success: false, message: 'Invoice not found' };
@@ -135,11 +116,11 @@ export async function sendFollowUpEmail(
   // Prepare placeholder data
   const placeholderData: EmailPlaceholderData = {
     customerName: invoice.customerName,
-    billingNo: invoice.billingNo || invoice.id.slice(0, 8),
-    dueDate: formatDate(invoice.dueDate),
+    billingNo: invoice.billingNo || invoice._id.slice(0, 8),
+    dueDate: formatDate(new Date(invoice.dueDate)),
     totalAmount: formatCurrency(Number(invoice.netAmount)),
-    periodStart: invoice.periodStart ? formatDate(invoice.periodStart) : '',
-    periodEnd: invoice.periodEnd ? formatDate(invoice.periodEnd) : '',
+    periodStart: invoice.periodStart ? formatDate(new Date(invoice.periodStart)) : '',
+    periodEnd: invoice.periodEnd ? formatDate(new Date(invoice.periodEnd)) : '',
     companyName: invoice.company?.name || 'YAHSHUA-ABBA',
     clientCompanyName: invoice.customerName,
     daysOverdue: daysOverdue.toString(),
@@ -166,30 +147,38 @@ export async function sendFollowUpEmail(
     const soaSettings = await getSOASettings(companyCode);
     const templateSettings = await getInvoiceTemplate(companyCode);
 
-    const pdfData = await generateInvoicePdfLib(invoice, soaSettings as SOASettings, templateSettings || undefined);
+    // Convert timestamps to Dates for the PDF generator
+    const invoiceForPdf = {
+      ...invoice,
+      dueDate: new Date(invoice.dueDate),
+      statementDate: new Date(invoice.statementDate),
+      periodStart: invoice.periodStart ? new Date(invoice.periodStart) : null,
+      periodEnd: invoice.periodEnd ? new Date(invoice.periodEnd) : null,
+    };
+
+    const pdfData = await generateInvoicePdfLib(invoiceForPdf, soaSettings as SOASettings, templateSettings || undefined);
     pdfBuffer = Buffer.from(pdfData);
-    pdfFilename = `Invoice-${invoice.billingNo || invoice.id.slice(0, 8)}.pdf`;
+    pdfFilename = `Invoice-${invoice.billingNo || invoice._id.slice(0, 8)}.pdf`;
   } catch (error) {
     console.error('[Follow-up Service] Failed to generate PDF:', error);
     // Continue without PDF - it's not critical for follow-up
   }
 
   // Create follow-up log record
-  const followUpLog = await prisma.followUpLog.create({
-    data: {
-      invoiceId: invoice.id,
-      level,
-      toEmail: toEmails,
-      subject,
-      status: EmailStatus.QUEUED,
-      templateId: template.id,
-    },
+  const followUpLogId = await convexClient.mutation(api.followUpLogs.create, {
+    invoiceId: invoice._id as any,
+    level,
+    sentAt: Date.now(),
+    toEmail: toEmails,
+    subject,
+    status: 'QUEUED',
+    templateId: template._id as any,
   });
 
   try {
     // Send the email
     const result = await sendBillingEmail(
-      invoice.id,
+      invoice._id,
       toEmails,
       subject,
       plainTextBody,
@@ -200,65 +189,61 @@ export async function sendFollowUpEmail(
 
     if (result.success) {
       // Update follow-up log
-      await prisma.followUpLog.update({
-        where: { id: followUpLog.id },
+      await convexClient.mutation(api.followUpLogs.update, {
+        id: followUpLogId,
         data: {
-          status: EmailStatus.SENT,
+          status: 'SENT',
           messageId: result.messageId,
-          sentAt: new Date(),
+          sentAt: Date.now(),
         },
       });
 
       // Update invoice follow-up tracking
-      await prisma.invoice.update({
-        where: { id: invoice.id },
+      await convexClient.mutation(api.invoices.update, {
+        id: invoice._id as any,
         data: {
-          followUpCount: { increment: 1 },
-          lastFollowUpAt: new Date(),
+          followUpCount: invoice.followUpCount + 1,
+          lastFollowUpAt: Date.now(),
           lastFollowUpLevel: level,
         },
       });
 
       // Create audit log
-      await prisma.auditLog.create({
-        data: {
-          userId: userId || null,
-          action: 'INVOICE_FOLLOW_UP_SENT',
-          entityType: 'Invoice',
-          entityId: invoice.id,
-          details: {
-            level,
-            to: toEmails,
-            subject,
-            daysOverdue,
-          },
+      await convexClient.mutation(api.auditLogs.create, {
+        userId: userId as any || undefined,
+        action: 'INVOICE_FOLLOW_UP_SENT',
+        entityType: 'Invoice',
+        entityId: invoice._id,
+        details: {
+          level,
+          to: toEmails,
+          subject,
+          daysOverdue,
         },
       });
 
       // Create notification
-      await prisma.notification.create({
-        data: {
-          type: 'INVOICE_FOLLOW_UP',
-          title: `Follow-up ${level} Sent`,
-          message: `Follow-up email (level ${level}) sent for invoice ${invoice.billingNo || invoice.id.slice(0, 8)} to ${invoice.customerName}`,
-          link: '/dashboard/invoices',
-          entityType: 'Invoice',
-          entityId: invoice.id,
-        },
+      await convexClient.mutation(api.notifications.create, {
+        type: 'INVOICE_FOLLOW_UP',
+        title: `Follow-up ${level} Sent`,
+        message: `Follow-up email (level ${level}) sent for invoice ${invoice.billingNo || invoice._id.slice(0, 8)} to ${invoice.customerName}`,
+        link: '/dashboard/invoices',
+        entityType: 'Invoice',
+        entityId: invoice._id,
       });
 
       return {
         success: true,
         level,
         message: `Follow-up level ${level} sent successfully`,
-        followUpLogId: followUpLog.id,
+        followUpLogId,
       };
     } else {
       // Update follow-up log with error
-      await prisma.followUpLog.update({
-        where: { id: followUpLog.id },
+      await convexClient.mutation(api.followUpLogs.update, {
+        id: followUpLogId,
         data: {
-          status: EmailStatus.FAILED,
+          status: 'FAILED',
           error: result.error,
         },
       });
@@ -274,10 +259,10 @@ export async function sendFollowUpEmail(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     // Update follow-up log with error
-    await prisma.followUpLog.update({
-      where: { id: followUpLog.id },
+    await convexClient.mutation(api.followUpLogs.update, {
+      id: followUpLogId,
       data: {
-        status: EmailStatus.FAILED,
+        status: 'FAILED',
         error: errorMessage,
       },
     });
@@ -295,18 +280,7 @@ export async function sendFollowUpEmail(
  * Get follow-up history for an invoice
  */
 export async function getFollowUpHistory(invoiceId: string) {
-  return prisma.followUpLog.findMany({
-    where: { invoiceId },
-    include: {
-      template: {
-        select: {
-          name: true,
-          followUpLevel: true,
-        },
-      },
-    },
-    orderBy: { sentAt: 'desc' },
-  });
+  return convexClient.query(api.followUpLogs.listByInvoiceId, { invoiceId: invoiceId as any });
 }
 
 /**
@@ -317,21 +291,19 @@ export async function toggleFollowUpEnabled(
   enabled: boolean,
   userId?: string
 ): Promise<{ success: boolean; enabled: boolean }> {
-  const invoice = await prisma.invoice.update({
-    where: { id: invoiceId },
+  await convexClient.mutation(api.invoices.update, {
+    id: invoiceId as any,
     data: { followUpEnabled: enabled },
   });
 
   // Create audit log
-  await prisma.auditLog.create({
-    data: {
-      userId: userId || null,
-      action: enabled ? 'INVOICE_FOLLOW_UP_ENABLED' : 'INVOICE_FOLLOW_UP_DISABLED',
-      entityType: 'Invoice',
-      entityId: invoiceId,
-      details: { enabled },
-    },
+  await convexClient.mutation(api.auditLogs.create, {
+    userId: userId as any || undefined,
+    action: enabled ? 'INVOICE_FOLLOW_UP_ENABLED' : 'INVOICE_FOLLOW_UP_DISABLED',
+    entityType: 'Invoice',
+    entityId: invoiceId,
+    details: { enabled },
   });
 
-  return { success: true, enabled: invoice.followUpEnabled };
+  return { success: true, enabled };
 }

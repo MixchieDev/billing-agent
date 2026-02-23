@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { approveInvoice } from '@/lib/billing-service';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { notifyInvoiceApproved } from '@/lib/notifications';
 
 export async function POST(
@@ -24,14 +24,12 @@ export async function POST(
     const invoice = await approveInvoice(id, session.user.id);
 
     // Log the action
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'INVOICE_APPROVED',
-        entityType: 'Invoice',
-        entityId: id,
-        details: { invoiceNo: invoice.billingNo },
-      },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'INVOICE_APPROVED',
+      entityType: 'Invoice',
+      entityId: id,
+      details: { invoiceNo: invoice.billingNo },
     });
 
     // Create notification

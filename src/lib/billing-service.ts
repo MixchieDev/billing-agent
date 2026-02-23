@@ -1,6 +1,6 @@
-import prisma from './prisma';
+import { convexClient, api } from '@/lib/convex';
 import { calculateBilling, getBillingEntity, generateBillingNo } from './utils';
-import { BillingModel, InvoiceStatus, ContractStatus, VatType, BillingFrequency } from '@/generated/prisma';
+import { BillingModel, InvoiceStatus, ContractStatus, VatType, BillingFrequency } from '@/lib/enums';
 
 // Map contract paymentPlan string to BillingFrequency enum
 function mapPaymentPlanToFrequency(paymentPlan: string | null | undefined): BillingFrequency {
@@ -33,7 +33,7 @@ export interface InvoiceGenerationResult {
   contractId: string;
   customerName: string;
   billingNo: string;
-  status: InvoiceStatus;
+  status: string;
   autoApproved: boolean;
   autoSendEnabled: boolean;
 }
@@ -43,67 +43,49 @@ export async function getContractsDueToday() {
   const today = new Date();
   const dayOfMonth = today.getDate();
 
-  return prisma.contract.findMany({
-    where: {
-      status: ContractStatus.ACTIVE,
-      billingDayOfMonth: dayOfMonth,
-      // Exclude contracts that have ended
-      OR: [
-        { contractEndDate: null },
-        { contractEndDate: { gt: today } },
-      ],
-    },
-    include: {
-      partner: true,
-      billingEntity: true,
-    },
+  const contracts = await convexClient.query(api.contracts.listDueToday, { dayOfMonth });
+
+  // Filter out contracts that have ended
+  return contracts.filter((c: any) => {
+    if (!c.contractEndDate) return true;
+    return c.contractEndDate > Date.now();
   });
 }
 
 // Get contracts due within specified days (kept for backward compatibility)
 export async function getContractsDueWithin(days: number) {
-  const today = new Date();
-  const futureDate = new Date();
-  futureDate.setDate(today.getDate() + days);
+  const today = Date.now();
+  const futureDate = today + days * 24 * 60 * 60 * 1000;
 
-  return prisma.contract.findMany({
-    where: {
-      status: ContractStatus.ACTIVE,
-      nextDueDate: {
-        gte: today,
-        lte: futureDate,
-      },
-      // Exclude contracts that have ended
-      OR: [
-        { contractEndDate: null },
-        { contractEndDate: { gt: today } },
-      ],
-    },
-    include: {
-      partner: true,
-      billingEntity: true,
-    },
+  const contracts = await convexClient.query(api.contracts.list, { status: ContractStatus.ACTIVE });
+
+  return contracts.filter((c: any) => {
+    if (!c.nextDueDate) return false;
+    if (c.nextDueDate < today || c.nextDueDate > futureDate) return false;
+    if (c.contractEndDate && c.contractEndDate <= today) return false;
+    return true;
   });
 }
 
 // Helper to check if invoice exists for current billing period
 async function checkExistingInvoiceForMonth(contractId: string): Promise<boolean> {
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).getTime();
 
-  const existing = await prisma.invoice.findFirst({
-    where: {
-      contracts: { some: { id: contractId } },
-      statementDate: {
-        gte: startOfMonth,
-        lte: endOfMonth,
-      },
-      status: { notIn: [InvoiceStatus.CANCELLED, InvoiceStatus.VOID] },
-    },
-  });
+  // Get invoices linked to this contract via contractInvoices
+  const links = await convexClient.query(api.contractInvoices.listByContractId, { contractId: contractId as any });
 
-  return !!existing;
+  for (const link of links) {
+    if (!link.invoice) continue;
+    const inv = link.invoice;
+    if (inv.statementDate >= startOfMonth && inv.statementDate <= endOfMonth &&
+        inv.status !== InvoiceStatus.CANCELLED && inv.status !== InvoiceStatus.VOID) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // Helper to calculate and update nextDueDate
@@ -115,11 +97,11 @@ async function updateNextDueDate(contractId: string, billingDayOfMonth: number) 
   const lastDayOfNextMonth = new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0).getDate();
   const actualDay = Math.min(billingDayOfMonth, lastDayOfNextMonth);
 
-  const nextDueDate = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), actualDay);
+  const nextDueDate = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), actualDay).getTime();
 
-  await prisma.contract.update({
-    where: { id: contractId },
-    data: { nextDueDate },
+  await convexClient.mutation(api.contracts.updateNextDueDate, {
+    id: contractId as any,
+    nextDueDate,
   });
 }
 
@@ -130,7 +112,7 @@ export async function generateInvoices(): Promise<InvoiceGenerationResult[]> {
 
   for (const contract of contracts) {
     // Check if invoice already exists for this month
-    const hasExisting = await checkExistingInvoiceForMonth(contract.id);
+    const hasExisting = await checkExistingInvoiceForMonth(contract._id);
     if (hasExisting) continue;
 
     const billingAmount = Number(contract.billingAmount || contract.monthlyFee);
@@ -138,17 +120,17 @@ export async function generateInvoices(): Promise<InvoiceGenerationResult[]> {
 
     // Create invoice with status based on autoApprove
     const invoice = await createInvoiceFromContract({
-      contractId: contract.id,
+      contractId: contract._id,
       billingAmount,
       hasWithholding,
       autoApprove: contract.autoApprove,
     });
 
     results.push({
-      invoiceId: invoice.id,
-      contractId: contract.id,
+      invoiceId: invoice._id,
+      contractId: contract._id,
       customerName: contract.companyName,
-      billingNo: invoice.billingNo || invoice.id,
+      billingNo: invoice.billingNo || invoice._id,
       status: invoice.status,
       autoApproved: contract.autoApprove,
       autoSendEnabled: contract.autoSendEnabled,
@@ -156,7 +138,7 @@ export async function generateInvoices(): Promise<InvoiceGenerationResult[]> {
 
     // Update contract's nextDueDate to next month
     if (contract.billingDayOfMonth) {
-      await updateNextDueDate(contract.id, contract.billingDayOfMonth);
+      await updateNextDueDate(contract._id, contract.billingDayOfMonth);
     }
   }
 
@@ -166,13 +148,7 @@ export async function generateInvoices(): Promise<InvoiceGenerationResult[]> {
 // Create invoice from contract
 // If autoApprove is true, invoice is created with APPROVED status
 export async function createInvoiceFromContract(params: CreateInvoiceParams) {
-  const contract = await prisma.contract.findUnique({
-    where: { id: params.contractId },
-    include: {
-      partner: true,
-      billingEntity: true,
-    },
-  });
+  const contract = await convexClient.query(api.contracts.getById, { id: params.contractId as any });
 
   if (!contract) {
     throw new Error('Contract not found');
@@ -181,7 +157,7 @@ export async function createInvoiceFromContract(params: CreateInvoiceParams) {
   const isVatClient = contract.vatType === VatType.VAT;
   const calculation = calculateBilling(
     params.billingAmount,
-    params.isVatInclusive ?? false, // Default to VAT-exclusive (net amount)
+    params.isVatInclusive ?? false,
     isVatClient,
     params.hasWithholding ?? false
   );
@@ -207,29 +183,32 @@ export async function createInvoiceFromContract(params: CreateInvoiceParams) {
   }
 
   // Generate billing number
+  const billingEntity = contract.billingEntity;
   const billingNo = generateBillingNo(
-    contract.billingEntity.invoicePrefix || 'INV',
-    contract.billingEntity.nextInvoiceNo
+    billingEntity?.invoicePrefix || 'INV',
+    billingEntity?.nextInvoiceNo || 1
   );
 
   // Determine billing frequency from contract's paymentPlan
   const billingFrequency = mapPaymentPlanToFrequency(contract.paymentPlan);
 
-  // Create the invoice
-  const invoice = await prisma.invoice.create({
+  const now = Date.now();
+
+  // Create the invoice with line items
+  const invoiceId = await convexClient.mutation(api.invoices.create, {
     data: {
       billingNo,
       companyId: contract.billingEntityId,
-      partnerId: contract.partnerId, // Link to partner for traceability
+      partnerId: contract.partnerId,
       customerName,
       attention,
       customerAddress,
       customerEmail,
       customerTin: contract.tin,
-      statementDate: new Date(),
-      dueDate: contract.nextDueDate || new Date(),
-      periodStart: params.periodStart,
-      periodEnd: params.periodEnd,
+      statementDate: now,
+      dueDate: contract.nextDueDate || now,
+      periodStart: params.periodStart?.getTime(),
+      periodEnd: params.periodEnd?.getTime(),
       serviceFee: calculation.serviceFee,
       vatAmount: calculation.vatAmount,
       grossAmount: calculation.grossAmount,
@@ -237,69 +216,57 @@ export async function createInvoiceFromContract(params: CreateInvoiceParams) {
       netAmount: calculation.netAmount,
       vatType: contract.vatType,
       hasWithholding: params.hasWithholding ?? false,
-      withholdingCode: params.hasWithholding ? 'WC160' : null,
+      withholdingCode: params.hasWithholding ? 'WC160' : undefined,
       billingFrequency,
       monthlyFee: Number(contract.monthlyFee),
       status: params.autoApprove ? InvoiceStatus.APPROVED : InvoiceStatus.PENDING,
-      approvedAt: params.autoApprove ? new Date() : null,
+      approvedAt: params.autoApprove ? now : undefined,
       billingModel: contract.partner?.billingModel || BillingModel.DIRECT,
       remarks: params.remarks,
-      contracts: {
-        connect: { id: contract.id },
-      },
-      lineItems: {
-        create: {
-          contractId: contract.id,
-          date: new Date(),
-          description: contract.productType.charAt(0) + contract.productType.slice(1).toLowerCase(),
-          quantity: 1,
-          unitPrice: calculation.serviceFee,
-          serviceFee: calculation.serviceFee,
-          vatAmount: calculation.vatAmount,
-          withholdingTax: calculation.withholdingTax,
-          amount: calculation.netAmount,
-        },
-      },
-    },
-    include: {
-      lineItems: true,
-      company: true,
+      isConsolidated: false,
+      emailStatus: 'NOT_SENT',
+      followUpEnabled: true,
+      followUpCount: 0,
+      lastFollowUpLevel: 0,
+      lineItems: [{
+        contractId: contract._id,
+        date: now,
+        description: contract.productType.charAt(0) + contract.productType.slice(1).toLowerCase(),
+        quantity: 1,
+        unitPrice: calculation.serviceFee,
+        serviceFee: calculation.serviceFee,
+        vatAmount: calculation.vatAmount,
+        withholdingTax: calculation.withholdingTax,
+        amount: calculation.netAmount,
+        sortOrder: 0,
+      }],
+      contractId: contract._id,
     },
   });
 
   // Update company's next invoice number
-  await prisma.company.update({
-    where: { id: contract.billingEntityId },
-    data: {
-      nextInvoiceNo: {
-        increment: 1,
-      },
-    },
-  });
+  await convexClient.mutation(api.companies.incrementInvoiceNo, { id: contract.billingEntityId });
 
+  const invoice = await convexClient.query(api.invoices.getById, { id: invoiceId });
   return invoice;
 }
 
 // Approve invoice
 export async function approveInvoice(invoiceId: string, userId: string) {
-  return prisma.invoice.update({
-    where: { id: invoiceId },
-    data: {
-      status: InvoiceStatus.APPROVED,
-      approvedById: userId,
-      approvedAt: new Date(),
-    },
+  return convexClient.mutation(api.invoices.updateStatus, {
+    id: invoiceId as any,
+    status: InvoiceStatus.APPROVED,
+    approvedById: userId as any,
   });
 }
 
 // Auto-approve invoice (system automated, no user ID)
 export async function autoApproveInvoice(invoiceId: string) {
-  return prisma.invoice.update({
-    where: { id: invoiceId },
+  return convexClient.mutation(api.invoices.update, {
+    id: invoiceId as any,
     data: {
       status: InvoiceStatus.APPROVED,
-      approvedAt: new Date(),
-      // No approvedById since it's system-automated
+      approvedAt: Date.now(),
     },
   });
 }
@@ -311,54 +278,35 @@ export async function rejectInvoice(
   reason: string,
   rescheduleDate?: Date
 ) {
-  return prisma.invoice.update({
-    where: { id: invoiceId },
-    data: {
-      status: InvoiceStatus.REJECTED,
-      rejectedById: userId,
-      rejectedAt: new Date(),
-      rejectionReason: reason,
-      rescheduleDate,
-    },
+  return convexClient.mutation(api.invoices.updateStatus, {
+    id: invoiceId as any,
+    status: InvoiceStatus.REJECTED,
+    rejectedById: userId as any,
+    rejectionReason: reason,
+    rescheduleDate: rescheduleDate?.getTime(),
   });
 }
 
 // Bulk approve invoices
 export async function bulkApproveInvoices(invoiceIds: string[], userId: string) {
-  return prisma.invoice.updateMany({
-    where: {
-      id: { in: invoiceIds },
-      status: InvoiceStatus.PENDING,
-    },
-    data: {
-      status: InvoiceStatus.APPROVED,
-      approvedById: userId,
-      approvedAt: new Date(),
-    },
+  return convexClient.mutation(api.invoices.bulkUpdateStatus, {
+    ids: invoiceIds as any[],
+    status: InvoiceStatus.APPROVED,
+    approvedById: userId as any,
   });
 }
 
 // Get invoice stats - optimized single query
 export async function getInvoiceStats() {
-  // Single groupBy query instead of 4 separate queries
-  const statsByStatus = await prisma.invoice.groupBy({
-    by: ['status'],
-    _count: true,
-    _sum: { netAmount: true },
-  });
-
-  // Map results to expected format
-  const statsMap = new Map(
-    statsByStatus.map((s) => [s.status, { count: s._count, sum: Number(s._sum.netAmount || 0) }])
-  );
+  const stats = await convexClient.query(api.invoices.statsByStatus, {});
 
   return {
-    pending: statsMap.get(InvoiceStatus.PENDING)?.count || 0,
-    approved: statsMap.get(InvoiceStatus.APPROVED)?.count || 0,
-    rejected: statsMap.get(InvoiceStatus.REJECTED)?.count || 0,
-    sent: statsMap.get(InvoiceStatus.SENT)?.count || 0,
-    totalPendingAmount: statsMap.get(InvoiceStatus.PENDING)?.sum || 0,
-    totalApprovedAmount: statsMap.get(InvoiceStatus.APPROVED)?.sum || 0,
+    pending: stats[InvoiceStatus.PENDING]?.count || 0,
+    approved: stats[InvoiceStatus.APPROVED]?.count || 0,
+    rejected: stats[InvoiceStatus.REJECTED]?.count || 0,
+    sent: stats[InvoiceStatus.SENT]?.count || 0,
+    totalPendingAmount: stats[InvoiceStatus.PENDING]?.sum || 0,
+    totalApprovedAmount: stats[InvoiceStatus.APPROVED]?.sum || 0,
   };
 }
 
@@ -368,23 +316,20 @@ export async function getPendingInvoices(filters?: {
   partner?: string;
   productType?: string;
 }) {
-  return prisma.invoice.findMany({
-    where: {
-      status: InvoiceStatus.PENDING,
-      ...(filters?.billingEntity && {
-        company: { code: filters.billingEntity },
-      }),
-      ...(filters?.partner && {
-        billingModel: filters.partner as BillingModel,
-      }),
-    },
-    include: {
-      company: true,
-      lineItems: true,
-      contracts: true,
-    },
-    orderBy: {
-      dueDate: 'asc',
-    },
+  let companyId: any = undefined;
+  if (filters?.billingEntity) {
+    const company = await convexClient.query(api.companies.getByCode, { code: filters.billingEntity });
+    if (company) companyId = company._id;
+  }
+
+  const invoices = await convexClient.query(api.invoices.list, {
+    status: InvoiceStatus.PENDING,
+    companyId,
   });
+
+  if (filters?.partner) {
+    return invoices.filter((inv: any) => inv.billingModel === filters.partner);
+  }
+
+  return invoices;
 }

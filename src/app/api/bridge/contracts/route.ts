@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { validateBridgeApiKey } from '@/lib/bridge-auth';
-import { ContractStatus, VatType, BillingType, BillingFrequency, ScheduleStatus } from '@/generated/prisma';
+import { ContractStatus, VatType, BillingType, BillingFrequency, ScheduleStatus } from '@/lib/enums';
 
 interface BridgeContractPayload {
   nexusAgreementId: string;
@@ -66,22 +66,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Idempotency: check if this agreement was already synced
-    const existingMapping = await prisma.bridgeMapping.findUnique({
-      where: { nexusAgreementId: body.nexusAgreementId },
-      include: { contract: true },
+    const existingMapping = await convexClient.query(api.bridgeMappings.getByNexusAgreementId, {
+      nexusAgreementId: body.nexusAgreementId,
     });
 
     if (existingMapping) {
+      const contract = await convexClient.query(api.contracts.getById, {
+        id: existingMapping.contractId,
+      });
       return NextResponse.json({
         action: 'already_exists',
         contractId: existingMapping.contractId,
-        customerNumber: existingMapping.contract.customerNumber,
+        customerNumber: contract?.customerNumber,
       });
     }
 
     // Look up billing entity (Company) by code
-    const billingEntity = await prisma.company.findUnique({
-      where: { code: body.billingEntityCode },
+    const billingEntity = await convexClient.query(api.companies.getByCode, {
+      code: body.billingEntityCode,
     });
 
     if (!billingEntity) {
@@ -94,11 +96,11 @@ export async function POST(request: NextRequest) {
     // Look up partner by code (optional)
     let partnerId: string | null = null;
     if (body.partnerCode) {
-      const partner = await prisma.partner.findUnique({
-        where: { code: body.partnerCode },
+      const partner = await convexClient.query(api.partners.getByCode, {
+        code: body.partnerCode,
       });
       if (partner) {
-        partnerId = partner.id;
+        partnerId = partner._id;
       }
     }
 
@@ -117,95 +119,88 @@ export async function POST(request: NextRequest) {
       (body.billingFrequency?.toUpperCase() as BillingFrequency) || 'MONTHLY';
 
     const billingDayOfMonth = body.billingDayOfMonth || 1;
-    const contractStart = body.startDate ? new Date(body.startDate) : new Date();
-    const contractEnd = body.endDate ? new Date(body.endDate) : null;
+    const contractStartMs = body.startDate ? new Date(body.startDate).getTime() : Date.now();
+    const contractEndMs = body.endDate ? new Date(body.endDate).getTime() : null;
 
-    // Create Contract + ScheduledBilling + BridgeMapping atomically
-    const result = await prisma.$transaction(async (tx) => {
-      // Auto-generate customerNumber
-      const prefix = billingEntity.contractPrefix || billingEntity.code;
-      const seqNo = billingEntity.nextContractNo || 1;
-      const customerNumber = `${prefix}-${String(seqNo).padStart(5, '0')}`;
+    // Auto-generate customerNumber
+    const prefix = billingEntity.contractPrefix || billingEntity.code;
+    const seqNo = billingEntity.nextContractNo || 1;
+    const customerNumber = `${prefix}-${String(seqNo).padStart(5, '0')}`;
 
-      // Increment nextContractNo
-      await tx.company.update({
-        where: { id: billingEntity.id },
-        data: { nextContractNo: seqNo + 1 },
-      });
+    // Increment nextContractNo
+    await convexClient.mutation(api.companies.incrementContractNo, {
+      id: billingEntity._id,
+    });
 
-      // Create Contract
-      const contract = await tx.contract.create({
-        data: {
-          customerNumber,
-          companyName: body.companyName,
-          productType: productType as any,
-          billingType: (body.billingType?.toUpperCase() as BillingType) || 'RECURRING',
-          billingEntityId: billingEntity.id,
-          partnerId,
-          monthlyFee,
-          vatType,
-          vatAmount,
-          totalWithVat,
-          netReceivable: totalWithVat,
-          billingAmount: monthlyFee,
-          contactPerson: body.contactPerson || null,
-          email: body.email || null,
-          mobile: body.mobile || null,
-          address: body.address || null,
-          tin: body.tin || null,
-          industry: body.industry || null,
-          contractStart,
-          contractEndDate: contractEnd,
-          billingDayOfMonth,
-          status: 'ACTIVE' as ContractStatus,
-          remarks: body.remarks || `Auto-created from Nexus agreement ${body.agreementNumber}`,
-        },
-      });
+    // Create Contract
+    const contractId = await convexClient.mutation(api.contracts.create, {
+      data: {
+        customerNumber,
+        companyName: body.companyName,
+        productType: productType as any,
+        billingType: (body.billingType?.toUpperCase() as BillingType) || 'RECURRING',
+        billingEntityId: billingEntity._id,
+        partnerId,
+        monthlyFee,
+        vatType,
+        vatAmount,
+        totalWithVat,
+        netReceivable: totalWithVat,
+        billingAmount: monthlyFee,
+        contactPerson: body.contactPerson || null,
+        email: body.email || null,
+        mobile: body.mobile || null,
+        address: body.address || null,
+        tin: body.tin || null,
+        industry: body.industry || null,
+        contractStart: contractStartMs,
+        contractEndDate: contractEndMs,
+        billingDayOfMonth,
+        status: 'ACTIVE' as ContractStatus,
+        remarks: body.remarks || `Auto-created from Nexus agreement ${body.agreementNumber}`,
+      },
+    });
 
-      // Create ScheduledBilling
-      // Calculate first billing date
-      const now = new Date();
-      let nextBillingDate = new Date(contractStart);
-      nextBillingDate.setDate(billingDayOfMonth);
-      if (nextBillingDate <= now) {
-        nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
-      }
+    // Create ScheduledBilling
+    // Calculate first billing date
+    const now = Date.now();
+    const contractStartDate = new Date(contractStartMs);
+    let nextBillingDate = new Date(contractStartDate);
+    nextBillingDate.setDate(billingDayOfMonth);
+    if (nextBillingDate.getTime() <= now) {
+      nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
+    }
 
-      await tx.scheduledBilling.create({
-        data: {
-          contractId: contract.id,
-          billingEntityId: billingEntity.id,
-          billingAmount: monthlyFee,
-          vatType,
-          frequency: billingFrequency,
-          billingDayOfMonth,
-          startDate: contractStart,
-          endDate: contractEnd,
-          nextBillingDate,
-          status: 'ACTIVE' as ScheduleStatus,
-          autoApprove: false,
-          autoSendEnabled: true,
-          description: body.description || `${body.companyName} - ${productType}`,
-        },
-      });
+    await convexClient.mutation(api.scheduledBillings.create, {
+      data: {
+        contractId,
+        billingEntityId: billingEntity._id,
+        billingAmount: monthlyFee,
+        vatType,
+        frequency: billingFrequency,
+        billingDayOfMonth,
+        startDate: contractStartMs,
+        endDate: contractEndMs,
+        nextBillingDate: nextBillingDate.getTime(),
+        status: 'ACTIVE' as ScheduleStatus,
+        autoApprove: false,
+        autoSendEnabled: true,
+        description: body.description || `${body.companyName} - ${productType}`,
+      },
+    });
 
-      // Create BridgeMapping
-      await tx.bridgeMapping.create({
-        data: {
-          nexusAgreementId: body.nexusAgreementId,
-          nexusOrganizationId: body.nexusOrganizationId,
-          contractId: contract.id,
-          syncStatus: 'success',
-        },
-      });
-
-      return { contractId: contract.id, customerNumber };
+    // Create BridgeMapping
+    await convexClient.mutation(api.bridgeMappings.create, {
+      nexusAgreementId: body.nexusAgreementId,
+      nexusOrganizationId: body.nexusOrganizationId,
+      contractId,
+      syncStatus: 'success',
     });
 
     return NextResponse.json({
       action: 'created',
-      contractId: result.contractId,
-      customerNumber: result.customerNumber,
+      contractId,
+      customerNumber,
     });
   } catch (error) {
     console.error('Bridge: Contract creation error:', error);

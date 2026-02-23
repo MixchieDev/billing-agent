@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { bulkApproveInvoices } from '@/lib/billing-service';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,14 +29,12 @@ export async function POST(request: NextRequest) {
     const result = await bulkApproveInvoices(invoiceIds, session.user.id);
 
     // Log the action
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'INVOICES_BULK_APPROVED',
-        entityType: 'Invoice',
-        entityId: 'bulk',
-        details: { count: result.count, invoiceIds },
-      },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'INVOICES_BULK_APPROVED',
+      entityType: 'Invoice',
+      entityId: 'bulk',
+      details: { count: result.count, invoiceIds },
     });
 
     return NextResponse.json({

@@ -1,11 +1,9 @@
 import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { PrismaAdapter } from '@auth/prisma-adapter';
 import bcrypt from 'bcryptjs';
-import prisma from './prisma';
+import { convexClient, api } from '@/lib/convex';
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma) as NextAuthOptions['adapter'],
   providers: [
     CredentialsProvider({
       name: 'credentials',
@@ -18,8 +16,8 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+        const user = await convexClient.query(api.users.getByEmail, {
+          email: credentials.email,
         });
 
         if (!user || !user.password) {
@@ -36,7 +34,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         return {
-          id: user.id,
+          id: user._id,
           email: user.email,
           name: user.name,
           role: user.role,

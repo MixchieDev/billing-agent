@@ -1,6 +1,6 @@
-import prisma from './prisma';
+import { convexClient, api } from '@/lib/convex';
 import { calculateBilling, generateBillingNo } from './utils';
-import { BillingModel, InvoiceStatus, VatType, BillingFrequency } from '@/generated/prisma';
+import { BillingModel, InvoiceStatus, VatType, BillingFrequency } from '@/lib/enums';
 import {
   getScheduledBilling,
   createScheduledBillingRun,
@@ -40,17 +40,17 @@ export interface GenerateInvoiceRequest {
   dueDate: Date;
 
   // Optional
-  vatType?: VatType;
+  vatType?: string;
   hasWithholding?: boolean;
-  withholdingRate?: number;  // Rate as decimal (e.g., 0.02 = 2%)
-  withholdingCode?: string;  // ATC code (e.g., 'WC160')
+  withholdingRate?: number;
+  withholdingCode?: string;
   periodStart?: Date;
   periodEnd?: Date;
   autoApprove?: boolean;
 
   // Editable text fields
-  description?: string;    // Line item description (for single item)
-  remarks?: string;        // Invoice remarks/notes
+  description?: string;
+  remarks?: string;
 
   // Multiple line items (for multi-month billing)
   lineItems?: LineItemInput[];
@@ -60,7 +60,7 @@ export interface GenerateInvoiceResult {
   invoice: {
     id: string;
     billingNo: string;
-    status: InvoiceStatus;
+    status: string;
     netAmount: number;
     customerName: string;
   };
@@ -82,10 +82,7 @@ export async function generateInvoice(
   }
 
   // Get billing entity
-  const billingEntity = await prisma.company.findUnique({
-    where: { id: request.billingEntityId },
-    include: { template: true },
-  });
+  const billingEntity = await convexClient.query(api.companies.getWithTemplate, { id: request.billingEntityId as any });
 
   if (!billingEntity) {
     throw new Error('Billing entity not found');
@@ -96,25 +93,22 @@ export async function generateInvoice(
   let attention: string | null = null;
   let customerAddress: string | null = null;
   let customerEmail: string | null = null;
-  let customerEmails: string | null = null;  // Comma-separated list
+  let customerEmails: string | null = null;
   let customerTin: string | null = null;
   let partnerId: string | null = null;
-  let billingModel: BillingModel = BillingModel.DIRECT;
+  let billingModel: string = BillingModel.DIRECT;
   let contractId: string | null = null;
   let description = request.description || 'Professional Services';
 
   if (request.contractId) {
     // Generate from contract
-    const contract = await prisma.contract.findUnique({
-      where: { id: request.contractId },
-      include: { partner: true },
-    });
+    const contract = await convexClient.query(api.contracts.getById, { id: request.contractId as any });
 
     if (!contract) {
       throw new Error('Contract not found');
     }
 
-    contractId = contract.id;
+    contractId = contract._id;
     customerTin = contract.tin;
 
     // Determine recipient based on partner billing model
@@ -127,22 +121,21 @@ export async function generateInvoice(
         customerName = contract.partner.invoiceTo || contract.companyName;
         attention = contract.partner.attention;
         customerAddress = contract.partner.address;
-        // Use emails field if available, fallback to email
         customerEmails = contract.partner.emails || contract.partner.email;
         customerEmail = customerEmails?.split(',')[0]?.trim() || null;
       } else {
         customerName = contract.companyName;
         attention = contract.contactPerson;
-        customerAddress = contract.address;  // Use contract address for direct billing
-        customerEmails = contract.emails || contract.email;  // Prefer emails
-        customerEmail = customerEmails?.split(',')[0]?.trim() || null;  // First email for legacy
+        customerAddress = contract.address;
+        customerEmails = contract.emails || contract.email;
+        customerEmail = customerEmails?.split(',')[0]?.trim() || null;
       }
     } else {
       customerName = contract.companyName;
       attention = contract.contactPerson;
-      customerAddress = contract.address;  // Use contract address
-      customerEmails = contract.emails || contract.email;  // Prefer emails
-      customerEmail = customerEmails?.split(',')[0]?.trim() || null;  // First email for legacy
+      customerAddress = contract.address;
+      customerEmails = contract.emails || contract.email;
+      customerEmail = customerEmails?.split(',')[0]?.trim() || null;
     }
 
     // Use product type as default description if not provided
@@ -154,8 +147,8 @@ export async function generateInvoice(
     customerName = request.customBillTo.name;
     attention = request.customBillTo.attention || null;
     customerAddress = request.customBillTo.address || null;
-    customerEmails = request.customBillTo.emails || request.customBillTo.email || null;  // Prefer emails
-    customerEmail = customerEmails?.split(',')[0]?.trim() || null;  // First email for legacy
+    customerEmails = request.customBillTo.emails || request.customBillTo.email || null;
+    customerEmail = customerEmails?.split(',')[0]?.trim() || null;
     customerTin = request.customBillTo.tin || null;
   } else {
     throw new Error('Invalid request: no source specified');
@@ -164,14 +157,14 @@ export async function generateInvoice(
   // Calculate billing amounts
   const isVatClient = (request.vatType ?? VatType.VAT) === VatType.VAT;
   const hasWithholding = request.hasWithholding ?? false;
-  const withholdingRate = request.withholdingRate ?? 0.02;  // Default to 2%
-  const withholdingCode = request.withholdingCode ?? 'WC160';  // Default code
-  const vatRate = await getVatRate();  // Fetch configurable VAT rate
+  const withholdingRate = request.withholdingRate ?? 0.02;
+  const withholdingCode = request.withholdingCode ?? 'WC160';
+  const vatRate = await getVatRate();
 
   // Prepare line items data
   let lineItemsToCreate: Array<{
     contractId?: string;
-    date: Date;
+    date: number;
     description: string;
     quantity: number;
     unitPrice: number;
@@ -179,6 +172,7 @@ export async function generateInvoice(
     vatAmount: number;
     withholdingTax: number;
     amount: number;
+    sortOrder: number;
   }> = [];
 
   // Calculate totals
@@ -188,12 +182,14 @@ export async function generateInvoice(
   let totalNetAmount = 0;
   let totalGrossAmount = 0;
 
+  const now = Date.now();
+
   if (request.lineItems && request.lineItems.length > 0) {
-    // Multiple line items (multi-month billing)
+    let sortOrder = 0;
     for (const item of request.lineItems) {
       const itemCalc = calculateBilling(
         item.amount,
-        false, // VAT-exclusive (amount is net, VAT added on top)
+        false,
         isVatClient,
         hasWithholding,
         withholdingRate,
@@ -202,7 +198,7 @@ export async function generateInvoice(
 
       lineItemsToCreate.push({
         ...(contractId && { contractId }),
-        date: new Date(),
+        date: now,
         description: item.description,
         quantity: 1,
         unitPrice: itemCalc.serviceFee,
@@ -210,6 +206,7 @@ export async function generateInvoice(
         vatAmount: itemCalc.vatAmount,
         withholdingTax: itemCalc.withholdingTax,
         amount: itemCalc.netAmount,
+        sortOrder: sortOrder++,
       });
 
       totalServiceFee += itemCalc.serviceFee;
@@ -219,10 +216,9 @@ export async function generateInvoice(
       totalGrossAmount += itemCalc.grossAmount;
     }
   } else {
-    // Single line item
     const calculation = calculateBilling(
       request.billingAmount,
-      false, // VAT-exclusive (amount is net, VAT added on top)
+      false,
       isVatClient,
       hasWithholding,
       withholdingRate,
@@ -231,7 +227,7 @@ export async function generateInvoice(
 
     lineItemsToCreate.push({
       ...(contractId && { contractId }),
-      date: new Date(),
+      date: now,
       description,
       quantity: 1,
       unitPrice: calculation.serviceFee,
@@ -239,6 +235,7 @@ export async function generateInvoice(
       vatAmount: calculation.vatAmount,
       withholdingTax: calculation.withholdingTax,
       amount: calculation.netAmount,
+      sortOrder: 0,
     });
 
     totalServiceFee = calculation.serviceFee;
@@ -258,7 +255,7 @@ export async function generateInvoice(
   const status = request.autoApprove ? InvoiceStatus.APPROVED : InvoiceStatus.PENDING;
 
   // Create the invoice
-  const invoice = await prisma.invoice.create({
+  const invoiceId = await convexClient.mutation(api.invoices.create, {
     data: {
       billingNo,
       companyId: request.billingEntityId,
@@ -269,72 +266,60 @@ export async function generateInvoice(
       customerEmail,
       customerEmails,
       customerTin,
-      statementDate: new Date(),
-      dueDate: request.dueDate,
-      periodStart: request.periodStart,
-      periodEnd: request.periodEnd,
+      statementDate: now,
+      dueDate: request.dueDate.getTime(),
+      periodStart: request.periodStart?.getTime(),
+      periodEnd: request.periodEnd?.getTime(),
       serviceFee: totalServiceFee,
       vatAmount: totalVatAmount,
       grossAmount: totalGrossAmount,
       withholdingTax: totalWithholdingTax,
       netAmount: totalNetAmount,
       vatType: request.vatType ?? VatType.VAT,
-      hasWithholding: hasWithholding,
-      withholdingCode: hasWithholding ? withholdingCode : null,
-      withholdingRate: hasWithholding ? withholdingRate : null,
+      hasWithholding,
+      withholdingCode: hasWithholding ? withholdingCode : undefined,
+      withholdingRate: hasWithholding ? withholdingRate : undefined,
       billingFrequency: BillingFrequency.MONTHLY,
       monthlyFee: request.billingAmount,
       status,
-      approvedAt: request.autoApprove ? new Date() : null,
+      approvedAt: request.autoApprove ? now : undefined,
       billingModel,
       remarks: request.remarks,
-      ...(contractId && {
-        contracts: {
-          connect: { id: contractId },
-        },
-      }),
-      lineItems: {
-        create: lineItemsToCreate,
-      },
-    },
-    include: {
-      lineItems: true,
-      company: true,
+      isConsolidated: false,
+      emailStatus: 'NOT_SENT',
+      followUpEnabled: true,
+      followUpCount: 0,
+      lastFollowUpLevel: 0,
+      lineItems: lineItemsToCreate,
+      ...(contractId && { contractId }),
     },
   });
 
   // Update company's next invoice number
-  await prisma.company.update({
-    where: { id: request.billingEntityId },
-    data: {
-      nextInvoiceNo: {
-        increment: 1,
-      },
-    },
+  await convexClient.mutation(api.companies.incrementInvoiceNo, {
+    id: request.billingEntityId as any,
   });
 
   // Create audit log
-  await prisma.auditLog.create({
-    data: {
-      action: request.autoApprove ? 'INVOICE_AUTO_APPROVED' : 'INVOICE_CREATED',
-      entityType: 'Invoice',
-      entityId: invoice.id,
-      details: {
-        billingNo,
-        customerName,
-        amount: totalNetAmount,
-        source: request.scheduledBillingId ? 'scheduled' : request.contractId ? 'contract' : 'adhoc',
-      },
+  await convexClient.mutation(api.auditLogs.create, {
+    action: request.autoApprove ? 'INVOICE_AUTO_APPROVED' : 'INVOICE_CREATED',
+    entityType: 'Invoice',
+    entityId: invoiceId,
+    details: {
+      billingNo,
+      customerName,
+      amount: totalNetAmount,
+      source: request.scheduledBillingId ? 'scheduled' : request.contractId ? 'contract' : 'adhoc',
     },
   });
 
   return {
     invoice: {
-      id: invoice.id,
-      billingNo: invoice.billingNo || invoice.id,
-      status: invoice.status,
-      netAmount: Number(invoice.netAmount),
-      customerName: invoice.customerName,
+      id: invoiceId,
+      billingNo,
+      status,
+      netAmount: totalNetAmount,
+      customerName,
     },
     autoApproved: request.autoApprove ?? false,
     scheduledBillingId: request.scheduledBillingId,
@@ -379,38 +364,35 @@ export async function generateFromScheduledBilling(
       periodEnd = new Date(now.getFullYear(), 11, 31);
       break;
     case BillingFrequency.CUSTOM:
-      // For custom intervals, calculate period based on interval from start date
       const baseDate = schedule.nextBillingDate ? new Date(schedule.nextBillingDate) : new Date(schedule.startDate);
 
       if (schedule.customIntervalUnit === 'DAYS' && schedule.customIntervalValue) {
-        // Period ends on next billing date, starts interval days before
         periodEnd = new Date(baseDate);
         periodStart = new Date(baseDate);
         periodStart.setDate(periodStart.getDate() - schedule.customIntervalValue);
       } else if (schedule.customIntervalUnit === 'MONTHS' && schedule.customIntervalValue) {
-        // Period ends on next billing date, starts interval months before
         periodEnd = new Date(baseDate);
         periodStart = new Date(baseDate);
         periodStart.setMonth(periodStart.getMonth() - schedule.customIntervalValue);
       } else {
-        // Fallback to monthly if custom interval not properly configured
         periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
         periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       }
       break;
+    default:
+      periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
   }
 
-  // Calculate due date based on dueDayOfMonth
-  // Due date is the dueDayOfMonth in the same month as the billing period
+  // Calculate due date
   const dueDayOfMonth = schedule.dueDayOfMonth || schedule.billingDayOfMonth;
   let dueDate = new Date(periodStart.getFullYear(), periodStart.getMonth(), dueDayOfMonth);
 
-  // If due day is before billing day, due date is in the next month
   if (dueDayOfMonth < schedule.billingDayOfMonth) {
     dueDate = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, dueDayOfMonth);
   }
 
-  // Format description with billing period (e.g., "Payroll Services - Jan 2026")
+  // Format description with billing period
   let formattedDescription = schedule.description || 'Services';
   if (schedule.frequency === BillingFrequency.MONTHLY) {
     formattedDescription = `${formattedDescription} - ${format(periodStart, 'MMM yyyy')}`;
@@ -419,14 +401,13 @@ export async function generateFromScheduledBilling(
   } else if (schedule.frequency === BillingFrequency.ANNUALLY) {
     formattedDescription = `${formattedDescription} - ${format(periodStart, 'yyyy')}`;
   } else if (schedule.frequency === BillingFrequency.CUSTOM) {
-    // For custom, show the period range
     formattedDescription = `${formattedDescription} - ${format(periodStart, 'MMM d')} to ${format(periodEnd, 'MMM d, yyyy')}`;
   }
 
   try {
     const result = await generateInvoice({
       contractId: schedule.contractId,
-      scheduledBillingId: schedule.id,
+      scheduledBillingId: schedule._id,
       billingEntityId: schedule.billingEntityId,
       billingAmount: Number(schedule.billingAmount),
       vatType: schedule.vatType,
@@ -478,7 +459,6 @@ export async function generateInvoices(
       results.push(result);
     } catch (error) {
       console.error('Failed to generate invoice:', error);
-      // Continue with other invoices
     }
   }
 

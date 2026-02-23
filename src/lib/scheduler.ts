@@ -1,6 +1,6 @@
 import * as cron from 'node-cron';
-import prisma from './prisma';
-import { JobStatus, InvoiceStatus } from '@/generated/prisma';
+import { convexClient, api } from '@/lib/convex';
+import { JobStatus, InvoiceStatus } from '@/lib/enums';
 import { autoSendInvoice } from './auto-send';
 import { notifyInvoicePending } from './notifications';
 import {
@@ -33,17 +33,11 @@ let nextRun: Date | null = null;
 
 /**
  * Main billing job - uses ScheduledBilling model
- * 1. Get scheduled billings where billingDayOfMonth = today
- * 2. For each schedule, generate invoice
- * 3. For APPROVED invoices with autoSendEnabled: auto-send
- * 4. For PENDING invoices: notify for approval
  */
 async function runBillingJob() {
-  const jobRun = await prisma.jobRun.create({
-    data: {
-      jobName: 'daily-billing-check',
-      status: JobStatus.RUNNING,
-    },
+  const jobRunId = await convexClient.mutation(api.jobRuns.create, {
+    jobName: 'daily-billing-check',
+    status: JobStatus.RUNNING,
   });
 
   try {
@@ -63,7 +57,7 @@ async function runBillingJob() {
     for (const schedule of schedules) {
       try {
         // Check if invoice already exists for this period
-        const hasExisting = await checkExistingInvoiceForPeriod(schedule.id);
+        const hasExisting = await checkExistingInvoiceForPeriod(schedule._id);
         if (hasExisting) {
           console.log(`[Scheduler] Skipping ${schedule.contract.companyName} - invoice already exists for this period`);
           skipped++;
@@ -71,7 +65,7 @@ async function runBillingJob() {
         }
 
         // Generate invoice
-        const result = await generateFromScheduledBilling(schedule.id);
+        const result = await generateFromScheduledBilling(schedule._id);
         processed++;
 
         console.log(`[Scheduler] Created invoice ${result.invoice.billingNo} for ${schedule.contract.companyName}`);
@@ -88,7 +82,7 @@ async function runBillingJob() {
               } else {
                 console.error(`[Scheduler] Failed to auto-send ${result.invoice.billingNo}: ${sendResult.error}`);
                 errors.push({
-                  scheduleId: schedule.id,
+                  scheduleId: schedule._id,
                   invoiceId: result.invoice.id,
                   billingNo: result.invoice.billingNo,
                   error: `Auto-send failed: ${sendResult.error}`,
@@ -97,7 +91,7 @@ async function runBillingJob() {
             } catch (sendError) {
               console.error(`[Scheduler] Error sending invoice ${result.invoice.billingNo}:`, sendError);
               errors.push({
-                scheduleId: schedule.id,
+                scheduleId: schedule._id,
                 invoiceId: result.invoice.id,
                 billingNo: result.invoice.billingNo,
                 error: `Auto-send error: ${sendError instanceof Error ? sendError.message : 'Unknown'}`,
@@ -123,14 +117,14 @@ async function runBillingJob() {
 
         // Record failed run
         await createScheduledBillingRun(
-          schedule.id,
+          schedule._id,
           null,
           'FAILED',
           error instanceof Error ? error.message : 'Unknown error'
         );
 
         errors.push({
-          scheduleId: schedule.id,
+          scheduleId: schedule._id,
           companyName: schedule.contract.companyName,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
@@ -138,11 +132,11 @@ async function runBillingJob() {
     }
 
     // Update job run
-    await prisma.jobRun.update({
-      where: { id: jobRun.id },
+    await convexClient.mutation(api.jobRuns.update, {
+      id: jobRunId,
       data: {
         status: JobStatus.COMPLETED,
-        completedAt: new Date(),
+        completedAt: Date.now(),
         itemsProcessed: processed,
         errors: { errors, autoSent, pendingApproval, skipped },
       },
@@ -158,11 +152,11 @@ async function runBillingJob() {
   } catch (error) {
     console.error('[Scheduler] Job failed:', error);
 
-    await prisma.jobRun.update({
-      where: { id: jobRun.id },
+    await convexClient.mutation(api.jobRuns.update, {
+      id: jobRunId,
       data: {
         status: JobStatus.FAILED,
-        completedAt: new Date(),
+        completedAt: Date.now(),
         errors: [{ error: error instanceof Error ? error.message : 'Unknown error' }],
       },
     });
@@ -185,11 +179,9 @@ function updateNextRunTime() {
   }
 
   try {
-    // Parse cron and calculate next occurrence
     const cronParts = currentConfig.cronExpression.split(' ');
     const now = new Date();
 
-    // Simple calculation for common patterns (minute hour * * *)
     if (cronParts.length >= 2) {
       const minute = parseInt(cronParts[0]) || 0;
       const hour = parseInt(cronParts[1]) || 8;
@@ -197,7 +189,6 @@ function updateNextRunTime() {
       const next = new Date(now);
       next.setHours(hour, minute, 0, 0);
 
-      // If time has passed today, schedule for tomorrow
       if (next <= now) {
         next.setDate(next.getDate() + 1);
       }
@@ -266,7 +257,6 @@ export function stopScheduler() {
 
 /**
  * Initialize scheduler from database settings
- * Call this on app startup
  */
 export async function initializeScheduler() {
   try {
@@ -274,7 +264,7 @@ export async function initializeScheduler() {
     const settings = await getSchedulerSettings();
 
     startScheduler({
-      enabled: true, // Always enabled - individual schedules control themselves
+      enabled: true,
       cronExpression: settings.cronExpression,
       daysBeforeDue: settings.daysBeforeDue,
     });
@@ -287,7 +277,6 @@ export async function initializeScheduler() {
 
 /**
  * Reload scheduler settings from database
- * Call this after settings are updated
  */
 export async function reloadScheduler() {
   console.log('[Scheduler] Reloading settings...');
@@ -323,7 +312,7 @@ export async function getSchedulerStatusAsync() {
     running: scheduledTask !== null,
     config: {
       ...currentConfig,
-      enabled: true, // Always enabled
+      enabled: true,
       cronExpression: settings.cronExpression,
       daysBeforeDue: settings.daysBeforeDue,
     },

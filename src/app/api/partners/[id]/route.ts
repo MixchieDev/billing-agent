@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 
 // GET single partner
 export async function GET(
@@ -16,16 +16,13 @@ export async function GET(
 
     const { id } = await params;
 
-    const partner = await prisma.partner.findUnique({
-      where: { id },
-      include: { company: true },
-    });
+    const partner = await convexClient.query(api.partners.getByIdWithCompany, { id: id as any });
 
     if (!partner) {
       return NextResponse.json({ error: 'Partner not found' }, { status: 404 });
     }
 
-    return NextResponse.json(partner);
+    return NextResponse.json({ ...partner, id: partner._id });
   } catch (error) {
     console.error('Error fetching partner:', error);
     return NextResponse.json(
@@ -56,32 +53,20 @@ export async function PUT(
 
     const { name, invoiceTo, attention, address, email, emails, billingModel, companyId, emailTemplateId } = body;
 
-    const partner = await prisma.partner.update({
-      where: { id },
-      data: {
-        name,
-        invoiceTo,
-        attention,
-        address,
-        email,
-        emails,
-        billingModel,
-        companyId,
-        emailTemplateId: emailTemplateId || null,
-      },
-      include: {
-        company: true,
-        emailTemplate: {
-          select: {
-            id: true,
-            name: true,
-            isDefault: true,
-          },
-        },
-      },
+    const partner = await convexClient.mutation(api.partners.updateWithRelations, {
+      id: id as any,
+      name,
+      invoiceTo,
+      attention,
+      address,
+      email,
+      emails,
+      billingModel,
+      companyId: companyId as any,
+      emailTemplateId: emailTemplateId ? (emailTemplateId as any) : null,
     });
 
-    return NextResponse.json(partner);
+    return NextResponse.json(partner ? { ...partner, id: (partner as any)._id } : partner);
   } catch (error) {
     console.error('Error updating partner:', error);
     return NextResponse.json(
@@ -110,8 +95,8 @@ export async function DELETE(
     const { id } = await params;
 
     // Check if partner has contracts
-    const contractCount = await prisma.contract.count({
-      where: { partnerId: id },
+    const contractCount = await convexClient.query(api.contracts.countByPartnerId, {
+      partnerId: id as any,
     });
 
     if (contractCount > 0) {
@@ -121,8 +106,8 @@ export async function DELETE(
       );
     }
 
-    await prisma.partner.delete({
-      where: { id },
+    await convexClient.mutation(api.partners.remove, {
+      id: id as any,
     });
 
     return NextResponse.json({ success: true });

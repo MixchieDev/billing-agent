@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { getSOASettings, getInvoiceTemplate, clearTemplateCache } from '@/lib/settings';
 import { generateInvoicePdfLib } from '@/lib/pdf-generator';
 
@@ -17,12 +17,8 @@ export async function GET(
 
     const { id } = await params;
 
-    const invoice = await prisma.invoice.findUnique({
-      where: { id },
-      include: {
-        company: true,
-        lineItems: true,
-      },
+    const invoice = await convexClient.query(api.invoices.getByIdFull, {
+      id: id as any,
     });
 
     if (!invoice) {
@@ -54,7 +50,7 @@ export async function GET(
     return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="${invoice.billingNo || invoice.id}.pdf"`,
+        'Content-Disposition': `inline; filename="${invoice.billingNo || invoice._id}.pdf"`,
       },
     });
   } catch (error) {

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import bcrypt from 'bcryptjs';
-import { UserRole } from '@/generated/prisma';
+import { UserRole } from '@/lib/enums';
 
 // GET /api/users - List all users (ADMIN only)
 export async function GET(request: NextRequest) {
@@ -18,19 +18,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const users = await convexClient.query(api.users.list, {});
 
-    return NextResponse.json(users);
+    // Map to expected shape (exclude password, map _id to id)
+    const mapped = users.map((u: any) => ({
+      id: u._id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      createdAt: u.createdAt ? new Date(u.createdAt).toISOString() : null,
+      updatedAt: u.updatedAt ? new Date(u.updatedAt).toISOString() : null,
+    }));
+
+    return NextResponse.json(mapped);
   } catch (error) {
     console.error('Error fetching users:', error);
     return NextResponse.json(
@@ -82,9 +82,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if email already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
+    const existingUser = await convexClient.query(api.users.getByEmail, { email });
 
     if (existingUser) {
       return NextResponse.json(
@@ -97,38 +95,36 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Create user
-    const user = await prisma.user.create({
-      data: {
-        name: name || null,
-        email,
-        password: hashedPassword,
-        role: (role as UserRole) || UserRole.VIEWER,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
-      },
+    const userId = await convexClient.mutation(api.users.create, {
+      name: name || undefined,
+      email,
+      password: hashedPassword,
+      role: (role as UserRole) || UserRole.VIEWER,
     });
+
+    // Get the created user
+    const user = await convexClient.query(api.users.getById, { id: userId as any });
 
     // Audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'USER_CREATED',
-        entityType: 'User',
-        entityId: user.id,
-        details: {
-          email: user.email,
-          role: user.role,
-          createdBy: session.user.email,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'USER_CREATED',
+      entityType: 'User',
+      entityId: String(userId),
+      details: {
+        email,
+        role: role || UserRole.VIEWER,
+        createdBy: session.user.email,
       },
     });
 
-    return NextResponse.json(user, { status: 201 });
+    return NextResponse.json({
+      id: userId,
+      name: user?.name,
+      email: user?.email,
+      role: user?.role,
+      createdAt: user?.createdAt ? new Date(user.createdAt).toISOString() : null,
+    }, { status: 201 });
   } catch (error) {
     console.error('Error creating user:', error);
     return NextResponse.json(

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { parseContractsCSV, generateContractsTemplate } from '@/lib/csv-parser';
-import { ProductType, ContractStatus, VatType, BillingType } from '@/generated/prisma';
+import { ProductType, ContractStatus, VatType, BillingType } from '@/lib/enums';
 
 // GET - Download template
 export async function GET() {
@@ -54,11 +54,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Get all partners and companies for lookup
-    const partners = await prisma.partner.findMany();
-    const companies = await prisma.company.findMany();
+    const partners = await convexClient.query(api.partners.list, {});
+    const companies = await convexClient.query(api.companies.list, {});
 
-    const partnerMap = new Map(partners.map(p => [p.code, p]));
-    const companyMap = new Map(companies.map(c => [c.code, c]));
+    const partnerMap = new Map(partners.map((p: any) => [p.code, p]));
+    const companyMap = new Map(companies.map((c: any) => [c.code, c]));
 
     // Process contracts
     const results = {
@@ -104,24 +104,24 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Check if contract exists
-        const existingContract = await prisma.contract.findFirst({
-          where: {
-            customerId: row.customerId,
-            billingEntityId: company.id,
-          },
+        // Check if contract exists by searching
+        const existingContracts = await convexClient.query(api.contracts.list, {
+          billingEntityId: company._id,
         });
+        const existingContract = existingContracts.find(
+          (c: any) => c.customerId === row.customerId
+        );
 
         const contractData = {
           customerId: row.customerId,
           companyName: row.companyName,
           productType: productTypeMap[row.productType] || ProductType.ACCOUNTING,
-          partnerId: partner.id,
-          billingEntityId: company.id,
+          partnerId: partner._id,
+          billingEntityId: company._id,
           monthlyFee: row.monthlyFee,
           paymentPlan: row.paymentPlan || null,
-          contractStart: row.contractStart || null,
-          nextDueDate: row.nextDueDate || null,
+          contractStart: row.contractStart ? new Date(row.contractStart).getTime() : null,
+          nextDueDate: row.nextDueDate ? new Date(row.nextDueDate).getTime() : null,
           status: statusMap[row.status?.toUpperCase() || 'ACTIVE'] || ContractStatus.ACTIVE,
           vatType: row.vatType?.toUpperCase() === 'NON_VAT' ? VatType.NON_VAT : VatType.VAT,
           billingType: row.billingType?.toUpperCase() === 'ONE_TIME' ? BillingType.ONE_TIME : BillingType.RECURRING,
@@ -134,14 +134,14 @@ export async function POST(request: NextRequest) {
 
         if (existingContract) {
           // Update existing contract
-          await prisma.contract.update({
-            where: { id: existingContract.id },
+          await convexClient.mutation(api.contracts.update, {
+            id: existingContract._id,
             data: contractData,
           });
           results.updated++;
         } else {
           // Create new contract
-          await prisma.contract.create({
+          await convexClient.mutation(api.contracts.create, {
             data: contractData,
           });
           results.created++;
@@ -153,19 +153,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'CONTRACTS_IMPORTED',
-        entityType: 'Contract',
-        entityId: 'bulk',
-        details: {
-          fileName: file.name,
-          totalRows: parseResult.totalRows,
-          created: results.created,
-          updated: results.updated,
-          skipped: results.skipped,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'CONTRACTS_IMPORTED',
+      entityType: 'Contract',
+      entityId: 'bulk',
+      details: {
+        fileName: file.name,
+        totalRows: parseResult.totalRows,
+        created: results.created,
+        updated: results.updated,
+        skipped: results.skipped,
       },
     });
 

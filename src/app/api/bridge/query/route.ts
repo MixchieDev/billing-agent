@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBridgeApiKey } from '@/lib/bridge-auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 
 /**
  * POST /api/bridge/query
@@ -24,67 +24,87 @@ export async function POST(request: NextRequest) {
 
     switch (entity) {
       case 'contracts': {
-        const where: any = {};
+        let contracts = await convexClient.query(api.contracts.list, {
+          ...(status ? { status } : {}),
+        });
+
+        // Apply additional filters client-side
         if (searchTerm) {
-          where.companyName = { contains: searchTerm, mode: 'insensitive' };
-        }
-        if (status) {
-          where.status = status;
+          const term = searchTerm.toLowerCase();
+          contracts = contracts.filter((c: any) =>
+            c.companyName?.toLowerCase().includes(term)
+          );
         }
         if (nexusAgreementId) {
-          where.bridgeMappings = { some: { nexusAgreementId } };
+          // Need to check bridge mappings
+          const mapping = await convexClient.query(api.bridgeMappings.getByNexusAgreementId, {
+            nexusAgreementId,
+          });
+          if (mapping) {
+            contracts = contracts.filter((c: any) => c._id === mapping.contractId);
+          } else {
+            contracts = [];
+          }
         }
 
-        const contracts = await prisma.contract.findMany({
-          where,
-          include: { billingEntity: true, bridgeMappings: true },
-          take: 20,
-          orderBy: { updatedAt: 'desc' },
-        });
+        // Limit to 20
+        contracts = contracts.slice(0, 20);
+
+        // Get bridge mappings for each contract
+        const contractsWithMappings = await Promise.all(
+          contracts.map(async (c: any) => {
+            const bridgeMapping = await convexClient.query(api.bridgeMappings.getByContractId, {
+              contractId: c._id,
+            });
+            return {
+              id: c._id,
+              companyName: c.companyName,
+              productType: c.productType,
+              status: c.status,
+              monthlyFee: Number(c.monthlyFee),
+              billingAmount: c.billingAmount ? Number(c.billingAmount) : null,
+              nextDueDate: c.nextDueDate,
+              billingEntity: c.billingEntity?.code || null,
+              email: c.email,
+              contactPerson: c.contactPerson,
+              nexusAgreementId: bridgeMapping?.nexusAgreementId || null,
+            };
+          })
+        );
 
         return NextResponse.json({
           entity: 'contracts',
-          count: contracts.length,
-          data: contracts.map((c) => ({
-            id: c.id,
-            companyName: c.companyName,
-            productType: c.productType,
-            status: c.status,
-            monthlyFee: Number(c.monthlyFee),
-            billingAmount: c.billingAmount ? Number(c.billingAmount) : null,
-            nextDueDate: c.nextDueDate,
-            billingEntity: c.billingEntity?.code || null,
-            email: c.email,
-            contactPerson: c.contactPerson,
-            nexusAgreementId: c.bridgeMappings[0]?.nexusAgreementId || null,
-          })),
+          count: contractsWithMappings.length,
+          data: contractsWithMappings,
         });
       }
 
       case 'invoices': {
-        const where: any = {};
+        let invoices = await convexClient.query(api.invoices.list, {
+          ...(status ? { status } : {}),
+        });
+
+        // Apply additional filters client-side
         if (searchTerm) {
-          where.customerName = { contains: searchTerm, mode: 'insensitive' };
-        }
-        if (status) {
-          where.status = status;
+          const term = searchTerm.toLowerCase();
+          invoices = invoices.filter((inv: any) =>
+            inv.customerName?.toLowerCase().includes(term)
+          );
         }
         if (contractId) {
-          where.contractId = contractId;
+          // Filter by contractId through contractInvoices if needed
+          invoices = invoices.filter((inv: any) => inv.contractId === contractId);
         }
 
-        const invoices = await prisma.invoice.findMany({
-          where,
-          include: { company: true },
-          take: 20,
-          orderBy: { dueDate: 'desc' },
-        });
+        // Limit to 20, sort by dueDate desc
+        invoices.sort((a: any, b: any) => (b.dueDate || 0) - (a.dueDate || 0));
+        invoices = invoices.slice(0, 20);
 
         return NextResponse.json({
           entity: 'invoices',
           count: invoices.length,
-          data: invoices.map((inv) => ({
-            id: inv.id,
+          data: invoices.map((inv: any) => ({
+            id: inv._id,
             invoiceNo: inv.invoiceNo,
             billingNo: inv.billingNo,
             customerName: inv.customerName,
@@ -101,23 +121,27 @@ export async function POST(request: NextRequest) {
       }
 
       case 'payments': {
-        const where: any = { status: 'PAID' };
+        let payments = await convexClient.query(api.invoices.list, {
+          status: 'PAID',
+        });
+
+        // Apply search filter
         if (searchTerm) {
-          where.customerName = { contains: searchTerm, mode: 'insensitive' };
+          const term = searchTerm.toLowerCase();
+          payments = payments.filter((inv: any) =>
+            inv.customerName?.toLowerCase().includes(term)
+          );
         }
 
-        const payments = await prisma.invoice.findMany({
-          where,
-          include: { company: true },
-          take: 20,
-          orderBy: { paidAt: 'desc' },
-        });
+        // Sort by paidAt desc and limit to 20
+        payments.sort((a: any, b: any) => (b.paidAt || 0) - (a.paidAt || 0));
+        payments = payments.slice(0, 20);
 
         return NextResponse.json({
           entity: 'payments',
           count: payments.length,
-          data: payments.map((inv) => ({
-            id: inv.id,
+          data: payments.map((inv: any) => ({
+            id: inv._id,
             invoiceNo: inv.invoiceNo,
             customerName: inv.customerName,
             netAmount: Number(inv.netAmount),
@@ -131,16 +155,18 @@ export async function POST(request: NextRequest) {
       }
 
       case 'billing_summary': {
-        const [totalContracts, activeContracts, totalInvoices, paidInvoices, overdueInvoices] =
+        const [totalContracts, activeContracts, totalInvoices, paidInvoices] =
           await Promise.all([
-            prisma.contract.count(),
-            prisma.contract.count({ where: { status: 'ACTIVE' } }),
-            prisma.invoice.count(),
-            prisma.invoice.count({ where: { status: 'PAID' } }),
-            prisma.invoice.count({
-              where: { status: 'SENT', dueDate: { lt: new Date() } },
-            }),
+            convexClient.query(api.contracts.count, {}),
+            convexClient.query(api.contracts.count, { status: 'ACTIVE' }),
+            convexClient.query(api.invoices.count, {}),
+            convexClient.query(api.invoices.count, { status: 'PAID' }),
           ]);
+
+        // Get overdue invoices (SENT with dueDate < now)
+        const sentInvoices = await convexClient.query(api.invoices.list, { status: 'SENT' });
+        const now = Date.now();
+        const overdueInvoices = sentInvoices.filter((inv: any) => inv.dueDate && inv.dueDate < now).length;
 
         return NextResponse.json({
           entity: 'billing_summary',

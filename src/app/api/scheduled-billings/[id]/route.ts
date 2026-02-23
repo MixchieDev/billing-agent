@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
-import {
-  getScheduledBilling,
-  updateScheduledBilling,
-  deleteScheduledBilling,
-  UpdateScheduledBillingInput,
-} from '@/lib/scheduled-billing-service';
+import { convexClient, api } from '@/lib/convex';
 
 /**
  * GET /api/scheduled-billings/[id]
@@ -24,13 +18,20 @@ export async function GET(
     }
 
     const { id } = await params;
-    const scheduledBilling = await getScheduledBilling(id);
+    const scheduledBilling = await convexClient.query(api.scheduledBillings.getById, {
+      id: id as any,
+    });
 
     if (!scheduledBilling) {
       return NextResponse.json({ error: 'Scheduled billing not found' }, { status: 404 });
     }
 
-    return NextResponse.json(scheduledBilling);
+    // Get run history
+    const runs = await convexClient.query(api.scheduledBillingRuns.listByScheduledBillingId, {
+      scheduledBillingId: id as any,
+    });
+
+    return NextResponse.json({ ...scheduledBilling, runs });
   } catch (error) {
     console.error('Error fetching scheduled billing:', error);
     return NextResponse.json(
@@ -58,8 +59,8 @@ export async function PATCH(
     const body = await request.json();
 
     // Check if exists
-    const existing = await prisma.scheduledBilling.findUnique({
-      where: { id },
+    const existing = await convexClient.query(api.scheduledBillings.getById, {
+      id: id as any,
     });
 
     if (!existing) {
@@ -84,32 +85,32 @@ export async function PATCH(
       );
     }
 
-    const input: UpdateScheduledBillingInput = {
-      ...(body.billingAmount !== undefined && { billingAmount: body.billingAmount }),
-      ...(body.vatType !== undefined && { vatType: body.vatType }),
-      ...(body.hasWithholding !== undefined && { hasWithholding: body.hasWithholding }),
-      ...(body.description !== undefined && { description: body.description }),
-      ...(body.frequency !== undefined && { frequency: body.frequency }),
-      ...(body.billingDayOfMonth !== undefined && { billingDayOfMonth: body.billingDayOfMonth }),
-      ...(body.startDate !== undefined && { startDate: new Date(body.startDate) }),
-      ...(body.endDate !== undefined && { endDate: body.endDate ? new Date(body.endDate) : null }),
-      ...(body.autoApprove !== undefined && { autoApprove: body.autoApprove }),
-      ...(body.autoSendEnabled !== undefined && { autoSendEnabled: body.autoSendEnabled }),
-      ...(body.status !== undefined && { status: body.status }),
-      ...(body.remarks !== undefined && { remarks: body.remarks }),
-    };
+    const updateData: Record<string, any> = {};
+    if (body.billingAmount !== undefined) updateData.billingAmount = body.billingAmount;
+    if (body.vatType !== undefined) updateData.vatType = body.vatType;
+    if (body.hasWithholding !== undefined) updateData.hasWithholding = body.hasWithholding;
+    if (body.description !== undefined) updateData.description = body.description;
+    if (body.frequency !== undefined) updateData.frequency = body.frequency;
+    if (body.billingDayOfMonth !== undefined) updateData.billingDayOfMonth = body.billingDayOfMonth;
+    if (body.startDate !== undefined) updateData.startDate = new Date(body.startDate).getTime();
+    if (body.endDate !== undefined) updateData.endDate = body.endDate ? new Date(body.endDate).getTime() : null;
+    if (body.autoApprove !== undefined) updateData.autoApprove = body.autoApprove;
+    if (body.autoSendEnabled !== undefined) updateData.autoSendEnabled = body.autoSendEnabled;
+    if (body.status !== undefined) updateData.status = body.status;
+    if (body.remarks !== undefined) updateData.remarks = body.remarks;
 
-    const scheduledBilling = await updateScheduledBilling(id, input);
+    const scheduledBilling = await convexClient.mutation(api.scheduledBillings.update, {
+      id: id as any,
+      data: updateData,
+    });
 
     // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: (session.user as { id: string }).id,
-        action: 'SCHEDULED_BILLING_UPDATED',
-        entityType: 'ScheduledBilling',
-        entityId: id,
-        details: body,
-      },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: (session.user as { id: string }).id as any,
+      action: 'SCHEDULED_BILLING_UPDATED',
+      entityType: 'ScheduledBilling',
+      entityId: id,
+      details: body,
     });
 
     return NextResponse.json(scheduledBilling);
@@ -139,27 +140,26 @@ export async function DELETE(
     const { id } = await params;
 
     // Check if exists
-    const existing = await prisma.scheduledBilling.findUnique({
-      where: { id },
-      select: { id: true, contract: { select: { companyName: true } } },
+    const existing = await convexClient.query(api.scheduledBillings.getById, {
+      id: id as any,
     });
 
     if (!existing) {
       return NextResponse.json({ error: 'Scheduled billing not found' }, { status: 404 });
     }
 
-    await deleteScheduledBilling(id);
+    await convexClient.mutation(api.scheduledBillings.remove, {
+      id: id as any,
+    });
 
     // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: (session.user as { id: string }).id,
-        action: 'SCHEDULED_BILLING_DELETED',
-        entityType: 'ScheduledBilling',
-        entityId: id,
-        details: {
-          companyName: existing.contract.companyName,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: (session.user as { id: string }).id as any,
+      action: 'SCHEDULED_BILLING_DELETED',
+      entityType: 'ScheduledBilling',
+      entityId: id,
+      details: {
+        companyName: existing.contract?.companyName,
       },
     });
 

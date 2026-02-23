@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,19 +10,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const partners = await prisma.partner.findMany({
-      include: {
-        company: true,
-        emailTemplate: {
-          select: {
-            id: true,
-            name: true,
-            isDefault: true,
-          },
-        },
-      },
-      orderBy: { code: 'asc' },
-    });
+    const partners = await convexClient.query(api.partners.listWithRelations, {});
 
     return NextResponse.json(partners);
   } catch (error) {

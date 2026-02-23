@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 
 // GET all email templates
 export async function GET() {
@@ -11,23 +11,22 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const templates = await prisma.emailTemplate.findMany({
-      include: {
-        partners: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-          },
-        },
-      },
-      orderBy: [
-        { isDefault: 'desc' }, // Default template first
-        { name: 'asc' },
-      ],
+    const templates = await convexClient.query(api.emailTemplates.listWithPartners, {});
+
+    // Sort: default template first, then by name
+    const sorted = [...templates].sort((a: any, b: any) => {
+      if (a.isDefault && !b.isDefault) return -1;
+      if (!a.isDefault && b.isDefault) return 1;
+      return (a.name || '').localeCompare(b.name || '');
     });
 
-    return NextResponse.json(templates);
+    // Map _id to id for compatibility
+    const mapped = sorted.map((t: any) => ({
+      ...t,
+      id: t._id,
+    }));
+
+    return NextResponse.json(mapped);
   } catch (error) {
     console.error('Error fetching email templates:', error);
     return NextResponse.json(
@@ -63,22 +62,18 @@ export async function POST(request: NextRequest) {
 
     // For follow-up templates, check by templateType + followUpLevel instead of name
     if (templateType === 'FOLLOW_UP' && followUpLevel) {
-      const existingFollowUp = await prisma.emailTemplate.findFirst({
-        where: { templateType: 'FOLLOW_UP', followUpLevel },
-      });
+      const existingFollowUp = await convexClient.query(api.emailTemplates.getFollowUpByLevel, { level: followUpLevel });
       if (existingFollowUp) {
         // Update existing follow-up template instead of creating duplicate
-        const updated = await prisma.emailTemplate.update({
-          where: { id: existingFollowUp.id },
+        const updated = await convexClient.mutation(api.emailTemplates.update, {
+          id: existingFollowUp._id as any,
           data: { name, subject, greeting, body: bodyText, closing },
         });
-        return NextResponse.json(updated, { status: 200 });
+        return NextResponse.json({ ...updated, id: updated?._id }, { status: 200 });
       }
     } else {
       // Check for duplicate name for non-follow-up templates
-      const existing = await prisma.emailTemplate.findUnique({
-        where: { name },
-      });
+      const existing = await convexClient.query(api.emailTemplates.getByName, { name });
       if (existing) {
         return NextResponse.json(
           { error: 'A template with this name already exists' },
@@ -89,35 +84,24 @@ export async function POST(request: NextRequest) {
 
     // If setting as default, unset other defaults
     if (isDefault) {
-      await prisma.emailTemplate.updateMany({
-        where: { isDefault: true },
-        data: { isDefault: false },
-      });
+      await convexClient.mutation(api.emailTemplates.clearDefaults, {});
     }
 
-    const template = await prisma.emailTemplate.create({
-      data: {
-        name,
-        subject,
-        greeting,
-        body: bodyText,
-        closing,
-        isDefault: isDefault || false,
-        templateType: templateType || 'BILLING',
-        followUpLevel: followUpLevel || null,
-      },
-      include: {
-        partners: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-          },
-        },
-      },
+    const templateId = await convexClient.mutation(api.emailTemplates.create, {
+      name,
+      subject,
+      greeting,
+      body: bodyText,
+      closing,
+      isDefault: isDefault || false,
+      templateType: templateType || 'BILLING',
+      followUpLevel: followUpLevel || undefined,
     });
 
-    return NextResponse.json(template, { status: 201 });
+    // Fetch the created template with partners
+    const template = await convexClient.query(api.emailTemplates.getWithPartners, { id: templateId as any });
+
+    return NextResponse.json({ ...template, id: template?._id }, { status: 201 });
   } catch (error) {
     console.error('Error creating email template:', error);
     return NextResponse.json(

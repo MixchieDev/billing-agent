@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { toggleFollowUpEnabled } from '@/lib/follow-up-service';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 
 // PATCH - Toggle follow-up enabled/disabled for an invoice
 export async function PATCH(
@@ -35,9 +35,8 @@ export async function PATCH(
     }
 
     // Check if invoice exists
-    const invoice = await prisma.invoice.findUnique({
-      where: { id },
-      select: { id: true, status: true },
+    const invoice = await convexClient.query(api.invoices.getById, {
+      id: id as any,
     });
 
     if (!invoice) {

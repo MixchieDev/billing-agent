@@ -1,5 +1,5 @@
-import prisma from './prisma';
-import { ScheduleStatus, BillingFrequency, VatType, IntervalUnit, InvoiceStatus } from '@/generated/prisma';
+import { convexClient, api } from '@/lib/convex';
+import { ScheduleStatus, BillingFrequency, VatType, IntervalUnit, InvoiceStatus } from '@/lib/enums';
 
 // ==================== TYPES ====================
 
@@ -7,49 +7,46 @@ export interface CreateScheduledBillingInput {
   contractId: string;
   billingEntityId: string;
   billingAmount: number;
-  vatType?: VatType;
+  vatType?: string;
   hasWithholding?: boolean;
-  withholdingRate?: number;  // Rate as decimal (e.g., 0.02 = 2%)
+  withholdingRate?: number;
   description?: string;
-  frequency?: BillingFrequency;
+  frequency?: string;
   billingDayOfMonth: number;
-  dueDayOfMonth?: number;    // Day of month invoice is due (defaults to billingDayOfMonth)
+  dueDayOfMonth?: number;
   startDate?: Date;
   endDate?: Date;
   autoApprove?: boolean;
   autoSendEnabled?: boolean;
   remarks?: string;
-  // Custom frequency fields
   customIntervalValue?: number;
-  customIntervalUnit?: IntervalUnit;
-  // Creator tracking
+  customIntervalUnit?: string;
   createdById?: string;
 }
 
 export interface UpdateScheduledBillingInput {
   billingAmount?: number;
-  vatType?: VatType;
+  vatType?: string;
   hasWithholding?: boolean;
-  withholdingRate?: number;  // Rate as decimal (e.g., 0.02 = 2%)
+  withholdingRate?: number;
   description?: string;
-  frequency?: BillingFrequency;
+  frequency?: string;
   billingDayOfMonth?: number;
   startDate?: Date;
   endDate?: Date | null;
   autoApprove?: boolean;
   autoSendEnabled?: boolean;
-  status?: ScheduleStatus;
+  status?: string;
   remarks?: string;
-  // Custom frequency fields
   customIntervalValue?: number;
-  customIntervalUnit?: IntervalUnit;
+  customIntervalUnit?: string;
 }
 
 export interface ScheduledBillingFilters {
   contractId?: string;
   billingEntityId?: string;
-  status?: ScheduleStatus;
-  frequency?: BillingFrequency;
+  status?: string;
+  frequency?: string;
 }
 
 // ==================== CRUD OPERATIONS ====================
@@ -58,14 +55,14 @@ export async function createScheduledBilling(data: CreateScheduledBillingInput) 
   // Calculate next billing date
   const nextBillingDate = calculateNextBillingDate(
     data.billingDayOfMonth,
-    data.frequency || BillingFrequency.MONTHLY,
+    (data.frequency || BillingFrequency.MONTHLY) as any,
     data.startDate || new Date(),
     false,
     data.customIntervalValue,
-    data.customIntervalUnit
+    data.customIntervalUnit as any
   );
 
-  return prisma.scheduledBilling.create({
+  const id = await convexClient.mutation(api.scheduledBillings.create, {
     data: {
       contractId: data.contractId,
       billingEntityId: data.billingEntityId,
@@ -76,203 +73,86 @@ export async function createScheduledBilling(data: CreateScheduledBillingInput) 
       description: data.description,
       frequency: data.frequency || BillingFrequency.MONTHLY,
       billingDayOfMonth: data.billingDayOfMonth,
-      dueDayOfMonth: data.dueDayOfMonth || data.billingDayOfMonth,  // Default to billing day if not specified
-      startDate: data.startDate || new Date(),
-      endDate: data.endDate,
-      nextBillingDate,
+      dueDayOfMonth: data.dueDayOfMonth || data.billingDayOfMonth,
+      startDate: (data.startDate || new Date()).getTime(),
+      endDate: data.endDate?.getTime(),
+      nextBillingDate: nextBillingDate.getTime(),
       autoApprove: data.autoApprove ?? false,
       autoSendEnabled: data.autoSendEnabled ?? true,
-      status: ScheduleStatus.PENDING,  // New schedules start as PENDING
+      status: ScheduleStatus.PENDING,
       remarks: data.remarks,
-      // Custom frequency fields
       customIntervalValue: data.customIntervalValue,
       customIntervalUnit: data.customIntervalUnit,
-      // Creator tracking
       createdById: data.createdById,
     },
-    include: {
-      contract: {
-        select: {
-          id: true,
-          companyName: true,
-          productType: true,
-          email: true,
-          contactPerson: true,
-        },
-      },
-      billingEntity: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-        },
-      },
-      createdBy: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-    },
   });
+
+  return convexClient.query(api.scheduledBillings.getById, { id });
 }
 
 export async function getScheduledBilling(id: string) {
-  return prisma.scheduledBilling.findUnique({
-    where: { id },
-    include: {
-      contract: {
-        select: {
-          id: true,
-          companyName: true,
-          productType: true,
-          email: true,
-          contactPerson: true,
-          tin: true,
-          partnerId: true,
-          partner: {
-            select: {
-              id: true,
-              name: true,
-              billingModel: true,
-              invoiceTo: true,
-              attention: true,
-              address: true,
-              email: true,
-            },
-          },
-        },
-      },
-      billingEntity: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-          invoicePrefix: true,
-          nextInvoiceNo: true,
-        },
-      },
-      runs: {
-        orderBy: { runDate: 'desc' },
-        take: 10,
-        include: {
-          invoice: {
-            select: {
-              id: true,
-              billingNo: true,
-              status: true,
-              netAmount: true,
-            },
-          },
-        },
-      },
-      createdBy: {
-        select: { id: true, name: true, email: true },
-      },
-      approvedBy: {
-        select: { id: true, name: true, email: true },
-      },
-      rejectedBy: {
-        select: { id: true, name: true, email: true },
-      },
-    },
-  });
+  const sb = await convexClient.query(api.scheduledBillings.getById, { id: id as any });
+  if (!sb) return null;
+
+  // Get runs
+  const runs = await convexClient.query(api.scheduledBillingRuns.listByScheduledBillingId, { scheduledBillingId: id as any });
+
+  // Get related users
+  const createdBy = sb.createdById ? await convexClient.query(api.users.getById, { id: sb.createdById as any }) : null;
+  const approvedBy = sb.approvedById ? await convexClient.query(api.users.getById, { id: sb.approvedById as any }) : null;
+  const rejectedBy = sb.rejectedById ? await convexClient.query(api.users.getById, { id: sb.rejectedById as any }) : null;
+
+  return { ...sb, runs: runs.slice(0, 10), createdBy, approvedBy, rejectedBy };
 }
 
 export async function updateScheduledBilling(id: string, data: UpdateScheduledBillingInput) {
   // If billing day or frequency changed, recalculate next billing date
   let nextBillingDate: Date | undefined;
   if (data.billingDayOfMonth !== undefined || data.frequency !== undefined) {
-    const current = await prisma.scheduledBilling.findUnique({
-      where: { id },
-      select: { billingDayOfMonth: true, frequency: true, startDate: true },
-    });
+    const current = await convexClient.query(api.scheduledBillings.getById, { id: id as any });
 
     if (current) {
       nextBillingDate = calculateNextBillingDate(
         data.billingDayOfMonth ?? current.billingDayOfMonth,
-        data.frequency ?? current.frequency,
-        current.startDate
+        (data.frequency ?? current.frequency) as any,
+        new Date(current.startDate)
       );
     }
   }
 
-  return prisma.scheduledBilling.update({
-    where: { id },
-    data: {
-      ...data,
-      ...(nextBillingDate && { nextBillingDate }),
-    },
-    include: {
-      contract: {
-        select: {
-          id: true,
-          companyName: true,
-          productType: true,
-        },
-      },
-      billingEntity: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-        },
-      },
-    },
-  });
+  const updateData: any = { ...data };
+  if (data.startDate) updateData.startDate = data.startDate.getTime();
+  if (data.endDate) updateData.endDate = data.endDate.getTime();
+  if (data.endDate === null) updateData.endDate = undefined;
+  if (nextBillingDate) updateData.nextBillingDate = nextBillingDate.getTime();
+
+  // Remove Date objects (already converted to timestamps)
+  delete updateData.startDate;
+  delete updateData.endDate;
+  if (data.startDate) updateData.startDate = data.startDate.getTime();
+  if (data.endDate !== undefined) updateData.endDate = data.endDate ? data.endDate.getTime() : undefined;
+
+  await convexClient.mutation(api.scheduledBillings.update, { id: id as any, data: updateData });
+  return convexClient.query(api.scheduledBillings.getById, { id: id as any });
 }
 
 export async function deleteScheduledBilling(id: string) {
-  // First delete all runs
-  await prisma.scheduledBillingRun.deleteMany({
-    where: { scheduledBillingId: id },
-  });
-
-  return prisma.scheduledBilling.delete({
-    where: { id },
-  });
+  return convexClient.mutation(api.scheduledBillings.remove, { id: id as any });
 }
 
 export async function listScheduledBillings(filters?: ScheduledBillingFilters) {
-  return prisma.scheduledBilling.findMany({
-    where: {
-      ...(filters?.contractId && { contractId: filters.contractId }),
-      ...(filters?.billingEntityId && { billingEntityId: filters.billingEntityId }),
-      ...(filters?.status && { status: filters.status }),
-      ...(filters?.frequency && { frequency: filters.frequency }),
-    },
-    include: {
-      contract: {
-        select: {
-          id: true,
-          companyName: true,
-          productType: true,
-          email: true,
-        },
-      },
-      billingEntity: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-        },
-      },
-      createdBy: {
-        select: { id: true, name: true, email: true },
-      },
-      approvedBy: {
-        select: { id: true, name: true, email: true },
-      },
-      _count: {
-        select: { runs: true },
-      },
-    },
-    orderBy: [
-      { status: 'asc' },
-      { nextBillingDate: 'asc' },
-    ],
+  const result = await convexClient.query(api.scheduledBillings.list, {
+    status: filters?.status,
+    billingEntityId: filters?.billingEntityId as any,
   });
+
+  let items = result.items;
+
+  // Client-side filter for contractId and frequency
+  if (filters?.contractId) items = items.filter((s: any) => s.contractId === filters.contractId);
+  if (filters?.frequency) items = items.filter((s: any) => s.frequency === filters.frequency);
+
+  return items;
 }
 
 // ==================== SCHEDULING OPERATIONS ====================
@@ -280,46 +160,27 @@ export async function listScheduledBillings(filters?: ScheduledBillingFilters) {
 export async function getSchedulesDueToday() {
   const today = new Date();
   const dayOfMonth = today.getDate();
+  const todayMs = today.getTime();
 
-  // Get schedules where:
-  // 1. Status is ACTIVE
-  // 2. billingDayOfMonth matches today
-  // 3. startDate <= today
-  // 4. endDate is null OR endDate > today
-  return prisma.scheduledBilling.findMany({
-    where: {
-      status: ScheduleStatus.ACTIVE,
-      billingDayOfMonth: dayOfMonth,
-      startDate: { lte: today },
-      OR: [
-        { endDate: null },
-        { endDate: { gt: today } },
-      ],
-    },
-    include: {
-      contract: {
-        include: {
-          partner: true,
-        },
-      },
-      billingEntity: true,
-    },
+  const schedules = await convexClient.query(api.scheduledBillings.listDueToday, { dayOfMonth });
+
+  // Filter: startDate <= today AND (endDate is null OR endDate > today)
+  return schedules.filter((s: any) => {
+    if (s.startDate > todayMs) return false;
+    if (s.endDate && s.endDate <= todayMs) return false;
+    return true;
   });
 }
 
 export async function pauseSchedule(id: string) {
-  return prisma.scheduledBilling.update({
-    where: { id },
+  return convexClient.mutation(api.scheduledBillings.update, {
+    id: id as any,
     data: { status: ScheduleStatus.PAUSED },
   });
 }
 
 export async function resumeSchedule(id: string) {
-  // Recalculate next billing date when resuming
-  const schedule = await prisma.scheduledBilling.findUnique({
-    where: { id },
-    select: { billingDayOfMonth: true, frequency: true, startDate: true },
-  });
+  const schedule = await convexClient.query(api.scheduledBillings.getById, { id: id as any });
 
   if (!schedule) {
     throw new Error('Schedule not found');
@@ -327,25 +188,25 @@ export async function resumeSchedule(id: string) {
 
   const nextBillingDate = calculateNextBillingDate(
     schedule.billingDayOfMonth,
-    schedule.frequency,
-    schedule.startDate
+    schedule.frequency as any,
+    new Date(schedule.startDate)
   );
 
-  return prisma.scheduledBilling.update({
-    where: { id },
+  return convexClient.mutation(api.scheduledBillings.update, {
+    id: id as any,
     data: {
       status: ScheduleStatus.ACTIVE,
-      nextBillingDate,
+      nextBillingDate: nextBillingDate.getTime(),
     },
   });
 }
 
 export async function endSchedule(id: string) {
-  return prisma.scheduledBilling.update({
-    where: { id },
+  return convexClient.mutation(api.scheduledBillings.update, {
+    id: id as any,
     data: {
       status: ScheduleStatus.ENDED,
-      endDate: new Date(),
+      endDate: Date.now(),
     },
   });
 }
@@ -358,22 +219,17 @@ export async function createScheduledBillingRun(
   status: 'SUCCESS' | 'FAILED' | 'SKIPPED',
   errorMessage?: string
 ) {
-  return prisma.scheduledBillingRun.create({
-    data: {
-      scheduledBillingId,
-      invoiceId,
-      status,
-      errorMessage,
-      runDate: new Date(),
-    },
+  return convexClient.mutation(api.scheduledBillingRuns.create, {
+    scheduledBillingId: scheduledBillingId as any,
+    invoiceId: invoiceId as any || undefined,
+    status,
+    errorMessage,
+    runDate: Date.now(),
   });
 }
 
 export async function updateNextBillingDate(id: string) {
-  const schedule = await prisma.scheduledBilling.findUnique({
-    where: { id },
-    select: { billingDayOfMonth: true, frequency: true, startDate: true },
-  });
+  const schedule = await convexClient.query(api.scheduledBillings.getById, { id: id as any });
 
   if (!schedule) {
     throw new Error('Schedule not found');
@@ -381,14 +237,14 @@ export async function updateNextBillingDate(id: string) {
 
   const nextBillingDate = calculateNextBillingDate(
     schedule.billingDayOfMonth,
-    schedule.frequency,
-    schedule.startDate,
+    schedule.frequency as any,
+    new Date(schedule.startDate),
     true // Skip to next period
   );
 
-  return prisma.scheduledBilling.update({
-    where: { id },
-    data: { nextBillingDate },
+  return convexClient.mutation(api.scheduledBillings.update, {
+    id: id as any,
+    data: { nextBillingDate: nextBillingDate.getTime() },
   });
 }
 
@@ -396,16 +252,16 @@ export async function updateNextBillingDate(id: string) {
 
 export function calculateNextBillingDate(
   billingDayOfMonth: number,
-  frequency: BillingFrequency,
+  frequency: string,
   startDate: Date,
   skipCurrent: boolean = false,
   customIntervalValue?: number,
-  customIntervalUnit?: IntervalUnit
+  customIntervalUnit?: string
 ): Date {
   const now = new Date();
   let nextDate = new Date(now.getFullYear(), now.getMonth(), billingDayOfMonth);
 
-  // Handle months with fewer days (e.g., billing day 31 in February)
+  // Handle months with fewer days
   const lastDayOfMonth = new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate();
   if (billingDayOfMonth > lastDayOfMonth) {
     nextDate.setDate(lastDayOfMonth);
@@ -433,16 +289,12 @@ export function calculateNextBillingDate(
         nextDate.setFullYear(nextDate.getFullYear() + 1);
         break;
       case BillingFrequency.CUSTOM:
-        // Handle custom intervals
         if (customIntervalValue && customIntervalUnit) {
           if (customIntervalUnit === IntervalUnit.DAYS) {
-            // For DAYS: Add interval days from current date
             nextDate = new Date(now);
             nextDate.setDate(nextDate.getDate() + customIntervalValue);
           } else if (customIntervalUnit === IntervalUnit.MONTHS) {
-            // For MONTHS: Add interval months, keep billingDayOfMonth
             nextDate.setMonth(nextDate.getMonth() + customIntervalValue);
-            // Re-adjust for month length
             const newLastDay = new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate();
             if (billingDayOfMonth > newLastDay) {
               nextDate.setDate(newLastDay);
@@ -451,7 +303,6 @@ export function calculateNextBillingDate(
             }
           }
         } else {
-          // Fallback to monthly if custom values not set
           nextDate.setMonth(nextDate.getMonth() + 1);
         }
         break;
@@ -475,60 +326,51 @@ export function calculateNextBillingDate(
 export async function checkExistingInvoiceForPeriod(
   scheduledBillingId: string
 ): Promise<boolean> {
-  const schedule = await prisma.scheduledBilling.findUnique({
-    where: { id: scheduledBillingId },
-    select: { frequency: true },
-  });
+  const schedule = await convexClient.query(api.scheduledBillings.getById, { id: scheduledBillingId as any });
 
   if (!schedule) return false;
 
   const now = new Date();
-  let periodStart: Date;
-  let periodEnd: Date;
+  let periodStart: number;
+  let periodEnd: number;
 
   switch (schedule.frequency) {
     case BillingFrequency.MONTHLY:
-      periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      periodStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+      periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).getTime();
       break;
     case BillingFrequency.QUARTERLY:
       const quarter = Math.floor(now.getMonth() / 3);
-      periodStart = new Date(now.getFullYear(), quarter * 3, 1);
-      periodEnd = new Date(now.getFullYear(), quarter * 3 + 3, 0, 23, 59, 59);
+      periodStart = new Date(now.getFullYear(), quarter * 3, 1).getTime();
+      periodEnd = new Date(now.getFullYear(), quarter * 3 + 3, 0, 23, 59, 59).getTime();
       break;
     case BillingFrequency.ANNUALLY:
-      periodStart = new Date(now.getFullYear(), 0, 1);
-      periodEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+      periodStart = new Date(now.getFullYear(), 0, 1).getTime();
+      periodEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59).getTime();
       break;
     case BillingFrequency.CUSTOM:
     default:
-      // For custom intervals, use the current month as the period
-      periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      periodStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+      periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).getTime();
       break;
   }
 
-  const existingRun = await prisma.scheduledBillingRun.findFirst({
-    where: {
-      scheduledBillingId,
-      status: 'SUCCESS',
-      runDate: {
-        gte: periodStart,
-        lte: periodEnd,
-      },
-    },
-    include: {
-      invoice: {
-        select: { status: true },
-      },
-    },
+  // Get runs for this schedule
+  const runs = await convexClient.query(api.scheduledBillingRuns.listByScheduledBillingId, {
+    scheduledBillingId: scheduledBillingId as any,
+  });
+
+  const existingRun = runs.find((r: any) => {
+    if (r.status !== 'SUCCESS') return false;
+    if (r.runDate < periodStart || r.runDate > periodEnd) return false;
+    return true;
   });
 
   // If run exists but invoice was voided or cancelled, allow regeneration
   if (existingRun?.invoice) {
     const invoiceStatus = existingRun.invoice.status;
     if (invoiceStatus === InvoiceStatus.CANCELLED || invoiceStatus === InvoiceStatus.VOID) {
-      return false; // Allow new invoice to be generated
+      return false;
     }
   }
 
@@ -538,26 +380,20 @@ export async function checkExistingInvoiceForPeriod(
 // Get stats for dashboard
 export async function getScheduledBillingStats() {
   const [pending, active, paused, ended] = await Promise.all([
-    prisma.scheduledBilling.count({ where: { status: ScheduleStatus.PENDING } }),
-    prisma.scheduledBilling.count({ where: { status: ScheduleStatus.ACTIVE } }),
-    prisma.scheduledBilling.count({ where: { status: ScheduleStatus.PAUSED } }),
-    prisma.scheduledBilling.count({ where: { status: ScheduleStatus.ENDED } }),
+    convexClient.query(api.scheduledBillings.count, { status: ScheduleStatus.PENDING }),
+    convexClient.query(api.scheduledBillings.count, { status: ScheduleStatus.ACTIVE }),
+    convexClient.query(api.scheduledBillings.count, { status: ScheduleStatus.PAUSED }),
+    convexClient.query(api.scheduledBillings.count, { status: ScheduleStatus.ENDED }),
   ]);
 
   // Get schedules due in next 7 days
-  const today = new Date();
-  const nextWeek = new Date();
-  nextWeek.setDate(today.getDate() + 7);
+  const today = Date.now();
+  const nextWeek = today + 7 * 24 * 60 * 60 * 1000;
 
-  const dueThisWeek = await prisma.scheduledBilling.count({
-    where: {
-      status: ScheduleStatus.ACTIVE,
-      nextBillingDate: {
-        gte: today,
-        lte: nextWeek,
-      },
-    },
-  });
+  const activeSchedules = await convexClient.query(api.scheduledBillings.list, { status: ScheduleStatus.ACTIVE });
+  const dueThisWeek = activeSchedules.items.filter((s: any) =>
+    s.nextBillingDate && s.nextBillingDate >= today && s.nextBillingDate <= nextWeek
+  ).length;
 
   return {
     pending,
@@ -572,10 +408,7 @@ export async function getScheduledBillingStats() {
 // ==================== APPROVAL WORKFLOW ====================
 
 export async function approveSchedule(id: string, approverId: string) {
-  const schedule = await prisma.scheduledBilling.findUnique({
-    where: { id },
-    select: { status: true },
-  });
+  const schedule = await convexClient.query(api.scheduledBillings.getById, { id: id as any });
 
   if (!schedule) {
     throw new Error('Schedule not found');
@@ -585,40 +418,16 @@ export async function approveSchedule(id: string, approverId: string) {
     throw new Error('Only pending schedules can be approved');
   }
 
-  return prisma.scheduledBilling.update({
-    where: { id },
-    data: {
-      status: ScheduleStatus.ACTIVE,
-      approvedById: approverId,
-      approvedAt: new Date(),
-    },
-    include: {
-      contract: {
-        select: {
-          id: true,
-          companyName: true,
-          productType: true,
-        },
-      },
-      billingEntity: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-        },
-      },
-      approvedBy: {
-        select: { id: true, name: true, email: true },
-      },
-    },
+  await convexClient.mutation(api.scheduledBillings.approve, {
+    id: id as any,
+    approvedById: approverId as any,
   });
+
+  return convexClient.query(api.scheduledBillings.getById, { id: id as any });
 }
 
 export async function rejectSchedule(id: string, rejectorId: string, reason?: string) {
-  const schedule = await prisma.scheduledBilling.findUnique({
-    where: { id },
-    select: { status: true },
-  });
+  const schedule = await convexClient.query(api.scheduledBillings.getById, { id: id as any });
 
   if (!schedule) {
     throw new Error('Schedule not found');
@@ -628,34 +437,13 @@ export async function rejectSchedule(id: string, rejectorId: string, reason?: st
     throw new Error('Only pending schedules can be rejected');
   }
 
-  return prisma.scheduledBilling.update({
-    where: { id },
-    data: {
-      status: ScheduleStatus.ENDED,
-      rejectedById: rejectorId,
-      rejectedAt: new Date(),
-      rejectionReason: reason,
-    },
-    include: {
-      contract: {
-        select: {
-          id: true,
-          companyName: true,
-          productType: true,
-        },
-      },
-      billingEntity: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-        },
-      },
-      rejectedBy: {
-        select: { id: true, name: true, email: true },
-      },
-    },
+  await convexClient.mutation(api.scheduledBillings.reject, {
+    id: id as any,
+    rejectedById: rejectorId as any,
+    rejectionReason: reason,
   });
+
+  return convexClient.query(api.scheduledBillings.getById, { id: id as any });
 }
 
 // Get run history with filtering
@@ -664,50 +452,28 @@ export async function getScheduledBillingRuns(options?: {
   daysBack?: number;
   limit?: number;
 }) {
-  const where: any = {};
-
   if (options?.scheduledBillingId) {
-    where.scheduledBillingId = options.scheduledBillingId;
+    const runs = await convexClient.query(api.scheduledBillingRuns.listByScheduledBillingId, {
+      scheduledBillingId: options.scheduledBillingId as any,
+    });
+
+    let filtered = runs;
+    if (options?.daysBack && options.daysBack > 0) {
+      const startDate = Date.now() - options.daysBack * 24 * 60 * 60 * 1000;
+      filtered = filtered.filter((r: any) => r.runDate >= startDate);
+    }
+
+    return filtered.slice(0, options?.limit || 100);
   }
+
+  const runs = await convexClient.query(api.scheduledBillingRuns.list, {
+    limit: options?.limit || 100,
+  });
 
   if (options?.daysBack && options.daysBack > 0) {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - options.daysBack);
-    where.runDate = { gte: startDate };
+    const startDate = Date.now() - options.daysBack * 24 * 60 * 60 * 1000;
+    return runs.filter((r: any) => r.runDate >= startDate);
   }
 
-  return prisma.scheduledBillingRun.findMany({
-    where,
-    include: {
-      scheduledBilling: {
-        include: {
-          contract: {
-            select: {
-              id: true,
-              companyName: true,
-              productType: true,
-            },
-          },
-          billingEntity: {
-            select: {
-              id: true,
-              code: true,
-              name: true,
-            },
-          },
-        },
-      },
-      invoice: {
-        select: {
-          id: true,
-          billingNo: true,
-          status: true,
-          netAmount: true,
-          customerName: true,
-        },
-      },
-    },
-    orderBy: { runDate: 'desc' },
-    take: options?.limit || 100,
-  });
+  return runs;
 }

@@ -1,4 +1,4 @@
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { format, startOfMonth, endOfMonth, addDays } from 'date-fns';
 
 // Tool result types
@@ -71,111 +71,86 @@ export interface BillingTotals {
 export async function getContractsDueSoon(days: number = 7): Promise<ContractDueSoon[]> {
   const today = new Date();
   const futureDate = addDays(today, days);
+  const todayMs = today.getTime();
+  const futureDateMs = futureDate.getTime();
 
-  // Get all active contracts with upcoming due dates
-  const contracts = await prisma.contract.findMany({
-    where: {
-      status: 'ACTIVE',
-      nextDueDate: {
-        gte: today,
-        lte: futureDate,
-      },
-    },
-    include: {
-      billingEntity: true,
-    },
-    orderBy: { nextDueDate: 'asc' },
-  });
+  const contracts = await convexClient.query(api.contracts.list, { status: 'ACTIVE' });
 
-  return contracts.map((contract) => ({
-    id: contract.id,
-    companyName: contract.companyName,
-    productType: contract.productType,
-    monthlyFee: Number(contract.monthlyFee),
-    nextDueDate: contract.nextDueDate,
-    billingEntity: contract.billingEntity?.code || 'YOWI',
-  }));
+  return contracts
+    .filter((c: any) => c.nextDueDate && c.nextDueDate >= todayMs && c.nextDueDate <= futureDateMs)
+    .sort((a: any, b: any) => (a.nextDueDate || 0) - (b.nextDueDate || 0))
+    .map((contract: any) => ({
+      id: contract._id,
+      companyName: contract.companyName,
+      productType: contract.productType,
+      monthlyFee: Number(contract.monthlyFee),
+      nextDueDate: contract.nextDueDate ? new Date(contract.nextDueDate) : null,
+      billingEntity: contract.billingEntity?.code || 'YOWI',
+    }));
 }
 
 // Get details for a specific contract by company name
 export async function getContractDetails(companyName: string): Promise<ContractDetails | null> {
-  const contract = await prisma.contract.findFirst({
-    where: {
-      companyName: {
-        contains: companyName,
-        mode: 'insensitive',
-      },
-    },
-    include: {
-      billingEntity: true,
-    },
-  });
+  const contracts = await convexClient.query(api.contracts.searchByName, { query: companyName });
 
-  if (!contract) return null;
+  if (!contracts || contracts.length === 0) return null;
+  const contract = contracts[0];
 
   return {
-    id: contract.id,
+    id: contract._id,
     companyName: contract.companyName,
     productType: contract.productType,
     monthlyFee: Number(contract.monthlyFee),
-    nextDueDate: contract.nextDueDate,
+    nextDueDate: contract.nextDueDate ? new Date(contract.nextDueDate) : null,
     status: contract.status,
     autoSendEnabled: contract.autoSendEnabled,
     billingEntity: contract.billingEntity?.code || 'YOWI',
     vatType: contract.vatType,
-    email: contract.email,
-    remarks: contract.remarks,
+    email: contract.email || null,
+    remarks: contract.remarks || null,
   };
 }
 
 // Get dashboard invoice statistics
 export async function getInvoiceStats(): Promise<InvoiceStats> {
-  const [pending, approved, rejected, sent, paid] = await Promise.all([
-    prisma.invoice.findMany({ where: { status: 'PENDING' } }),
-    prisma.invoice.findMany({ where: { status: 'APPROVED' } }),
-    prisma.invoice.findMany({ where: { status: 'REJECTED' } }),
-    prisma.invoice.findMany({ where: { status: 'SENT' } }),
-    prisma.invoice.findMany({ where: { status: 'PAID' } }),
-  ]);
+  const stats = await convexClient.query(api.invoices.statsByStatus, {});
 
-  const pendingAmount = pending.reduce((sum, inv) => sum + Number(inv.netAmount), 0);
-  const approvedAmount = approved.reduce((sum, inv) => sum + Number(inv.netAmount), 0);
-  const paidAmount = paid.reduce((sum, inv) => sum + Number(inv.paidAmount || inv.netAmount), 0);
+  const get = (status: string) => (stats as any)[status] || { count: 0, sum: 0 };
 
   return {
-    pending: pending.length,
-    approved: approved.length,
-    rejected: rejected.length,
-    sent: sent.length,
-    paid: paid.length,
-    pendingAmount,
-    approvedAmount,
-    paidAmount,
+    pending: get('PENDING').count,
+    approved: get('APPROVED').count,
+    rejected: get('REJECTED').count,
+    sent: get('SENT').count,
+    paid: get('PAID').count,
+    pendingAmount: get('PENDING').sum,
+    approvedAmount: get('APPROVED').sum,
+    paidAmount: get('PAID').sum,
   };
 }
 
 // Get invoices pending approval
 export async function getPendingInvoices(billingEntity?: string): Promise<PendingInvoice[]> {
-  const invoices = await prisma.invoice.findMany({
-    where: {
-      status: 'PENDING',
-      ...(billingEntity && { company: { code: billingEntity } }),
-    },
-    include: {
-      company: true,
-    },
-    orderBy: { dueDate: 'asc' },
-    take: 20,
+  let companyId: any = undefined;
+  if (billingEntity) {
+    const company = await convexClient.query(api.companies.getByCode, { code: billingEntity });
+    companyId = company?._id;
+  }
+
+  const invoices = await convexClient.query(api.invoices.list, {
+    status: 'PENDING',
+    companyId,
+    limit: 20,
   });
 
-  return invoices.map((inv) => ({
-    id: inv.id,
+  return invoices.map((inv: any) => ({
+    id: inv._id,
     billingNo: inv.billingNo,
     customerName: inv.customerName,
     netAmount: Number(inv.netAmount),
-    dueDate: inv.dueDate,
+    dueDate: new Date(inv.dueDate),
     billingEntity: inv.company?.code || 'YOWI',
-    createdAt: inv.createdAt,
+    createdAt: new Date(inv.createdAt),
   }));
 }
 
@@ -183,71 +158,46 @@ export async function getPendingInvoices(billingEntity?: string): Promise<Pendin
 export async function getOverdueInvoices(): Promise<OverdueInvoice[]> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const todayMs = today.getTime();
 
-  const invoices = await prisma.invoice.findMany({
-    where: {
-      status: 'SENT',
-      dueDate: {
-        lt: today,
-      },
-    },
-    include: {
-      company: true,
-    },
-    orderBy: { dueDate: 'asc' },
-  });
+  const invoices = await convexClient.query(api.invoices.list, { status: 'SENT' });
 
-  return invoices.map((inv) => {
-    const dueDate = new Date(inv.dueDate);
-    dueDate.setHours(0, 0, 0, 0);
-    const daysPastDue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+  return invoices
+    .filter((inv: any) => inv.dueDate < todayMs)
+    .sort((a: any, b: any) => a.dueDate - b.dueDate)
+    .map((inv: any) => {
+      const dueDate = new Date(inv.dueDate);
+      dueDate.setHours(0, 0, 0, 0);
+      const daysPastDue = Math.floor((todayMs - dueDate.getTime()) / (1000 * 60 * 60 * 24));
 
-    return {
-      id: inv.id,
-      billingNo: inv.billingNo,
-      customerName: inv.customerName,
-      netAmount: Number(inv.netAmount),
-      dueDate: inv.dueDate,
-      daysPastDue,
-      billingEntity: inv.company?.code || 'YOWI',
-    };
-  });
+      return {
+        id: inv._id,
+        billingNo: inv.billingNo,
+        customerName: inv.customerName,
+        netAmount: Number(inv.netAmount),
+        dueDate: new Date(inv.dueDate),
+        daysPastDue,
+        billingEntity: inv.company?.code || 'YOWI',
+      };
+    });
 }
 
 // Search contracts by company name or product type
 export async function searchContracts(query: string): Promise<ContractDetails[]> {
-  // Try to match product type if the query looks like one
-  const productTypes = ['ACCOUNTING', 'PAYROLL', 'COMPLIANCE', 'HR'];
-  const matchedProductType = productTypes.find(pt =>
-    pt.toLowerCase().includes(query.toLowerCase()) ||
-    query.toLowerCase().includes(pt.toLowerCase())
-  );
+  const contracts = await convexClient.query(api.contracts.searchByName, { query });
 
-  const contracts = await prisma.contract.findMany({
-    where: {
-      OR: [
-        { companyName: { contains: query, mode: 'insensitive' } },
-        ...(matchedProductType ? [{ productType: matchedProductType as any }] : []),
-      ],
-    },
-    include: {
-      billingEntity: true,
-    },
-    take: 10,
-  });
-
-  return contracts.map((contract) => ({
-    id: contract.id,
+  return contracts.map((contract: any) => ({
+    id: contract._id,
     companyName: contract.companyName,
     productType: contract.productType,
     monthlyFee: Number(contract.monthlyFee),
-    nextDueDate: contract.nextDueDate,
+    nextDueDate: contract.nextDueDate ? new Date(contract.nextDueDate) : null,
     status: contract.status,
     autoSendEnabled: contract.autoSendEnabled,
     billingEntity: contract.billingEntity?.code || 'YOWI',
     vatType: contract.vatType,
-    email: contract.email,
-    remarks: contract.remarks,
+    email: contract.email || null,
+    remarks: contract.remarks || null,
   }));
 }
 
@@ -256,42 +206,34 @@ export async function getBillingTotals(
   entity?: string,
   month?: string // Format: YYYY-MM
 ): Promise<BillingTotals> {
-  let dateFrom: Date | undefined;
-  let dateTo: Date | undefined;
-
-  if (month) {
-    const [year, monthNum] = month.split('-').map(Number);
-    dateFrom = startOfMonth(new Date(year, monthNum - 1));
-    dateTo = endOfMonth(new Date(year, monthNum - 1));
+  let companyId: any = undefined;
+  if (entity) {
+    const company = await convexClient.query(api.companies.getByCode, { code: entity });
+    companyId = company?._id;
   }
 
-  const invoices = await prisma.invoice.findMany({
-    where: {
-      ...(entity && { company: { code: entity } }),
-      ...(dateFrom && dateTo && {
-        statementDate: {
-          gte: dateFrom,
-          lte: dateTo,
-        },
-      }),
-    },
-    include: {
-      company: true,
-    },
-  });
+  const invoices = await convexClient.query(api.invoices.list, { companyId });
 
-  const totalServiceFee = invoices.reduce((sum, inv) => sum + Number(inv.serviceFee), 0);
-  const totalVat = invoices.reduce((sum, inv) => sum + Number(inv.vatAmount), 0);
-  const totalNet = invoices.reduce((sum, inv) => sum + Number(inv.netAmount), 0);
+  let filtered = invoices as any[];
+  if (month) {
+    const [year, monthNum] = month.split('-').map(Number);
+    const dateFrom = startOfMonth(new Date(year, monthNum - 1)).getTime();
+    const dateTo = endOfMonth(new Date(year, monthNum - 1)).getTime();
+    filtered = filtered.filter((inv: any) => inv.statementDate >= dateFrom && inv.statementDate <= dateTo);
+  }
 
-  const paidInvoices = invoices.filter((inv) => inv.status === 'PAID');
+  const totalServiceFee = filtered.reduce((sum: number, inv: any) => sum + Number(inv.serviceFee), 0);
+  const totalVat = filtered.reduce((sum: number, inv: any) => sum + Number(inv.vatAmount), 0);
+  const totalNet = filtered.reduce((sum: number, inv: any) => sum + Number(inv.netAmount), 0);
+
+  const paidInvoices = filtered.filter((inv: any) => inv.status === 'PAID');
   const paidCount = paidInvoices.length;
-  const paidAmount = paidInvoices.reduce((sum, inv) => sum + Number(inv.paidAmount || inv.netAmount), 0);
+  const paidAmount = paidInvoices.reduce((sum: number, inv: any) => sum + Number(inv.paidAmount || inv.netAmount), 0);
 
   return {
     entity: entity || 'ALL',
     period: month || 'ALL TIME',
-    invoiceCount: invoices.length,
+    invoiceCount: filtered.length,
     totalServiceFee,
     totalVat,
     totalNet,

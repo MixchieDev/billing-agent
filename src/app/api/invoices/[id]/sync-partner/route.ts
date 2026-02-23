@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
-import { InvoiceStatus } from '@/generated/prisma';
+import { convexClient, api } from '@/lib/convex';
+import { InvoiceStatus } from '@/lib/enums';
 
 // POST - Sync invoice recipient details from linked partner
 export async function POST(
@@ -22,10 +22,9 @@ export async function POST(
 
     const { id } = await params;
 
-    // Get invoice with partner
-    const invoice = await prisma.invoice.findUnique({
-      where: { id },
-      include: { partner: true },
+    // Get invoice with partner (using full hydrated query)
+    const invoice = await convexClient.query(api.invoices.getByIdFull, {
+      id: id as any,
     });
 
     if (!invoice) {
@@ -50,43 +49,45 @@ export async function POST(
     const partner = invoice.partner;
 
     // Update invoice with partner details
-    const updatedInvoice = await prisma.invoice.update({
-      where: { id },
+    await convexClient.mutation(api.invoices.update, {
+      id: id as any,
       data: {
         customerName: partner.invoiceTo || invoice.customerName,
         attention: partner.attention,
         customerAddress: partner.address,
         customerEmail: partner.email,
       },
-      include: {
-        partner: true,
-        company: true,
-      },
+    });
+
+    // Fetch updated invoice with relations
+    const updatedInvoice = await convexClient.query(api.invoices.getByIdFull, {
+      id: id as any,
     });
 
     // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'INVOICE_SYNCED_FROM_PARTNER',
-        entityType: 'Invoice',
-        entityId: id,
-        details: {
-          partnerId: partner.id,
-          partnerCode: partner.code,
-          updates: {
-            customerName: partner.invoiceTo,
-            attention: partner.attention,
-            customerAddress: partner.address,
-            customerEmail: partner.email,
-          },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'INVOICE_SYNCED_FROM_PARTNER',
+      entityType: 'Invoice',
+      entityId: id,
+      details: {
+        partnerId: partner._id,
+        partnerCode: partner.code,
+        updates: {
+          customerName: partner.invoiceTo,
+          attention: partner.attention,
+          customerAddress: partner.address,
+          customerEmail: partner.email,
         },
       },
     });
 
     return NextResponse.json({
       success: true,
-      invoice: updatedInvoice,
+      invoice: {
+        id: updatedInvoice?._id,
+        ...updatedInvoice,
+      },
       message: `Invoice updated with details from partner ${partner.code}`,
     });
   } catch (error) {

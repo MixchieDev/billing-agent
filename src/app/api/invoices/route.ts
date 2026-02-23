@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { getPendingInvoices, getInvoiceStats } from '@/lib/billing-service';
 
 export async function GET(request: NextRequest) {
@@ -21,72 +21,62 @@ export async function GET(request: NextRequest) {
     // Pagination params
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
-    const skip = (page - 1) * limit;
 
-    // Build date range filter for paidAt
-    const paidAtFilter: { gte?: Date; lte?: Date } = {};
+    // Fetch invoices from Convex (list returns invoices with company hydrated)
+    const allInvoices = await convexClient.query(api.invoices.list, {
+      ...(status ? { status } : {}),
+    });
+
+    // Apply client-side filters that Convex list doesn't handle directly
+    let filtered = allInvoices;
+
+    if (billingEntity) {
+      filtered = filtered.filter((inv: any) => inv.company?.code === billingEntity);
+    }
+    if (partner) {
+      filtered = filtered.filter((inv: any) => inv.billingModel === partner);
+    }
     if (paidFrom) {
-      paidAtFilter.gte = new Date(paidFrom);
+      const paidFromTime = new Date(paidFrom).getTime();
+      filtered = filtered.filter((inv: any) => inv.paidAt && inv.paidAt >= paidFromTime);
     }
     if (paidTo) {
-      // Set to end of day
       const endDate = new Date(paidTo);
       endDate.setHours(23, 59, 59, 999);
-      paidAtFilter.lte = endDate;
+      const paidToTime = endDate.getTime();
+      filtered = filtered.filter((inv: any) => inv.paidAt && inv.paidAt <= paidToTime);
     }
 
-    // Build where clause
-    const where = {
-      ...(status && { status: status as any }),
-      ...(billingEntity && { company: { code: billingEntity } }),
-      ...(partner && { billingModel: partner as any }),
-      ...(Object.keys(paidAtFilter).length > 0 && { paidAt: paidAtFilter }),
-    };
+    // Paginate
+    const total = filtered.length;
+    const skip = (page - 1) * limit;
+    const invoices = filtered.slice(skip, skip + limit);
 
-    // Get invoices and total count in parallel
-    // Optimized: only select needed fields to reduce payload
-    const [invoices, total] = await Promise.all([
-      prisma.invoice.findMany({
-        where,
-        select: {
-          id: true,
-          billingNo: true,
-          customerName: true,
-          customerEmail: true,
-          customerEmails: true,
-          serviceFee: true,
-          vatAmount: true,
-          netAmount: true,
-          dueDate: true,
-          createdAt: true,
-          billingModel: true,
-          status: true,
-          paidAt: true,
-          paidAmount: true,
-          // Follow-up tracking fields
-          followUpEnabled: true,
-          followUpCount: true,
-          lastFollowUpLevel: true,
-          company: {
-            select: { code: true },
-          },
-          lineItems: {
-            select: { description: true },
-            take: 1, // Only need first item for product type detection
-          },
-          approvedBy: {
-            select: { name: true, email: true },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-      }),
-      prisma.invoice.count({ where }),
-    ]);
+    // Map _id to id for response
+    const mappedInvoices = invoices.map((inv: any) => ({
+      id: inv._id,
+      billingNo: inv.billingNo,
+      customerName: inv.customerName,
+      customerEmail: inv.customerEmail,
+      customerEmails: inv.customerEmails,
+      serviceFee: inv.serviceFee,
+      vatAmount: inv.vatAmount,
+      netAmount: inv.netAmount,
+      dueDate: inv.dueDate,
+      createdAt: inv.createdAt,
+      billingModel: inv.billingModel,
+      status: inv.status,
+      paidAt: inv.paidAt,
+      paidAmount: inv.paidAmount,
+      followUpEnabled: inv.followUpEnabled,
+      followUpCount: inv.followUpCount,
+      lastFollowUpLevel: inv.lastFollowUpLevel,
+      company: inv.company ? { code: inv.company.code } : null,
+      approvedBy: inv.approvedBy ? { name: inv.approvedBy.name, email: inv.approvedBy.email } : null,
+    }));
 
     return NextResponse.json({
-      invoices,
+      invoices: mappedInvoices,
       total,
       page,
       limit,
@@ -111,14 +101,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // Create manual invoice
-    const invoice = await prisma.invoice.create({
+    const invoiceId = await convexClient.mutation(api.invoices.create, {
       data: {
         ...body,
         status: 'PENDING',
       },
     });
 
-    return NextResponse.json(invoice, { status: 201 });
+    const invoice = await convexClient.query(api.invoices.getById, { id: invoiceId as any });
+
+    return NextResponse.json({ id: invoiceId, ...invoice }, { status: 201 });
   } catch (error) {
     console.error('Error creating invoice:', error);
     return NextResponse.json(

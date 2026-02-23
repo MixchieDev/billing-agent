@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
-import { ProductType, ContractStatus, VatType, BillingType } from '@/generated/prisma';
+import { convexClient, api } from '@/lib/convex';
+import { ProductType, ContractStatus, VatType, BillingType } from '@/lib/enums';
 
 // GET single contract
 export async function GET(
@@ -17,12 +17,8 @@ export async function GET(
 
     const { id } = await params;
 
-    const contract = await prisma.contract.findUnique({
-      where: { id },
-      include: {
-        billingEntity: true,
-        partner: true,
-      },
+    const contract = await convexClient.query(api.contracts.getById, {
+      id: id as any,
     });
 
     if (!contract) {
@@ -59,8 +55,8 @@ export async function PATCH(
     const body = await request.json();
 
     // Check if contract exists
-    const existingContract = await prisma.contract.findUnique({
-      where: { id },
+    const existingContract = await convexClient.query(api.contracts.getById, {
+      id: id as any,
     });
 
     if (!existingContract) {
@@ -68,19 +64,14 @@ export async function PATCH(
     }
 
     // Validate and extract allowed fields
-    const updateData: {
-      autoSendEnabled?: boolean;
-      contractEndDate?: Date | null;
-      billingDayOfMonth?: number | null;
-      autoApprove?: boolean;
-    } = {};
+    const updateData: Record<string, any> = {};
 
     if (typeof body.autoSendEnabled === 'boolean') {
       updateData.autoSendEnabled = body.autoSendEnabled;
     }
 
     if (body.contractEndDate !== undefined) {
-      updateData.contractEndDate = body.contractEndDate ? new Date(body.contractEndDate) : null;
+      updateData.contractEndDate = body.contractEndDate ? new Date(body.contractEndDate).getTime() : null;
     }
 
     if (body.billingDayOfMonth !== undefined) {
@@ -99,30 +90,29 @@ export async function PATCH(
       );
     }
 
-    const contract = await prisma.contract.update({
-      where: { id },
+    const contract = await convexClient.mutation(api.contracts.update, {
+      id: id as any,
       data: updateData,
-      include: {
-        billingEntity: true,
-        partner: true,
-      },
     });
 
     // Audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'CONTRACT_SETTINGS_UPDATED',
-        entityType: 'Contract',
-        entityId: id,
-        details: {
-          contractName: contract.companyName,
-          changes: updateData,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'CONTRACT_SETTINGS_UPDATED',
+      entityType: 'Contract',
+      entityId: id,
+      details: {
+        contractName: existingContract.companyName,
+        changes: updateData,
       },
     });
 
-    return NextResponse.json(contract);
+    // Re-fetch with relations
+    const updatedContract = await convexClient.query(api.contracts.getById, {
+      id: id as any,
+    });
+
+    return NextResponse.json(updatedContract);
   } catch (error) {
     console.error('Error updating contract:', error);
     return NextResponse.json(
@@ -152,8 +142,8 @@ export async function PUT(
     const body = await request.json();
 
     // Check if contract exists
-    const existingContract = await prisma.contract.findUnique({
-      where: { id },
+    const existingContract = await convexClient.query(api.contracts.getById, {
+      id: id as any,
     });
 
     if (!existingContract) {
@@ -163,8 +153,8 @@ export async function PUT(
     // Find the partner if provided
     let partnerId = existingContract.partnerId;
     if (body.partner) {
-      const partner = await prisma.partner.findUnique({
-        where: { code: body.partner },
+      const partner = await convexClient.query(api.partners.getByCode, {
+        code: body.partner,
       });
       if (!partner) {
         return NextResponse.json(
@@ -172,14 +162,14 @@ export async function PUT(
           { status: 400 }
         );
       }
-      partnerId = partner.id;
+      partnerId = partner._id;
     }
 
     // Find the billing entity if provided
     let billingEntityId = existingContract.billingEntityId;
     if (body.billingEntity) {
-      const company = await prisma.company.findUnique({
-        where: { code: body.billingEntity },
+      const company = await convexClient.query(api.companies.getByCode, {
+        code: body.billingEntity,
       });
       if (!company) {
         return NextResponse.json(
@@ -187,7 +177,7 @@ export async function PUT(
           { status: 400 }
         );
       }
-      billingEntityId = company.id;
+      billingEntityId = company._id;
     }
 
     // Map productType to enum
@@ -221,10 +211,10 @@ export async function PUT(
     if (body.monthlyFee !== undefined) updateData.monthlyFee = body.monthlyFee;
     if (body.paymentPlan !== undefined) updateData.paymentPlan = body.paymentPlan || null;
     if (body.contractStart !== undefined) {
-      updateData.contractStart = body.contractStart ? new Date(body.contractStart) : null;
+      updateData.contractStart = body.contractStart ? new Date(body.contractStart).getTime() : null;
     }
     if (body.nextDueDate !== undefined) {
-      updateData.nextDueDate = body.nextDueDate ? new Date(body.nextDueDate) : null;
+      updateData.nextDueDate = body.nextDueDate ? new Date(body.nextDueDate).getTime() : null;
     }
     if (body.status !== undefined) {
       updateData.status = statusMap[body.status?.toUpperCase()] || existingContract.status;
@@ -244,7 +234,7 @@ export async function PUT(
     if (body.remarks !== undefined) updateData.remarks = body.remarks || null;
     if (typeof body.autoSendEnabled === 'boolean') updateData.autoSendEnabled = body.autoSendEnabled;
     if (body.contractEndDate !== undefined) {
-      updateData.contractEndDate = body.contractEndDate ? new Date(body.contractEndDate) : null;
+      updateData.contractEndDate = body.contractEndDate ? new Date(body.contractEndDate).getTime() : null;
     }
     if (body.billingDayOfMonth !== undefined) {
       updateData.billingDayOfMonth = body.billingDayOfMonth || null;
@@ -253,26 +243,25 @@ export async function PUT(
       updateData.autoApprove = body.autoApprove;
     }
 
-    const contract = await prisma.contract.update({
-      where: { id },
+    await convexClient.mutation(api.contracts.update, {
+      id: id as any,
       data: updateData,
-      include: {
-        billingEntity: true,
-        partner: true,
-      },
+    });
+
+    // Re-fetch with relations
+    const contract = await convexClient.query(api.contracts.getById, {
+      id: id as any,
     });
 
     // Audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'CONTRACT_UPDATED',
-        entityType: 'Contract',
-        entityId: id,
-        details: {
-          contractName: contract.companyName,
-          changes: Object.keys(updateData),
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'CONTRACT_UPDATED',
+      entityType: 'Contract',
+      entityId: id,
+      details: {
+        contractName: contract?.companyName,
+        changes: Object.keys(updateData),
       },
     });
 
@@ -305,39 +294,28 @@ export async function DELETE(
     const { id } = await params;
 
     // Check if contract exists
-    const existingContract = await prisma.contract.findUnique({
-      where: { id },
-      include: { invoices: { take: 1 } },
+    const existingContract = await convexClient.query(api.contracts.getById, {
+      id: id as any,
     });
 
     if (!existingContract) {
       return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
     }
 
-    // Prevent deletion if contract has invoices
-    if (existingContract.invoices.length > 0) {
-      return NextResponse.json(
-        { error: 'Cannot delete contract with existing invoices. Consider marking it as STOPPED instead.' },
-        { status: 400 }
-      );
-    }
-
-    // Delete the contract
-    await prisma.contract.delete({
-      where: { id },
+    // Delete the contract (Convex remove handles related contractInvoices)
+    await convexClient.mutation(api.contracts.remove, {
+      id: id as any,
     });
 
     // Audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'CONTRACT_DELETED',
-        entityType: 'Contract',
-        entityId: id,
-        details: {
-          contractName: existingContract.companyName,
-          customerId: existingContract.customerId,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'CONTRACT_DELETED',
+      entityType: 'Contract',
+      entityId: id,
+      details: {
+        contractName: existingContract.companyName,
+        customerId: existingContract.customerId,
       },
     });
 

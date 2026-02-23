@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import bcrypt from 'bcryptjs';
 
 // POST /api/users/[id]/change-password
@@ -36,10 +36,7 @@ export async function POST(
     }
 
     // Get user with current password
-    const user = await prisma.user.findUnique({
-      where: { id },
-      select: { id: true, email: true, password: true },
-    });
+    const user = await convexClient.query(api.users.getById, { id: id as any });
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -94,22 +91,20 @@ export async function POST(
     const hashedPassword = await bcrypt.hash(newPassword, 12);
 
     // Update password
-    await prisma.user.update({
-      where: { id },
-      data: { password: hashedPassword },
+    await convexClient.mutation(api.users.updatePassword, {
+      id: id as any,
+      password: hashedPassword,
     });
 
     // Audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: isOwnAccount ? 'PASSWORD_CHANGED' : 'PASSWORD_RESET',
-        entityType: 'User',
-        entityId: id,
-        details: {
-          email: user.email,
-          changedBy: session.user.email,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: isOwnAccount ? 'PASSWORD_CHANGED' : 'PASSWORD_RESET',
+      entityType: 'User',
+      entityId: id,
+      details: {
+        email: user.email,
+        changedBy: session.user.email,
       },
     });
 

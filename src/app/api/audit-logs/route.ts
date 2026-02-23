@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
-import { Prisma } from '@/generated/prisma';
+import { convexClient, api } from '@/lib/convex';
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +20,7 @@ export async function GET(request: NextRequest) {
     // Pagination
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20')));
-    const skip = (page - 1) * limit;
+    const offset = (page - 1) * limit;
 
     // Filters
     const dateFrom = searchParams.get('dateFrom');
@@ -31,78 +30,77 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get('userId');
     const search = searchParams.get('search');
 
-    // Build where clause
-    const where: Prisma.AuditLogWhereInput = {};
+    // Query audit logs
+    const result = await convexClient.query(api.auditLogs.list, {
+      ...(entityType ? { entityType } : {}),
+      ...(action ? { action } : {}),
+      limit: 1000, // Get more to filter client-side
+      offset: 0,
+    });
 
-    if (dateFrom || dateTo) {
-      where.createdAt = {};
-      if (dateFrom) {
-        where.createdAt.gte = new Date(dateFrom);
-      }
-      if (dateTo) {
-        // Add 1 day to include the entire end date
-        const endDate = new Date(dateTo);
-        endDate.setDate(endDate.getDate() + 1);
-        where.createdAt.lte = endDate;
-      }
+    let logs = result.items || [];
+
+    // Apply date filters client-side
+    if (dateFrom) {
+      const fromMs = new Date(dateFrom).getTime();
+      logs = logs.filter((log: any) => log.createdAt >= fromMs);
+    }
+    if (dateTo) {
+      const endDate = new Date(dateTo);
+      endDate.setDate(endDate.getDate() + 1);
+      const toMs = endDate.getTime();
+      logs = logs.filter((log: any) => log.createdAt <= toMs);
     }
 
-    if (action) {
-      where.action = action;
-    }
-
-    if (entityType) {
-      where.entityType = entityType;
-    }
-
+    // Apply userId filter
     if (userId) {
-      where.userId = userId;
+      logs = logs.filter((log: any) => log.userId === userId);
     }
 
+    // Apply search filter (search in entityId)
     if (search) {
-      where.entityId = {
-        contains: search,
-        mode: 'insensitive',
-      };
+      const term = search.toLowerCase();
+      logs = logs.filter((log: any) =>
+        log.entityId?.toLowerCase().includes(term)
+      );
     }
 
-    // Get total count and logs
-    const [total, logs] = await Promise.all([
-      prisma.auditLog.count({ where }),
-      prisma.auditLog.findMany({
-        where,
-        include: {
-          user: {
-            select: {
-              name: true,
-              email: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-        skip,
-        take: limit,
-      }),
-    ]);
+    const total = logs.length;
+
+    // Paginate
+    const paged = logs.slice(offset, offset + limit);
+
+    // Get user info for each log
+    const logsWithUsers = await Promise.all(
+      paged.map(async (log: any) => {
+        let user = null;
+        if (log.userId) {
+          try {
+            const userData = await convexClient.query(api.users.getById, {
+              id: log.userId,
+            });
+            if (userData) {
+              user = { name: userData.name, email: userData.email };
+            }
+          } catch {
+            // User might not exist
+          }
+        }
+        return {
+          id: log._id,
+          action: log.action,
+          entityType: log.entityType,
+          entityId: log.entityId,
+          details: log.details,
+          ipAddress: log.ipAddress,
+          createdAt: log.createdAt ? new Date(log.createdAt).toISOString() : null,
+          user,
+        };
+      })
+    );
 
     return NextResponse.json({
-      logs: logs.map((log) => ({
-        id: log.id,
-        action: log.action,
-        entityType: log.entityType,
-        entityId: log.entityId,
-        details: log.details,
-        ipAddress: log.ipAddress,
-        createdAt: log.createdAt.toISOString(),
-        user: log.user
-          ? {
-              name: log.user.name,
-              email: log.user.email,
-            }
-          : null,
-      })),
+      logs: logsWithUsers,
       total,
       page,
       limit,

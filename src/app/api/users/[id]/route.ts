@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
-import { UserRole } from '@/generated/prisma';
+import { convexClient, api } from '@/lib/convex';
+import { UserRole } from '@/lib/enums';
 
 // GET /api/users/[id] - Get user details
 export async function GET(
@@ -22,23 +22,20 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const user = await convexClient.query(api.users.getById, { id: id as any });
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    return NextResponse.json(user);
+    return NextResponse.json({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.createdAt ? new Date(user.createdAt).toISOString() : null,
+      updatedAt: user.updatedAt ? new Date(user.updatedAt).toISOString() : null,
+    });
   } catch (error) {
     console.error('Error fetching user:', error);
     return NextResponse.json(
@@ -64,9 +61,7 @@ export async function PUT(
     const { name, role } = body;
 
     // Check if user exists
-    const existingUser = await prisma.user.findUnique({
-      where: { id },
-    });
+    const existingUser = await convexClient.query(api.users.getById, { id: id as any });
 
     if (!existingUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -99,38 +94,33 @@ export async function PUT(
     }
 
     // Update user
-    const user = await prisma.user.update({
-      where: { id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(role && { role: role as UserRole }),
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const updateArgs: any = { id: id as any };
+    if (name !== undefined) updateArgs.name = name;
+    if (role) updateArgs.role = role as UserRole;
+
+    const user = await convexClient.mutation(api.users.update, updateArgs);
 
     // Audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'USER_UPDATED',
-        entityType: 'User',
-        entityId: user.id,
-        details: {
-          email: user.email,
-          changes: { name, role },
-          updatedBy: session.user.email,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'USER_UPDATED',
+      entityType: 'User',
+      entityId: String(user?._id),
+      details: {
+        email: user?.email,
+        changes: { name, role },
+        updatedBy: session.user.email,
       },
     });
 
-    return NextResponse.json(user);
+    return NextResponse.json({
+      id: user?._id,
+      name: user?.name,
+      email: user?.email,
+      role: user?.role,
+      createdAt: user?.createdAt ? new Date(user.createdAt).toISOString() : null,
+      updatedAt: user?.updatedAt ? new Date(user.updatedAt).toISOString() : null,
+    });
   } catch (error) {
     console.error('Error updating user:', error);
     return NextResponse.json(
@@ -167,31 +157,24 @@ export async function DELETE(
     }
 
     // Check if user exists
-    const existingUser = await prisma.user.findUnique({
-      where: { id },
-      select: { id: true, email: true },
-    });
+    const existingUser = await convexClient.query(api.users.getById, { id: id as any });
 
     if (!existingUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Delete user (cascade will handle related records)
-    await prisma.user.delete({
-      where: { id },
-    });
+    // Delete user
+    await convexClient.mutation(api.users.remove, { id: id as any });
 
     // Audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'USER_DELETED',
-        entityType: 'User',
-        entityId: id,
-        details: {
-          email: existingUser.email,
-          deletedBy: session.user.email,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'USER_DELETED',
+      entityType: 'User',
+      entityId: id,
+      details: {
+        email: existingUser.email,
+        deletedBy: session.user.email,
       },
     });
 

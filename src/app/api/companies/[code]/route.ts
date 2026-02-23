@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 
 export async function GET(
   request: NextRequest,
@@ -19,18 +19,13 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid company code' }, { status: 400 });
     }
 
-    const company = await prisma.company.findUnique({
-      where: { code },
-      include: {
-        signatories: true,
-      },
-    });
+    const company = await convexClient.query(api.companies.getByCodeWithSignatories, { code });
 
     if (!company) {
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
     }
 
-    return NextResponse.json(company);
+    return NextResponse.json({ ...company, id: company._id });
   } catch (error) {
     console.error('Error fetching company:', error);
     return NextResponse.json(
@@ -85,15 +80,12 @@ export async function PUT(
       }
     }
 
-    const company = await prisma.company.update({
-      where: { code },
+    const company = await convexClient.mutation(api.companies.updateByCode, {
+      code,
       data: updateData,
-      include: {
-        signatories: true,
-      },
     });
 
-    return NextResponse.json(company);
+    return NextResponse.json({ ...company, id: (company as any)._id });
   } catch (error) {
     console.error('Error updating company:', error);
     return NextResponse.json(

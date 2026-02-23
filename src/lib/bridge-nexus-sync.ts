@@ -1,4 +1,4 @@
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { getNexusBridgeHeaders, getNexusConvexUrl } from '@/lib/bridge-auth';
 
 /**
@@ -7,31 +7,8 @@ import { getNexusBridgeHeaders, getNexusConvexUrl } from '@/lib/bridge-auth';
  */
 export async function notifyNexusPayment(invoiceId: string): Promise<void> {
   try {
-    // Find the invoice with its contract and bridge mapping
-    const invoice = await prisma.invoice.findUnique({
-      where: { id: invoiceId },
-      select: {
-        id: true,
-        invoiceNo: true,
-        billingNo: true,
-        paidAmount: true,
-        paidAt: true,
-        paymentMethod: true,
-        paymentReference: true,
-        netAmount: true,
-        contracts: {
-          select: {
-            id: true,
-            bridgeMappings: {
-              select: {
-                nexusAgreementId: true,
-                nexusOrganizationId: true,
-              },
-            },
-          },
-        },
-      },
-    });
+    // Find the invoice with its contracts and bridge mappings
+    const invoice = await convexClient.query(api.invoices.getByIdFull, { id: invoiceId as any });
 
     if (!invoice) {
       console.log(`Bridge: Invoice ${invoiceId} not found, skipping Nexus notification`);
@@ -42,11 +19,17 @@ export async function notifyNexusPayment(invoiceId: string): Promise<void> {
     let nexusAgreementId: string | undefined;
     let nexusOrganizationId: string | undefined;
 
-    for (const contract of invoice.contracts) {
-      if (contract.bridgeMappings.length > 0) {
-        nexusAgreementId = contract.bridgeMappings[0].nexusAgreementId;
-        nexusOrganizationId = contract.bridgeMappings[0].nexusOrganizationId;
-        break;
+    if (invoice.contracts && Array.isArray(invoice.contracts)) {
+      for (const contract of invoice.contracts) {
+        if (!contract) continue;
+        const mapping = await convexClient.query(api.bridgeMappings.getByContractId, {
+          contractId: contract._id,
+        });
+        if (mapping) {
+          nexusAgreementId = mapping.nexusAgreementId;
+          nexusOrganizationId = mapping.nexusOrganizationId;
+          break;
+        }
       }
     }
 
@@ -59,12 +42,12 @@ export async function notifyNexusPayment(invoiceId: string): Promise<void> {
 
     const payload = {
       nexusAgreementId,
-      invoiceId: invoice.id,
+      invoiceId: invoice._id,
       invoiceNo: invoice.invoiceNo || invoice.billingNo,
       paidAmount: Number(invoice.paidAmount || invoice.netAmount),
       paymentMethod: invoice.paymentMethod || 'unknown',
       paymentReference: invoice.paymentReference,
-      paidAt: invoice.paidAt?.toISOString() || new Date().toISOString(),
+      paidAt: invoice.paidAt ? new Date(invoice.paidAt).toISOString() : new Date().toISOString(),
       currency: 'PHP',
     };
 

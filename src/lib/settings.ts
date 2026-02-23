@@ -1,4 +1,4 @@
-import prisma from './prisma';
+import { convexClient, api } from '@/lib/convex';
 
 // Default settings values
 const DEFAULTS: Record<string, any> = {
@@ -73,7 +73,7 @@ export async function getAllSettings(): Promise<Record<string, any>> {
   }
 
   try {
-    const dbSettings = await prisma.settings.findMany();
+    const dbSettings = await convexClient.query(api.settings.list, {});
 
     // Merge defaults with DB values
     const settings: Record<string, any> = { ...DEFAULTS };
@@ -116,31 +116,25 @@ export async function getSOASettings(companyCode: 'YOWI' | 'ABBA'): Promise<{
 }> {
   try {
     // Fetch company with signatories
-    const company = await prisma.company.findUnique({
-      where: { code: companyCode },
-      include: {
-        signatories: {
-          where: { isDefault: true },
-        },
-      },
-    });
+    const companyData = await convexClient.query(api.companies.getWithTemplate, { code: companyCode });
 
-    if (!company) {
+    if (!companyData) {
       // Fallback to defaults if company not found
       return getSOASettingsDefaults(companyCode);
     }
 
-    // Get signatories by role
-    const preparedBySignatory = company.signatories.find(s => s.role === 'prepared_by');
-    const reviewedBySignatory = company.signatories.find(s => s.role === 'reviewed_by');
+    // Get signatories by role (from the joined data)
+    const signatories = companyData.signatories || [];
+    const preparedBySignatory = signatories.find((s: any) => s.role === 'prepared_by' && s.isDefault);
+    const reviewedBySignatory = signatories.find((s: any) => s.role === 'reviewed_by' && s.isDefault);
 
     // Get footer from Settings (shared setting)
     const footerSetting = await getSetting('soa.footer');
 
     return {
-      bankName: company.bankName || 'BDO',
-      bankAccountName: company.bankAccountName || company.name,
-      bankAccountNo: company.bankAccountNo || '',
+      bankName: companyData.bankName || 'BDO',
+      bankAccountName: companyData.bankAccountName || companyData.name,
+      bankAccountNo: companyData.bankAccountNo || '',
       footer: footerSetting || 'Thank you for your business. Please include the invoice number in your payment reference.',
       preparedBy: preparedBySignatory?.name || 'VANESSA L. DONOSO',
       reviewedBy: reviewedBySignatory?.name || 'RUTH MICHELLE C. BAYRON',
@@ -241,22 +235,19 @@ export async function getInvoiceTemplate(companyCode: 'YOWI' | 'ABBA'): Promise<
   }
 
   try {
-    const company = await prisma.company.findUnique({
-      where: { code: companyCode },
-      include: { template: true },
-    });
+    const companyData = await convexClient.query(api.companies.getWithTemplate, { code: companyCode });
 
-    if (company?.template) {
-      console.log('[Template] Loaded from database for:', companyCode, company.template.id);
+    if (companyData?.template) {
+      console.log('[Template] Loaded from database for:', companyCode);
       const template: InvoiceTemplateConfig = {
-        primaryColor: company.template.primaryColor,
-        secondaryColor: company.template.secondaryColor,
-        footerBgColor: company.template.footerBgColor,
-        logoPath: company.template.logoPath || undefined,
-        invoiceTitle: company.template.invoiceTitle,
-        footerText: company.template.footerText,
-        showDisclaimer: company.template.showDisclaimer,
-        notes: company.template.notes || undefined,
+        primaryColor: companyData.template.primaryColor,
+        secondaryColor: companyData.template.secondaryColor,
+        footerBgColor: companyData.template.footerBgColor,
+        logoPath: companyData.template.logoPath || undefined,
+        invoiceTitle: companyData.template.invoiceTitle,
+        footerText: companyData.template.footerText,
+        showDisclaimer: companyData.template.showDisclaimer,
+        notes: companyData.template.notes || undefined,
       };
 
       // Update cache with per-company timestamp

@@ -1,5 +1,5 @@
-import prisma from '@/lib/prisma';
-import { NotificationType } from '@/generated/prisma';
+import { convexClient, api } from '@/lib/convex';
+import { NotificationType } from '@/lib/enums';
 
 interface CreateNotificationParams {
   userId?: string | null; // null = broadcast to all users
@@ -13,16 +13,14 @@ interface CreateNotificationParams {
 
 export async function createNotification(params: CreateNotificationParams) {
   try {
-    return await prisma.notification.create({
-      data: {
-        userId: params.userId,
-        type: params.type,
-        title: params.title,
-        message: params.message,
-        link: params.link,
-        entityType: params.entityType,
-        entityId: params.entityId,
-      },
+    return await convexClient.mutation(api.notifications.create, {
+      userId: params.userId as any,
+      type: params.type,
+      title: params.title,
+      message: params.message,
+      link: params.link,
+      entityType: params.entityType,
+      entityId: params.entityId,
     });
   } catch (error) {
     console.error('Error creating notification:', error);

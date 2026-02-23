@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { generateFromScheduledBilling } from '@/lib/invoice-generator';
 import { autoSendInvoice } from '@/lib/auto-send';
 
@@ -22,14 +22,8 @@ export async function POST(
     const { id } = await params;
 
     // Check if exists and is active
-    const existing = await prisma.scheduledBilling.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        status: true,
-        autoSendEnabled: true,
-        contract: { select: { companyName: true } },
-      },
+    const existing = await convexClient.query(api.scheduledBillings.getById, {
+      id: id as any,
     });
 
     if (!existing) {
@@ -47,7 +41,7 @@ export async function POST(
     let emailSent = false;
     if (result.autoApproved && existing.autoSendEnabled) {
       try {
-        await autoSendInvoice(result.invoice.id);
+        await autoSendInvoice(result.invoice._id || result.invoice.id);
         emailSent = true;
       } catch (emailError) {
         console.error('Failed to auto-send invoice:', emailError);
@@ -56,19 +50,17 @@ export async function POST(
     }
 
     // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: (session.user as { id: string }).id,
-        action: 'SCHEDULED_BILLING_MANUAL_RUN',
-        entityType: 'ScheduledBilling',
-        entityId: id,
-        details: {
-          companyName: existing.contract.companyName,
-          invoiceId: result.invoice.id,
-          billingNo: result.invoice.billingNo,
-          autoApproved: result.autoApproved,
-          emailSent,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: (session.user as { id: string }).id as any,
+      action: 'SCHEDULED_BILLING_MANUAL_RUN',
+      entityType: 'ScheduledBilling',
+      entityId: id,
+      details: {
+        companyName: existing.contract?.companyName,
+        invoiceId: result.invoice._id || result.invoice.id,
+        billingNo: result.invoice.billingNo,
+        autoApproved: result.autoApproved,
+        emailSent,
       },
     });
 

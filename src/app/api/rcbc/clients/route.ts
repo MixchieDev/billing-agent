@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 
 // GET - List all RCBC end-clients
 export async function GET(request: NextRequest) {
@@ -14,29 +14,22 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const monthStr = searchParams.get('month'); // Format: YYYY-MM
 
-    // Build where clause
-    const whereClause: any = {};
+    // Build query args
+    const queryArgs: { month?: number } = {};
 
     if (monthStr) {
-      // Parse YYYY-MM to Date range
+      // Parse YYYY-MM to timestamp (first day of month)
       const [year, month] = monthStr.split('-').map(Number);
       const startOfMonth = new Date(year, month - 1, 1);
-      const endOfMonth = new Date(year, month, 0, 23, 59, 59);
-
-      whereClause.month = {
-        gte: startOfMonth,
-        lte: endOfMonth,
-      };
+      queryArgs.month = startOfMonth.getTime();
     }
 
-    const clients = await prisma.rcbcEndClient.findMany({
-      where: whereClause,
-      orderBy: [{ month: 'desc' }, { name: 'asc' }],
-    });
+    const clients = await convexClient.query(api.rcbcEndClients.list, queryArgs);
 
-    // Transform Decimal to number for JSON
-    const transformedClients = clients.map(client => ({
+    // Transform for JSON response
+    const transformedClients = clients.map((client: any) => ({
       ...client,
+      id: client._id,
       ratePerEmployee: Number(client.ratePerEmployee),
     }));
 
@@ -73,18 +66,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parse month from YYYY-MM format
+    // Parse month from YYYY-MM format to timestamp
     const monthDate = new Date(body.month + '-01');
+    const monthTimestamp = monthDate.getTime();
 
     // Check if client already exists for this month
-    const existingClient = await prisma.rcbcEndClient.findUnique({
-      where: {
-        name_month: {
-          name: body.name,
-          month: monthDate,
-        },
-      },
+    const existingClients = await convexClient.query(api.rcbcEndClients.list, {
+      month: monthTimestamp,
     });
+    const existingClient = existingClients.find((c: any) => c.name === body.name);
 
     if (existingClient) {
       return NextResponse.json(
@@ -93,33 +83,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const client = await prisma.rcbcEndClient.create({
-      data: {
-        name: body.name,
-        employeeCount: parseInt(body.employeeCount),
-        ratePerEmployee: parseFloat(body.ratePerEmployee),
-        month: monthDate,
-        isActive: body.isActive ?? true,
-      },
+    const clientId = await convexClient.mutation(api.rcbcEndClients.create, {
+      name: body.name,
+      employeeCount: parseInt(body.employeeCount),
+      ratePerEmployee: parseFloat(body.ratePerEmployee),
+      month: monthTimestamp,
+      isActive: body.isActive ?? true,
     });
 
+    const client = await convexClient.query(api.rcbcEndClients.getById, { id: clientId });
+
     // Audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'RCBC_CLIENT_CREATED',
-        entityType: 'RcbcEndClient',
-        entityId: client.id,
-        details: {
-          clientName: client.name,
-          month: body.month,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'RCBC_CLIENT_CREATED',
+      entityType: 'RcbcEndClient',
+      entityId: clientId,
+      details: {
+        clientName: body.name,
+        month: body.month,
       },
     });
 
     return NextResponse.json({
       ...client,
-      ratePerEmployee: Number(client.ratePerEmployee),
+      id: client?._id,
+      ratePerEmployee: Number(client?.ratePerEmployee),
     }, { status: 201 });
   } catch (error) {
     console.error('Error creating RCBC client:', error);
@@ -153,22 +142,17 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Parse YYYY-MM to Date range
+    // Parse YYYY-MM to timestamp
     const [year, month] = monthStr.split('-').map(Number);
     const startOfMonth = new Date(year, month - 1, 1);
-    const endOfMonth = new Date(year, month, 0, 23, 59, 59);
+    const monthTimestamp = startOfMonth.getTime();
 
-    // Count clients to be deleted
-    const count = await prisma.rcbcEndClient.count({
-      where: {
-        month: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
-      },
+    // Get clients for this month
+    const clients = await convexClient.query(api.rcbcEndClients.list, {
+      month: monthTimestamp,
     });
 
-    if (count === 0) {
+    if (clients.length === 0) {
       return NextResponse.json(
         { error: 'No clients found for this month' },
         { status: 404 }
@@ -176,44 +160,34 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete all clients for this month
-    const result = await prisma.rcbcEndClient.deleteMany({
-      where: {
-        month: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
-      },
-    });
-
-    // Audit log - only create if user exists
-    try {
-      const userExists = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { id: true },
+    let deletedCount = 0;
+    for (const client of clients) {
+      await convexClient.mutation(api.rcbcEndClients.remove, {
+        id: client._id,
       });
+      deletedCount++;
+    }
 
-      if (userExists) {
-        await prisma.auditLog.create({
-          data: {
-            userId: session.user.id,
-            action: 'RCBC_CLIENTS_BULK_DELETED',
-            entityType: 'RcbcEndClient',
-            entityId: 'bulk',
-            details: {
-              month: monthStr,
-              deletedCount: result.count,
-            },
-          },
-        });
-      }
+    // Audit log
+    try {
+      await convexClient.mutation(api.auditLogs.create, {
+        userId: session.user.id as any,
+        action: 'RCBC_CLIENTS_BULK_DELETED',
+        entityType: 'RcbcEndClient',
+        entityId: 'bulk',
+        details: {
+          month: monthStr,
+          deletedCount,
+        },
+      });
     } catch (auditError) {
       console.warn('Failed to create audit log:', auditError);
     }
 
     return NextResponse.json({
       success: true,
-      message: `Deleted ${result.count} RCBC client(s) for ${monthStr}`,
-      deletedCount: result.count,
+      message: `Deleted ${deletedCount} RCBC client(s) for ${monthStr}`,
+      deletedCount,
     });
   } catch (error) {
     console.error('Error bulk deleting RCBC clients:', error);

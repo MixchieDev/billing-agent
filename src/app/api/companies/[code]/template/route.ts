@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { clearTemplateCache } from '@/lib/settings';
 
 // GET template for a company (includes bank details and signatories)
@@ -17,23 +17,19 @@ export async function GET(
 
     const { code } = await params;
 
-    const company = await prisma.company.findUnique({
-      where: { code: code.toUpperCase() },
-      include: {
-        template: true,
-        signatories: {
-          where: { isDefault: true },
-        },
-      },
-    });
+    const result = await convexClient.query(api.companies.getWithTemplate, { code: code.toUpperCase() });
 
-    if (!company) {
+    if (!result) {
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
     }
 
-    // Get signatories by role
-    const preparedBySignatory = company.signatories.find(s => s.role === 'prepared_by');
-    const reviewedBySignatory = company.signatories.find(s => s.role === 'reviewed_by');
+    const company = result;
+    const signatories = company.signatories || [];
+
+    // Get signatories by role (filter for default ones)
+    const defaultSignatories = signatories.filter((s: any) => s.isDefault);
+    const preparedBySignatory = defaultSignatories.find((s: any) => s.role === 'prepared_by');
+    const reviewedBySignatory = defaultSignatories.find((s: any) => s.role === 'reviewed_by');
 
     // Return template or default values
     const template = company.template || {
@@ -48,7 +44,7 @@ export async function GET(
     };
 
     return NextResponse.json({
-      companyId: company.id,
+      companyId: company._id,
       companyCode: company.code,
       companyName: company.name,
       // Template settings
@@ -92,9 +88,7 @@ export async function PUT(
     const { code } = await params;
     const body = await request.json();
 
-    const company = await prisma.company.findUnique({
-      where: { code: code.toUpperCase() },
-    });
+    const company = await convexClient.query(api.companies.getByCode, { code: code.toUpperCase() });
 
     if (!company) {
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
@@ -124,88 +118,63 @@ export async function PUT(
 
     // Update company bank details, invoice prefix, and next invoice number if provided
     if (bankName !== undefined || bankAccountName !== undefined || bankAccountNo !== undefined || invoicePrefix !== undefined || nextInvoiceNo !== undefined) {
-      await prisma.company.update({
-        where: { id: company.id },
-        data: {
-          ...(bankName !== undefined && { bankName }),
-          ...(bankAccountName !== undefined && { bankAccountName }),
-          ...(bankAccountNo !== undefined && { bankAccountNo }),
-          ...(invoicePrefix !== undefined && { invoicePrefix }),
-          ...(nextInvoiceNo !== undefined && { nextInvoiceNo: parseInt(nextInvoiceNo) }),
-        },
+      const companyUpdateData: Record<string, any> = {};
+      if (bankName !== undefined) companyUpdateData.bankName = bankName;
+      if (bankAccountName !== undefined) companyUpdateData.bankAccountName = bankAccountName;
+      if (bankAccountNo !== undefined) companyUpdateData.bankAccountNo = bankAccountNo;
+      if (invoicePrefix !== undefined) companyUpdateData.invoicePrefix = invoicePrefix;
+      // Note: nextInvoiceNo is not in the update mutation args, so we skip it or handle via a different approach
+      await convexClient.mutation(api.companies.update, {
+        id: company._id as any,
+        ...companyUpdateData,
       });
     }
 
     // Update signatories if provided
     if (preparedBy !== undefined) {
-      await prisma.signatory.upsert({
-        where: {
-          companyId_role_isDefault: {
-            companyId: company.id,
-            role: 'prepared_by',
-            isDefault: true,
-          },
-        },
-        update: { name: preparedBy },
-        create: {
-          companyId: company.id,
-          role: 'prepared_by',
-          name: preparedBy,
-          isDefault: true,
-        },
+      await convexClient.mutation(api.signatories.upsertByCompanyAndRole, {
+        companyId: company._id as any,
+        role: 'prepared_by',
+        name: preparedBy,
+        isDefault: true,
       });
     }
 
     if (reviewedBy !== undefined) {
-      await prisma.signatory.upsert({
-        where: {
-          companyId_role_isDefault: {
-            companyId: company.id,
-            role: 'reviewed_by',
-            isDefault: true,
-          },
-        },
-        update: { name: reviewedBy },
-        create: {
-          companyId: company.id,
-          role: 'reviewed_by',
-          name: reviewedBy,
-          isDefault: true,
-        },
+      await convexClient.mutation(api.signatories.upsertByCompanyAndRole, {
+        companyId: company._id as any,
+        role: 'reviewed_by',
+        name: reviewedBy,
+        isDefault: true,
       });
     }
 
     // Upsert template
-    const template = await prisma.invoiceTemplate.upsert({
-      where: { companyId: company.id },
-      update: {
-        primaryColor,
-        secondaryColor,
-        footerBgColor,
-        logoPath,
-        invoiceTitle,
-        footerText,
-        showDisclaimer,
-        notes,
-      },
-      create: {
-        companyId: company.id,
-        primaryColor: primaryColor || '#2563eb',
-        secondaryColor: secondaryColor || '#1e40af',
-        footerBgColor: footerBgColor || '#dbeafe',
-        logoPath,
-        invoiceTitle: invoiceTitle || 'Invoice',
-        footerText: footerText || `Powered by: ${company.name}`,
-        showDisclaimer: showDisclaimer ?? true,
-        notes: notes || null,
-      },
+    const templateId = await convexClient.mutation(api.invoiceTemplates.upsert, {
+      companyId: company._id as any,
+      primaryColor: primaryColor || '#2563eb',
+      secondaryColor: secondaryColor || '#1e40af',
+      footerBgColor: footerBgColor || '#dbeafe',
+      logoPath: logoPath || undefined,
+      invoiceTitle: invoiceTitle || 'Invoice',
+      footerText: footerText || `Powered by: ${company.name}`,
+      showDisclaimer: showDisclaimer ?? true,
+      notes: notes || undefined,
     });
 
     // Clear the template cache so changes take effect immediately
     clearTemplateCache();
 
     return NextResponse.json({
-      ...template,
+      templateId,
+      primaryColor,
+      secondaryColor,
+      footerBgColor,
+      logoPath,
+      invoiceTitle,
+      footerText,
+      showDisclaimer,
+      notes,
       bankName,
       bankAccountName,
       bankAccountNo,

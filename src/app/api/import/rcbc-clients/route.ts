@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { parseRcbcClientsCSV, generateRcbcClientsTemplate } from '@/lib/csv-parser';
 
 // GET - Download template
@@ -64,35 +64,38 @@ export async function POST(request: NextRequest) {
       const row = parseResult.data[i];
 
       try {
+        // Convert month to timestamp
+        const monthTimestamp = row.month instanceof Date ? row.month.getTime() : new Date(row.month).getTime();
+
         // Check if client exists for this month
-        const existingClient = await prisma.rcbcEndClient.findUnique({
-          where: {
-            name_month: {
-              name: row.name,
-              month: row.month,
-            },
-          },
+        const existingClients = await convexClient.query(api.rcbcEndClients.list, {
+          month: monthTimestamp,
         });
+        const existingClient = existingClients.find((c: any) => c.name === row.name);
 
         const clientData = {
           name: row.name,
           employeeCount: row.employeeCount,
           ratePerEmployee: row.ratePerEmployee,
-          month: row.month,
+          month: monthTimestamp,
           isActive: row.isActive,
         };
 
         if (existingClient) {
           // Update existing client
-          await prisma.rcbcEndClient.update({
-            where: { id: existingClient.id },
+          await convexClient.mutation(api.rcbcEndClients.update, {
+            id: existingClient._id,
             data: clientData,
           });
           results.updated++;
         } else {
           // Create new client
-          await prisma.rcbcEndClient.create({
-            data: clientData,
+          await convexClient.mutation(api.rcbcEndClients.create, {
+            name: clientData.name,
+            employeeCount: clientData.employeeCount,
+            ratePerEmployee: clientData.ratePerEmployee,
+            month: clientData.month,
+            isActive: clientData.isActive,
           });
           results.created++;
         }
@@ -102,30 +105,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Audit log - only create if user exists in database
+    // Audit log
     try {
-      const userExists = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { id: true },
+      await convexClient.mutation(api.auditLogs.create, {
+        userId: session.user.id as any,
+        action: 'RCBC_CLIENTS_IMPORTED',
+        entityType: 'RcbcEndClient',
+        entityId: 'bulk',
+        details: {
+          fileName: file.name,
+          totalRows: parseResult.totalRows,
+          created: results.created,
+          updated: results.updated,
+          skipped: results.skipped,
+        },
       });
-
-      if (userExists) {
-        await prisma.auditLog.create({
-          data: {
-            userId: session.user.id,
-            action: 'RCBC_CLIENTS_IMPORTED',
-            entityType: 'RcbcEndClient',
-            entityId: 'bulk',
-            details: {
-              fileName: file.name,
-              totalRows: parseResult.totalRows,
-              created: results.created,
-              updated: results.updated,
-              skipped: results.skipped,
-            },
-          },
-        });
-      }
     } catch (auditError) {
       console.warn('Failed to create audit log:', auditError);
     }

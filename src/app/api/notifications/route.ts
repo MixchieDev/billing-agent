@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 
 // GET /api/notifications - Get notifications for current user
 export async function GET(request: NextRequest) {
@@ -15,30 +15,24 @@ export async function GET(request: NextRequest) {
     const unreadOnly = searchParams.get('unread') === 'true';
     const limit = parseInt(searchParams.get('limit') || '20');
 
-    const notifications = await prisma.notification.findMany({
-      where: {
-        OR: [
-          { userId: session.user.id },
-          { userId: null }, // Broadcast notifications
-        ],
-        ...(unreadOnly && { isRead: false }),
-      },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
+    const notifications = await convexClient.query(api.notifications.listForUser, {
+      userId: session.user.id as any,
+      unreadOnly: unreadOnly || undefined,
+      limit,
     });
 
     // Get unread count
-    const unreadCount = await prisma.notification.count({
-      where: {
-        OR: [
-          { userId: session.user.id },
-          { userId: null },
-        ],
-        isRead: false,
-      },
+    const unreadCount = await convexClient.query(api.notifications.countUnreadForUser, {
+      userId: session.user.id as any,
     });
 
-    return NextResponse.json({ notifications, unreadCount });
+    // Map _id to id for compatibility
+    const mapped = notifications.map((n: any) => ({
+      ...n,
+      id: n._id,
+    }));
+
+    return NextResponse.json({ notifications: mapped, unreadCount });
   } catch (error) {
     console.error('Error fetching notifications:', error);
     return NextResponse.json(
@@ -61,27 +55,13 @@ export async function POST(request: NextRequest) {
 
     if (markAll) {
       // Mark all notifications as read for this user
-      await prisma.notification.updateMany({
-        where: {
-          OR: [
-            { userId: session.user.id },
-            { userId: null },
-          ],
-          isRead: false,
-        },
-        data: { isRead: true },
+      await convexClient.mutation(api.notifications.markAllRead, {
+        userId: session.user.id as any,
       });
     } else if (notificationIds && Array.isArray(notificationIds)) {
       // Mark specific notifications as read
-      await prisma.notification.updateMany({
-        where: {
-          id: { in: notificationIds },
-          OR: [
-            { userId: session.user.id },
-            { userId: null },
-          ],
-        },
-        data: { isRead: true },
+      await convexClient.mutation(api.notifications.markManyRead, {
+        ids: notificationIds as any,
       });
     }
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 
 // GET single email template
 export async function GET(
@@ -16,24 +16,13 @@ export async function GET(
 
     const { id } = await params;
 
-    const template = await prisma.emailTemplate.findUnique({
-      where: { id },
-      include: {
-        partners: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-          },
-        },
-      },
-    });
+    const template = await convexClient.query(api.emailTemplates.getWithPartners, { id: id as any });
 
     if (!template) {
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     }
 
-    return NextResponse.json(template);
+    return NextResponse.json({ ...template, id: template._id });
   } catch (error) {
     console.error('Error fetching email template:', error);
     return NextResponse.json(
@@ -64,18 +53,14 @@ export async function PUT(
     const { name, subject, greeting, body: bodyText, closing, isDefault } = body;
 
     // Check if template exists
-    const existing = await prisma.emailTemplate.findUnique({
-      where: { id },
-    });
+    const existing = await convexClient.query(api.emailTemplates.getById, { id: id as any });
     if (!existing) {
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     }
 
     // Check for duplicate name (excluding current template)
     if (name && name !== existing.name) {
-      const duplicate = await prisma.emailTemplate.findUnique({
-        where: { name },
-      });
+      const duplicate = await convexClient.query(api.emailTemplates.getByName, { name });
       if (duplicate) {
         return NextResponse.json(
           { error: 'A template with this name already exists' },
@@ -86,34 +71,26 @@ export async function PUT(
 
     // If setting as default, unset other defaults
     if (isDefault && !existing.isDefault) {
-      await prisma.emailTemplate.updateMany({
-        where: { isDefault: true },
-        data: { isDefault: false },
-      });
+      await convexClient.mutation(api.emailTemplates.clearDefaults, {});
     }
 
-    const template = await prisma.emailTemplate.update({
-      where: { id },
-      data: {
-        ...(name && { name }),
-        ...(subject && { subject }),
-        ...(greeting && { greeting }),
-        ...(bodyText && { body: bodyText }),
-        ...(closing && { closing }),
-        ...(typeof isDefault === 'boolean' && { isDefault }),
-      },
-      include: {
-        partners: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-          },
-        },
-      },
+    const updateData: Record<string, any> = {};
+    if (name) updateData.name = name;
+    if (subject) updateData.subject = subject;
+    if (greeting) updateData.greeting = greeting;
+    if (bodyText) updateData.body = bodyText;
+    if (closing) updateData.closing = closing;
+    if (typeof isDefault === 'boolean') updateData.isDefault = isDefault;
+
+    const template = await convexClient.mutation(api.emailTemplates.update, {
+      id: id as any,
+      data: updateData,
     });
 
-    return NextResponse.json(template);
+    // Fetch with partners for response
+    const templateWithPartners = await convexClient.query(api.emailTemplates.getWithPartners, { id: id as any });
+
+    return NextResponse.json({ ...templateWithPartners, id: templateWithPartners?._id });
   } catch (error) {
     console.error('Error updating email template:', error);
     return NextResponse.json(
@@ -141,13 +118,8 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // Check if template exists
-    const template = await prisma.emailTemplate.findUnique({
-      where: { id },
-      include: {
-        partners: true,
-      },
-    });
+    // Check if template exists (with partners)
+    const template = await convexClient.query(api.emailTemplates.getWithPartners, { id: id as any });
 
     if (!template) {
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
@@ -162,17 +134,15 @@ export async function DELETE(
     }
 
     // Prevent deleting template with assigned partners
-    if (template.partners.length > 0) {
-      const partnerNames = template.partners.map(p => p.name).join(', ');
+    if (template.partners && template.partners.length > 0) {
+      const partnerNames = template.partners.map((p: any) => p.name).join(', ');
       return NextResponse.json(
         { error: `Cannot delete template. It is assigned to: ${partnerNames}` },
         { status: 400 }
       );
     }
 
-    await prisma.emailTemplate.delete({
-      where: { id },
-    });
+    await convexClient.mutation(api.emailTemplates.remove, { id: id as any });
 
     return NextResponse.json({ success: true });
   } catch (error) {

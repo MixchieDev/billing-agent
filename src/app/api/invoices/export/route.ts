@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { generateYtoCsv, InvoiceCsvData } from '@/lib/csv-generator';
 import { format } from 'date-fns';
 
@@ -21,35 +21,30 @@ export async function GET(request: NextRequest) {
     const paidTo = searchParams.get('paidTo');
     const billingEntity = searchParams.get('billingEntity');
 
-    // Build date range filter for paidAt
-    const paidAtFilter: { gte?: Date; lte?: Date } = {};
+    // Fetch paid invoices from Convex
+    const allPaidInvoices = await convexClient.query(api.invoices.list, {
+      status: 'PAID',
+    });
+
+    // Apply client-side filters
+    let invoices = allPaidInvoices;
+
     if (paidFrom) {
-      paidAtFilter.gte = new Date(paidFrom);
+      const paidFromTime = new Date(paidFrom).getTime();
+      invoices = invoices.filter((inv: any) => inv.paidAt && inv.paidAt >= paidFromTime);
     }
     if (paidTo) {
       const endDate = new Date(paidTo);
       endDate.setHours(23, 59, 59, 999);
-      paidAtFilter.lte = endDate;
+      const paidToTime = endDate.getTime();
+      invoices = invoices.filter((inv: any) => inv.paidAt && inv.paidAt <= paidToTime);
+    }
+    if (billingEntity) {
+      invoices = invoices.filter((inv: any) => inv.company?.code === billingEntity);
     }
 
-    // Fetch paid invoices with their line items
-    const invoices = await prisma.invoice.findMany({
-      where: {
-        status: 'PAID',
-        ...(Object.keys(paidAtFilter).length > 0 && { paidAt: paidAtFilter }),
-        ...(billingEntity && { company: { code: billingEntity } }),
-      },
-      include: {
-        company: true,
-        lineItems: {
-          include: {
-            contract: true,
-          },
-        },
-        contracts: true,
-      },
-      orderBy: { paidAt: 'desc' },
-    });
+    // Sort by paidAt descending
+    invoices.sort((a: any, b: any) => (b.paidAt || 0) - (a.paidAt || 0));
 
     if (invoices.length === 0) {
       return NextResponse.json(
@@ -58,8 +53,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // For each invoice, fetch full data (line items, contracts, etc.)
+    const fullInvoices = await Promise.all(
+      invoices.map((inv: any) => convexClient.query(api.invoices.getByIdFull, { id: inv._id as any }))
+    );
+
     // Transform invoices to YTO CSV format
-    const csvData: InvoiceCsvData[] = invoices.map((invoice) => {
+    const csvData: InvoiceCsvData[] = fullInvoices.filter(Boolean).map((invoice: any) => {
       // Get product type from line items or default
       const productType = invoice.lineItems[0]?.description?.includes('Payroll')
         ? 'PAYROLL'
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
 
       // Generate description with period
       const periodMonth = invoice.periodDescription ||
-        format(invoice.statementDate, 'MMMM yyyy');
+        format(new Date(invoice.statementDate), 'MMMM yyyy');
       const description = `${productType.charAt(0) + productType.slice(1).toLowerCase()} Service ftm ${periodMonth}`;
 
       // For consolidated invoices (RCBC), include line items
@@ -87,8 +87,8 @@ export async function GET(request: NextRequest) {
 
       return {
         invoiceNo: '', // Leave blank for YTO to auto-generate
-        statementDate: invoice.statementDate,
-        dueDate: invoice.dueDate,
+        statementDate: new Date(invoice.statementDate),
+        dueDate: new Date(invoice.dueDate),
         customerCode,
         productType,
         description,
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
         withholdingCode: invoice.withholdingCode || undefined,
         remarks: invoice.remarks || `${productType.charAt(0) + productType.slice(1).toLowerCase()} services for ${periodMonth}`,
         lineItems: isConsolidated
-          ? invoice.lineItems.map((item) => ({
+          ? invoice.lineItems.map((item: any) => ({
               endClientName: item.endClientName || undefined,
               employeeCount: item.employeeCount || undefined,
               description: item.description,

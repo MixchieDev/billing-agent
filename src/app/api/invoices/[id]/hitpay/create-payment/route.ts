@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { createPaymentRequest } from '@/lib/hitpay-service';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -23,22 +23,8 @@ export async function POST(
     const { id } = await params;
 
     // Get the invoice
-    const invoice = await prisma.invoice.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        billingNo: true,
-        customerName: true,
-        customerEmail: true,
-        customerEmails: true,
-        status: true,
-        netAmount: true,
-        hitpayPaymentRequests: {
-          where: { status: 'PENDING' },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
-      },
+    const invoice = await convexClient.query(api.invoices.getById, {
+      id: id as any,
     });
 
     if (!invoice) {
@@ -54,10 +40,14 @@ export async function POST(
     }
 
     // Check if there's already a pending payment request
-    const existingRequest = invoice.hitpayPaymentRequests[0];
+    const existingRequests = await convexClient.query(api.hitpayPaymentRequests.getByInvoiceId, {
+      invoiceId: id as any,
+    });
+    const existingRequest = existingRequests.find((r: any) => r.status === 'PENDING');
+
     if (existingRequest) {
       return NextResponse.json({
-        paymentRequestId: existingRequest.id,
+        paymentRequestId: existingRequest._id,
         hitpayRequestId: existingRequest.hitpayRequestId,
         checkoutUrl: existingRequest.checkoutUrl,
         amount: existingRequest.amount,
@@ -72,8 +62,8 @@ export async function POST(
       (invoice.customerEmails ? invoice.customerEmails.split(',')[0].trim() : undefined);
 
     // Create payment request with HitPay
-    const referenceNumber = invoice.billingNo || invoice.id;
-    const redirectUrl = `${APP_URL}/payment/success?invoice=${invoice.id}`;
+    const referenceNumber = invoice.billingNo || invoice._id;
+    const redirectUrl = `${APP_URL}/payment/success?invoice=${invoice._id}`;
 
     const hitpayResponse = await createPaymentRequest({
       amount: Number(invoice.netAmount),
@@ -86,40 +76,36 @@ export async function POST(
     });
 
     // Store the payment request in database
-    const paymentRequest = await prisma.hitpayPaymentRequest.create({
-      data: {
-        invoiceId: invoice.id,
-        hitpayRequestId: hitpayResponse.id,
-        checkoutUrl: hitpayResponse.url,
-        amount: Number(invoice.netAmount),
-        currency: 'PHP',
-        status: 'PENDING',
-      },
+    const paymentRequestId = await convexClient.mutation(api.hitpayPaymentRequests.create, {
+      invoiceId: id as any,
+      hitpayRequestId: hitpayResponse.id,
+      checkoutUrl: hitpayResponse.url,
+      amount: Number(invoice.netAmount),
+      currency: 'PHP',
+      status: 'PENDING',
     });
 
     // Log the action
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'HITPAY_PAYMENT_CREATED',
-        entityType: 'Invoice',
-        entityId: invoice.id,
-        details: {
-          billingNo: invoice.billingNo,
-          hitpayRequestId: hitpayResponse.id,
-          amount: Number(invoice.netAmount),
-          checkoutUrl: hitpayResponse.url,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'HITPAY_PAYMENT_CREATED',
+      entityType: 'Invoice',
+      entityId: invoice._id,
+      details: {
+        billingNo: invoice.billingNo,
+        hitpayRequestId: hitpayResponse.id,
+        amount: Number(invoice.netAmount),
+        checkoutUrl: hitpayResponse.url,
       },
     });
 
     return NextResponse.json({
-      paymentRequestId: paymentRequest.id,
+      paymentRequestId,
       hitpayRequestId: hitpayResponse.id,
       checkoutUrl: hitpayResponse.url,
-      amount: paymentRequest.amount,
-      currency: paymentRequest.currency,
-      status: paymentRequest.status,
+      amount: Number(invoice.netAmount),
+      currency: 'PHP',
+      status: 'PENDING',
     });
   } catch (error) {
     console.error('Error creating HitPay payment request:', error);
@@ -147,10 +133,13 @@ export async function GET(
     const { id } = await params;
 
     // Get the latest payment request for this invoice
-    const paymentRequest = await prisma.hitpayPaymentRequest.findFirst({
-      where: { invoiceId: id },
-      orderBy: { createdAt: 'desc' },
+    const paymentRequests = await convexClient.query(api.hitpayPaymentRequests.getByInvoiceId, {
+      invoiceId: id as any,
     });
+
+    // Sort by createdAt desc and take the latest
+    const sorted = paymentRequests.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+    const paymentRequest = sorted[0];
 
     if (!paymentRequest) {
       return NextResponse.json({
@@ -160,7 +149,7 @@ export async function GET(
     }
 
     return NextResponse.json({
-      paymentRequestId: paymentRequest.id,
+      paymentRequestId: paymentRequest._id,
       hitpayRequestId: paymentRequest.hitpayRequestId,
       checkoutUrl: paymentRequest.checkoutUrl,
       amount: paymentRequest.amount,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 
 // GET - Get single RCBC end-client
 export async function GET(
@@ -16,8 +16,8 @@ export async function GET(
 
     const { id } = await params;
 
-    const client = await prisma.rcbcEndClient.findUnique({
-      where: { id },
+    const client = await convexClient.query(api.rcbcEndClients.getById, {
+      id: id as any,
     });
 
     if (!client) {
@@ -26,6 +26,7 @@ export async function GET(
 
     return NextResponse.json({
       ...client,
+      id: client._id,
       ratePerEmployee: Number(client.ratePerEmployee),
     });
   } catch (error) {
@@ -57,8 +58,8 @@ export async function PATCH(
     const body = await request.json();
 
     // Check if client exists
-    const existingClient = await prisma.rcbcEndClient.findUnique({
-      where: { id },
+    const existingClient = await convexClient.query(api.rcbcEndClients.getById, {
+      id: id as any,
     });
 
     if (!existingClient) {
@@ -75,17 +76,16 @@ export async function PATCH(
 
     // Handle month update (needs to check uniqueness)
     if (body.month !== undefined) {
-      const newMonthDate = new Date(body.month + '-01');
+      const newMonthTimestamp = new Date(body.month + '-01').getTime();
       const newName = body.name !== undefined ? body.name : existingClient.name;
 
       // Check if new name+month combination already exists (excluding current record)
-      const duplicate = await prisma.rcbcEndClient.findFirst({
-        where: {
-          name: newName,
-          month: newMonthDate,
-          id: { not: id },
-        },
+      const clientsForMonth = await convexClient.query(api.rcbcEndClients.list, {
+        month: newMonthTimestamp,
       });
+      const duplicate = clientsForMonth.find(
+        (c: any) => c.name === newName && c._id !== id
+      );
 
       if (duplicate) {
         return NextResponse.json(
@@ -94,31 +94,30 @@ export async function PATCH(
         );
       }
 
-      updateData.month = newMonthDate;
+      updateData.month = newMonthTimestamp;
     }
 
-    const client = await prisma.rcbcEndClient.update({
-      where: { id },
+    const client = await convexClient.mutation(api.rcbcEndClients.update, {
+      id: id as any,
       data: updateData,
     });
 
     // Audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'RCBC_CLIENT_UPDATED',
-        entityType: 'RcbcEndClient',
-        entityId: client.id,
-        details: {
-          clientName: client.name,
-          changes: Object.keys(updateData),
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'RCBC_CLIENT_UPDATED',
+      entityType: 'RcbcEndClient',
+      entityId: id,
+      details: {
+        clientName: client?.name,
+        changes: Object.keys(updateData),
       },
     });
 
     return NextResponse.json({
       ...client,
-      ratePerEmployee: Number(client.ratePerEmployee),
+      id: client?._id,
+      ratePerEmployee: Number(client?.ratePerEmployee),
     });
   } catch (error) {
     console.error('Error updating RCBC client:', error);
@@ -148,28 +147,26 @@ export async function DELETE(
     const { id } = await params;
 
     // Check if client exists
-    const existingClient = await prisma.rcbcEndClient.findUnique({
-      where: { id },
+    const existingClient = await convexClient.query(api.rcbcEndClients.getById, {
+      id: id as any,
     });
 
     if (!existingClient) {
       return NextResponse.json({ error: 'RCBC client not found' }, { status: 404 });
     }
 
-    await prisma.rcbcEndClient.delete({
-      where: { id },
+    await convexClient.mutation(api.rcbcEndClients.remove, {
+      id: id as any,
     });
 
     // Audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'RCBC_CLIENT_DELETED',
-        entityType: 'RcbcEndClient',
-        entityId: id,
-        details: {
-          clientName: existingClient.name,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'RCBC_CLIENT_DELETED',
+      entityType: 'RcbcEndClient',
+      entityId: id,
+      details: {
+        clientName: existingClient.name,
       },
     });
 

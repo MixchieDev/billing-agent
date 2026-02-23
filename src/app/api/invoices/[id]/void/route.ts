@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
-import { InvoiceStatus } from '@/generated/prisma';
+import { convexClient, api } from '@/lib/convex';
+import { InvoiceStatus } from '@/lib/enums';
 
 export async function POST(
   request: NextRequest,
@@ -20,8 +20,8 @@ export async function POST(
     }
 
     // Verify user exists in database
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+    const user = await convexClient.query(api.users.getById, {
+      id: session.user.id as any,
     });
     if (!user) {
       return NextResponse.json(
@@ -42,8 +42,8 @@ export async function POST(
     }
 
     // Get the invoice first to check status
-    const existingInvoice = await prisma.invoice.findUnique({
-      where: { id },
+    const existingInvoice = await convexClient.query(api.invoices.getById, {
+      id: id as any,
     });
 
     if (!existingInvoice) {
@@ -61,41 +61,37 @@ export async function POST(
       );
     }
 
-    // Void the invoice
-    const invoice = await prisma.invoice.update({
-      where: { id },
-      data: {
-        status: InvoiceStatus.VOID,
-        voidedById: session.user.id,
-        voidedAt: new Date(),
-        voidReason: reason,
-      },
+    // Void the invoice using updateStatus
+    const invoice = await convexClient.mutation(api.invoices.updateStatus, {
+      id: id as any,
+      status: InvoiceStatus.VOID,
+      voidedById: session.user.id as any,
+      voidReason: reason,
     });
 
     // Log the action
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'INVOICE_VOIDED',
-        entityType: 'Invoice',
-        entityId: id,
-        details: { invoiceNo: invoice.billingNo, reason },
-      },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'INVOICE_VOIDED',
+      entityType: 'Invoice',
+      entityId: id,
+      details: { invoiceNo: invoice?.billingNo, reason },
     });
 
     // Create notification
-    await prisma.notification.create({
-      data: {
-        type: 'INVOICE_VOID',
-        title: 'Invoice Voided',
-        message: `Invoice ${invoice.billingNo} has been voided by ${session.user.name || 'Unknown'}. Reason: ${reason}`,
-        link: `/dashboard/invoices/${id}`,
-        entityType: 'Invoice',
-        entityId: id,
-      },
+    await convexClient.mutation(api.notifications.create, {
+      type: 'INVOICE_VOID',
+      title: 'Invoice Voided',
+      message: `Invoice ${invoice?.billingNo} has been voided by ${session.user.name || 'Unknown'}. Reason: ${reason}`,
+      link: `/dashboard/invoices/${id}`,
+      entityType: 'Invoice',
+      entityId: id,
     });
 
-    return NextResponse.json(invoice);
+    return NextResponse.json({
+      id: invoice?._id,
+      ...invoice,
+    });
   } catch (error) {
     console.error('Error voiding invoice:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

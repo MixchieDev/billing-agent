@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { rejectInvoice } from '@/lib/billing-service';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { notifyInvoiceRejected } from '@/lib/notifications';
 
 export async function POST(
@@ -21,8 +21,8 @@ export async function POST(
     }
 
     // Verify user exists in database
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+    const user = await convexClient.query(api.users.getById, {
+      id: session.user.id as any,
     });
     if (!user) {
       return NextResponse.json(
@@ -50,14 +50,12 @@ export async function POST(
     );
 
     // Log the action
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'INVOICE_REJECTED',
-        entityType: 'Invoice',
-        entityId: id,
-        details: { invoiceNo: invoice.billingNo, reason, rescheduleDate },
-      },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'INVOICE_REJECTED',
+      entityType: 'Invoice',
+      entityId: id,
+      details: { invoiceNo: invoice.billingNo, reason, rescheduleDate },
     });
 
     // Create notification

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
-import { approveSchedule } from '@/lib/scheduled-billing-service';
-import { NotificationType } from '@/generated/prisma';
+import { convexClient, api } from '@/lib/convex';
+import { NotificationType } from '@/lib/enums';
 
 /**
  * POST /api/scheduled-billings/[id]/approve
@@ -32,15 +31,8 @@ export async function POST(
     const { id } = await params;
 
     // Check if exists and is pending
-    const existing = await prisma.scheduledBilling.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        status: true,
-        createdById: true,
-        contract: { select: { companyName: true } },
-        billingEntity: { select: { code: true } },
-      },
+    const existing = await convexClient.query(api.scheduledBillings.getById, {
+      id: id as any,
     });
 
     if (!existing) {
@@ -54,34 +46,33 @@ export async function POST(
       );
     }
 
-    const scheduledBilling = await approveSchedule(id, user.id);
+    const scheduledBilling = await convexClient.mutation(api.scheduledBillings.approve, {
+      id: id as any,
+      approvedById: user.id as any,
+    });
 
     // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: user.id,
-        action: 'SCHEDULED_BILLING_APPROVED',
-        entityType: 'ScheduledBilling',
-        entityId: id,
-        details: {
-          companyName: existing.contract.companyName,
-          billingEntity: existing.billingEntity.code,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: user.id as any,
+      action: 'SCHEDULED_BILLING_APPROVED',
+      entityType: 'ScheduledBilling',
+      entityId: id,
+      details: {
+        companyName: existing.contract?.companyName,
+        billingEntity: existing.billingEntity?.code,
       },
     });
 
     // Create notification for the creator
     if (existing.createdById) {
-      await prisma.notification.create({
-        data: {
-          userId: existing.createdById,
-          type: NotificationType.SCHEDULE_APPROVED,
-          title: 'Schedule Approved',
-          message: `Your scheduled billing for ${existing.contract.companyName} has been approved`,
-          link: '/scheduled-billings',
-          entityType: 'ScheduledBilling',
-          entityId: id,
-        },
+      await convexClient.mutation(api.notifications.create, {
+        userId: existing.createdById as any,
+        type: NotificationType.SCHEDULE_APPROVED,
+        title: 'Schedule Approved',
+        message: `Your scheduled billing for ${existing.contract?.companyName} has been approved`,
+        link: '/scheduled-billings',
+        entityType: 'ScheduledBilling',
+        entityId: id,
       });
     }
 

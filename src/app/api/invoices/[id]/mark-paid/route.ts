@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { notifyInvoicePaid } from '@/lib/notifications';
 import { notifyNexusPayment } from '@/lib/bridge-nexus-sync';
 
@@ -58,15 +58,8 @@ export async function POST(
     }
 
     // Get the invoice
-    const invoice = await prisma.invoice.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        billingNo: true,
-        customerName: true,
-        status: true,
-        netAmount: true,
-      },
+    const invoice = await convexClient.query(api.invoices.getById, {
+      id: id as any,
     });
 
     if (!invoice) {
@@ -82,10 +75,10 @@ export async function POST(
     }
 
     // Update invoice to PAID status with payment details
-    const paidAt = body.paidAt ? new Date(body.paidAt) : new Date();
+    const paidAt = body.paidAt ? new Date(body.paidAt).getTime() : Date.now();
 
-    const updatedInvoice = await prisma.invoice.update({
-      where: { id },
+    const updatedInvoice = await convexClient.mutation(api.invoices.update, {
+      id: id as any,
       data: {
         status: 'PAID',
         paidAt,
@@ -96,25 +89,23 @@ export async function POST(
     });
 
     // Log the action
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'INVOICE_PAID',
-        entityType: 'Invoice',
-        entityId: id,
-        details: {
-          billingNo: invoice.billingNo,
-          paidAmount: body.paidAmount,
-          paymentMethod: body.paymentMethod,
-          paymentReference: body.paymentReference,
-          paidAt: paidAt.toISOString(),
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'INVOICE_PAID',
+      entityType: 'Invoice',
+      entityId: id,
+      details: {
+        billingNo: invoice.billingNo,
+        paidAmount: body.paidAmount,
+        paymentMethod: body.paymentMethod,
+        paymentReference: body.paymentReference,
+        paidAt: new Date(paidAt).toISOString(),
       },
     });
 
     // Create notification
     await notifyInvoicePaid({
-      id: invoice.id,
+      id: invoice._id,
       billingNo: invoice.billingNo,
       customerName: invoice.customerName,
       paidAmount: body.paidAmount,
@@ -124,7 +115,10 @@ export async function POST(
     // Bridge: Notify Nexus of payment (fire-and-forget)
     notifyNexusPayment(id).catch(() => {});
 
-    return NextResponse.json(updatedInvoice);
+    return NextResponse.json({
+      id: updatedInvoice?._id,
+      ...updatedInvoice,
+    });
   } catch (error) {
     console.error('Error marking invoice as paid:', error);
     return NextResponse.json(

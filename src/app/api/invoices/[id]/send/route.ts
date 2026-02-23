@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { getSOASettings, getInvoiceTemplate, clearTemplateCache } from '@/lib/settings';
 import { generateInvoicePdfLib } from '@/lib/pdf-generator';
 import {
@@ -14,7 +14,7 @@ import {
   EmailPlaceholderData,
   EmailAttachment,
 } from '@/lib/email-service';
-import { InvoiceStatus } from '@/generated/prisma';
+import { InvoiceStatus } from '@/lib/enums';
 import { notifyInvoiceSent } from '@/lib/notifications';
 import { validateEmails, formatCurrency } from '@/lib/utils';
 import { createPaymentRequest } from '@/lib/hitpay-service';
@@ -45,17 +45,8 @@ export async function POST(
       // No body or invalid JSON - default to no payment link
     }
 
-    const invoice = await prisma.invoice.findUnique({
-      where: { id },
-      include: {
-        company: true,
-        lineItems: {
-          include: {
-            contract: true,
-          },
-        },
-        attachments: true,  // Include saved attachments
-      },
+    const invoice = await convexClient.query(api.invoices.getByIdFull, {
+      id: id as any,
     });
 
     if (!invoice) {
@@ -107,15 +98,15 @@ export async function POST(
     const pdfBuffer = Buffer.from(pdfBytes);
 
     // Generate email content using templates
-    const billingNo = invoice.billingNo || invoice.invoiceNo || invoice.id;
+    const billingNo = invoice.billingNo || invoice.invoiceNo || invoice._id;
 
     // Fetch email template based on partner
     const emailTemplate = await getEmailTemplateForPartner(invoice.partnerId);
 
     // Format dates for placeholders
-    const formatDate = (date: Date | null) => {
+    const formatDate = (date: number | null) => {
       if (!date) return 'N/A';
-      return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      return new Date(date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     };
 
     // Get the client company name from the first line item's contract
@@ -127,7 +118,7 @@ export async function POST(
     if (includePaymentLink) {
       try {
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-        const redirectUrl = `${appUrl}/payment/success?invoice=${invoice.id}`;
+        const redirectUrl = `${appUrl}/payment/success?invoice=${invoice._id}`;
 
         const paymentRequest = await createPaymentRequest({
           amount: Number(invoice.netAmount),
@@ -141,15 +132,13 @@ export async function POST(
         });
 
         // Store payment request in database
-        await prisma.hitpayPaymentRequest.create({
-          data: {
-            invoiceId: invoice.id,
-            hitpayRequestId: paymentRequest.id,
-            checkoutUrl: paymentRequest.url,
-            amount: Number(invoice.netAmount),
-            currency: 'PHP',
-            status: 'PENDING',
-          },
+        await convexClient.mutation(api.hitpayPaymentRequests.create, {
+          invoiceId: invoice._id as any,
+          hitpayRequestId: paymentRequest.id,
+          checkoutUrl: paymentRequest.url,
+          amount: Number(invoice.netAmount),
+          currency: 'PHP',
+          status: 'PENDING',
         });
 
         paymentUrl = paymentRequest.url;
@@ -173,11 +162,11 @@ export async function POST(
     };
 
     const subject = generateEmailSubjectFromTemplate(emailTemplate, placeholderData);
-    const body = generateEmailBodyFromTemplate(emailTemplate, placeholderData);
+    const emailBody = generateEmailBodyFromTemplate(emailTemplate, placeholderData);
     const htmlBody = generateEmailHtmlFromTemplate(emailTemplate, placeholderData);
 
     // Convert invoice attachments to email attachments
-    const additionalAttachments: EmailAttachment[] = invoice.attachments.map((att) => ({
+    const additionalAttachments: EmailAttachment[] = (invoice.attachments || []).map((att: any) => ({
       filename: att.filename,
       content: Buffer.from(att.data),
       contentType: att.mimeType,
@@ -185,10 +174,10 @@ export async function POST(
 
     // Send email to all valid recipients
     const result = await sendBillingEmail(
-      invoice.id,
+      invoice._id,
       validEmails,
       subject,
-      body,
+      emailBody,
       htmlBody,
       pdfBuffer,
       `${billingNo}.pdf`,
@@ -203,34 +192,30 @@ export async function POST(
     }
 
     // Update invoice status to SENT
-    await prisma.invoice.update({
-      where: { id },
-      data: {
-        status: InvoiceStatus.SENT,
-      },
+    await convexClient.mutation(api.invoices.updateStatus, {
+      id: id as any,
+      status: InvoiceStatus.SENT,
     });
 
     // Log the action
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'INVOICE_SENT',
-        entityType: 'Invoice',
-        entityId: id,
-        details: {
-          invoiceNo: billingNo,
-          sentTo: validEmails.join(', '),
-          messageId: result.messageId,
-          attachmentCount: additionalAttachments.length,
-          includePaymentLink,
-          paymentUrl: paymentUrl || null,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'INVOICE_SENT',
+      entityType: 'Invoice',
+      entityId: id,
+      details: {
+        invoiceNo: billingNo,
+        sentTo: validEmails.join(', '),
+        messageId: result.messageId,
+        attachmentCount: additionalAttachments.length,
+        includePaymentLink,
+        paymentUrl: paymentUrl || null,
       },
     });
 
     // Create notification
     await notifyInvoiceSent({
-      id: invoice.id,
+      id: invoice._id,
       billingNo: invoice.billingNo,
       customerName: invoice.customerName,
       customerEmail: validEmails[0],  // Use first email for notification

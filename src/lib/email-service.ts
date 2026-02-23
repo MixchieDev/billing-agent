@@ -1,7 +1,6 @@
 // Email service using Google Workspace SMTP
 import nodemailer from 'nodemailer';
-import prisma from './prisma';
-import { EmailStatus } from '@/generated/prisma';
+import { convexClient, api } from '@/lib/convex';
 
 // Email configuration
 interface EmailConfig {
@@ -120,10 +119,7 @@ export async function getEmailTemplateForPartner(partnerId: string | null): Prom
   try {
     // If partner has a template assigned, use it
     if (partnerId) {
-      const partner = await prisma.partner.findUnique({
-        where: { id: partnerId },
-        include: { emailTemplate: true },
-      });
+      const partner = await convexClient.query(api.partners.getWithEmailTemplate, { id: partnerId as any });
 
       if (partner?.emailTemplate) {
         return partner.emailTemplate;
@@ -131,9 +127,7 @@ export async function getEmailTemplateForPartner(partnerId: string | null): Prom
     }
 
     // Fall back to default template
-    const defaultTemplate = await prisma.emailTemplate.findFirst({
-      where: { isDefault: true },
-    });
+    const defaultTemplate = await convexClient.query(api.emailTemplates.getDefault, {});
 
     return defaultTemplate;
   } catch (error) {
@@ -146,12 +140,7 @@ export async function getEmailTemplateForPartner(partnerId: string | null): Prom
 export async function getFollowUpTemplate(level: number): Promise<EmailTemplateContent | null> {
   try {
     // Find follow-up template for this level
-    const template = await prisma.emailTemplate.findFirst({
-      where: {
-        templateType: 'FOLLOW_UP',
-        followUpLevel: level,
-      },
-    });
+    const template = await convexClient.query(api.emailTemplates.getFollowUpByLevel, { level });
 
     return template;
   } catch (error) {
@@ -358,13 +347,11 @@ export async function sendBillingEmail(
   const emailString = Array.isArray(toEmails) ? toEmails.join(', ') : toEmails;
 
   // Log the email attempt (store all recipients)
-  const emailLog = await prisma.emailLog.create({
-    data: {
-      invoiceId,
-      toEmail: emailString,
-      subject,
-      status: EmailStatus.QUEUED,
-    },
+  const emailLogId = await convexClient.mutation(api.emailLogs.create, {
+    invoiceId: invoiceId as any,
+    toEmail: emailString,
+    subject,
+    status: 'QUEUED',
   });
 
   try {
@@ -422,21 +409,21 @@ export async function sendBillingEmail(
     console.log('[Email Service] Email sent successfully:', messageId);
 
     // Update email log
-    await prisma.emailLog.update({
-      where: { id: emailLog.id },
+    await convexClient.mutation(api.emailLogs.update, {
+      id: emailLogId,
       data: {
-        status: EmailStatus.SENT,
-        sendGridId: messageId, // Reusing field for message ID
-        sentAt: new Date(),
+        status: 'SENT',
+        sendGridId: messageId,
+        sentAt: Date.now(),
       },
     });
 
     // Update invoice email status
-    await prisma.invoice.update({
-      where: { id: invoiceId },
+    await convexClient.mutation(api.invoices.update, {
+      id: invoiceId as any,
       data: {
-        emailStatus: EmailStatus.SENT,
-        emailSentAt: new Date(),
+        emailStatus: 'SENT',
+        emailSentAt: Date.now(),
       },
     });
 
@@ -446,19 +433,19 @@ export async function sendBillingEmail(
     console.error('[Email Service] Failed to send email:', errorMessage);
 
     // Update email log with error
-    await prisma.emailLog.update({
-      where: { id: emailLog.id },
+    await convexClient.mutation(api.emailLogs.update, {
+      id: emailLogId,
       data: {
-        status: EmailStatus.FAILED,
+        status: 'FAILED',
         error: errorMessage,
       },
     });
 
     // Update invoice email status
-    await prisma.invoice.update({
-      where: { id: invoiceId },
+    await convexClient.mutation(api.invoices.update, {
+      id: invoiceId as any,
       data: {
-        emailStatus: EmailStatus.FAILED,
+        emailStatus: 'FAILED',
         emailError: errorMessage,
       },
     });
@@ -503,15 +490,7 @@ export async function sendTestEmail(toEmail: string): Promise<{ success: boolean
 
 // Retry failed emails
 export async function retryFailedEmails(maxRetries: number = 3): Promise<number> {
-  const failedEmails = await prisma.emailLog.findMany({
-    where: {
-      status: EmailStatus.FAILED,
-    },
-    include: {
-      invoice: true,
-    },
-    take: 10, // Process in batches
-  });
+  const failedEmails = await convexClient.query(api.emailLogs.getFailedWithInvoices, {});
 
   let retried = 0;
 

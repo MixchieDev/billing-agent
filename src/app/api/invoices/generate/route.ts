@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { convexClient, api } from '@/lib/convex';
 import { generateInvoice, GenerateInvoiceRequest } from '@/lib/invoice-generator';
 import { autoSendInvoice } from '@/lib/auto-send';
-import { VatType } from '@/generated/prisma';
+import { VatType } from '@/lib/enums';
 
 /**
  * POST /api/invoices/generate
@@ -47,8 +47,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if billing entity exists
-    const billingEntity = await prisma.company.findUnique({
-      where: { id: body.billingEntityId },
+    const billingEntity = await convexClient.query(api.companies.getById, {
+      id: body.billingEntityId as any,
     });
 
     if (!billingEntity) {
@@ -57,8 +57,8 @@ export async function POST(request: NextRequest) {
 
     // If contractId provided, check if contract exists
     if (body.contractId) {
-      const contract = await prisma.contract.findUnique({
-        where: { id: body.contractId },
+      const contract = await convexClient.query(api.contracts.getById, {
+        id: body.contractId as any,
       });
 
       if (!contract) {
@@ -109,20 +109,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: (session.user as { id: string }).id,
-        action: 'INVOICE_GENERATED_ADHOC',
-        entityType: 'Invoice',
-        entityId: result.invoice.id,
-        details: {
-          billingNo: result.invoice.billingNo,
-          customerName: result.invoice.customerName,
-          amount: result.invoice.netAmount,
-          autoApproved: result.autoApproved,
-          emailSent,
-          source: body.contractId ? 'contract' : 'custom',
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: (session.user as { id: string }).id as any,
+      action: 'INVOICE_GENERATED_ADHOC',
+      entityType: 'Invoice',
+      entityId: result.invoice.id,
+      details: {
+        billingNo: result.invoice.billingNo,
+        customerName: result.invoice.customerName,
+        amount: result.invoice.netAmount,
+        autoApproved: result.autoApproved,
+        emailSent,
+        source: body.contractId ? 'contract' : 'custom',
       },
     });
 

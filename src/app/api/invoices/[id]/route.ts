@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
-import { InvoiceStatus } from '@/generated/prisma';
+import { convexClient, api } from '@/lib/convex';
+import { InvoiceStatus } from '@/lib/enums';
 
 // GET single invoice
 export async function GET(
@@ -17,25 +17,17 @@ export async function GET(
 
     const { id } = await params;
 
-    const invoice = await prisma.invoice.findUnique({
-      where: { id },
-      include: {
-        company: true,
-        partner: true,
-        lineItems: true,
-        contracts: {
-          include: {
-            partner: true,
-          },
-        },
-      },
-    });
+    const invoice = await convexClient.query(api.invoices.getByIdFull, { id: id as any });
 
     if (!invoice) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
-    return NextResponse.json(invoice);
+    // Map _id to id for response
+    return NextResponse.json({
+      id: invoice._id,
+      ...invoice,
+    });
   } catch (error: any) {
     console.error('Error fetching invoice:', error);
     return NextResponse.json(
@@ -65,9 +57,7 @@ export async function PUT(
     const body = await request.json();
 
     // Get existing invoice
-    const existingInvoice = await prisma.invoice.findUnique({
-      where: { id },
-    });
+    const existingInvoice = await convexClient.query(api.invoices.getById, { id: id as any });
 
     if (!existingInvoice) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
@@ -100,30 +90,29 @@ export async function PUT(
     if (customerEmails !== undefined) updateData.customerEmails = customerEmails;
     if (partnerId !== undefined) updateData.partnerId = partnerId;
 
-    const updatedInvoice = await prisma.invoice.update({
-      where: { id },
+    const updatedInvoice = await convexClient.mutation(api.invoices.update, {
+      id: id as any,
       data: updateData,
-      include: {
-        company: true,
-        partner: true,
-        lineItems: true,
-      },
     });
 
     // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'INVOICE_UPDATED',
-        entityType: 'Invoice',
-        entityId: id,
-        details: {
-          updates: updateData,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: session.user.id as any,
+      action: 'INVOICE_UPDATED',
+      entityType: 'Invoice',
+      entityId: id,
+      details: {
+        updates: updateData,
       },
     });
 
-    return NextResponse.json(updatedInvoice);
+    // Fetch updated invoice with relations
+    const fullInvoice = await convexClient.query(api.invoices.getByIdFull, { id: id as any });
+
+    return NextResponse.json({
+      id: fullInvoice?._id,
+      ...fullInvoice,
+    });
   } catch (error) {
     console.error('Error updating invoice:', error);
     return NextResponse.json(

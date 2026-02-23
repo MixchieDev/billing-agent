@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
-import { ScheduleStatus } from '@/generated/prisma';
-import {
-  createScheduledBilling,
-  listScheduledBillings,
-  getScheduledBillingStats,
-  CreateScheduledBillingInput,
-} from '@/lib/scheduled-billing-service';
+import { convexClient, api } from '@/lib/convex';
+import { ScheduleStatus } from '@/lib/enums';
 
 /**
  * GET /api/scheduled-billings
@@ -45,45 +39,52 @@ export async function GET(request: NextRequest) {
       // Fallback for serverless - scheduler doesn't run there anyway
     }
 
-    // Get recent job runs (last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const jobRuns = await prisma.jobRun.findMany({
-      where: {
-        createdAt: {
-          gte: thirtyDaysAgo,
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: 50,
-    });
+    // Get recent job runs (last 50)
+    const jobRuns = await convexClient.query(api.jobRuns.list, { limit: 50 });
 
     // Get scheduled billings with filters
-    const scheduledBillings = await listScheduledBillings({
-      ...(status && { status }),
-      ...(billingEntityId && { billingEntityId }),
-      ...(contractId && { contractId }),
+    const sbResult = await convexClient.query(api.scheduledBillings.list, {
+      ...(status ? { status } : {}),
+      ...(billingEntityId ? { billingEntityId: billingEntityId as any } : {}),
     });
 
+    let scheduledBillings = sbResult.items || [];
+
+    // Filter by contractId client-side if needed
+    if (contractId) {
+      scheduledBillings = scheduledBillings.filter((sb: any) => sb.contractId === contractId);
+    }
+
     // Get stats
-    const stats = await getScheduledBillingStats();
+    const [totalActive, totalPaused, totalPending, totalEnded] = await Promise.all([
+      convexClient.query(api.scheduledBillings.count, { status: 'ACTIVE' }),
+      convexClient.query(api.scheduledBillings.count, { status: 'PAUSED' }),
+      convexClient.query(api.scheduledBillings.count, { status: 'PENDING' }),
+      convexClient.query(api.scheduledBillings.count, { status: 'ENDED' }),
+    ]);
+
+    const stats = {
+      active: totalActive,
+      paused: totalPaused,
+      pending: totalPending,
+      ended: totalEnded,
+      total: totalActive + totalPaused + totalPending + totalEnded,
+      dueThisWeek: 0,
+    };
 
     // Get last successful run
-    const lastSuccessfulRun = jobRuns.find((run) => run.status === 'COMPLETED');
+    const lastSuccessfulRun = jobRuns.find((run: any) => run.status === 'COMPLETED');
 
     // Calculate next run time (approximate based on cron)
     const nextRunTime = calculateNextRun(schedulerStatus.config.cronExpression);
 
     // Transform scheduled billings for response
-    const formattedBillings = scheduledBillings.map((sb) => ({
-      id: sb.id,
+    const formattedBillings = scheduledBillings.map((sb: any) => ({
+      id: sb._id,
       contractId: sb.contractId,
-      companyName: sb.contract.companyName,
-      productType: sb.contract.productType,
-      email: sb.contract.email,
+      companyName: sb.contract?.companyName,
+      productType: sb.contract?.productType,
+      email: sb.contract?.email,
       billingAmount: Number(sb.billingAmount),
       description: sb.description,
       frequency: sb.frequency,
@@ -99,7 +100,7 @@ export async function GET(request: NextRequest) {
       hasWithholding: sb.hasWithholding,
       remarks: sb.remarks,
       billingEntity: sb.billingEntity,
-      runCount: sb._count.runs,
+      runCount: 0,
       createdAt: sb.createdAt,
       updatedAt: sb.updatedAt,
       // Custom frequency fields
@@ -124,10 +125,10 @@ export async function GET(request: NextRequest) {
         alreadyInvoiced: 0,
         pendingGeneration: stats.dueThisWeek,
         willAutoSend: 0,
-        requiresApproval: stats.pending,  // Schedules pending approval
+        requiresApproval: stats.pending,
       },
-      jobRuns: jobRuns.map((run) => ({
-        id: run.id,
+      jobRuns: jobRuns.map((run: any) => ({
+        id: run._id,
         jobName: run.jobName,
         startedAt: run.startedAt,
         completedAt: run.completedAt,
@@ -176,8 +177,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if contract exists
-    const contract = await prisma.contract.findUnique({
-      where: { id: body.contractId },
+    const contract = await convexClient.query(api.contracts.getById, {
+      id: body.contractId as any,
     });
 
     if (!contract) {
@@ -185,8 +186,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if billing entity exists
-    const billingEntity = await prisma.company.findUnique({
-      where: { id: body.billingEntityId },
+    const billingEntity = await convexClient.query(api.companies.getById, {
+      id: body.billingEntityId as any,
     });
 
     if (!billingEntity) {
@@ -203,44 +204,44 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const input: CreateScheduledBillingInput = {
-      contractId: body.contractId,
-      billingEntityId: body.billingEntityId,
-      billingAmount: body.billingAmount,
-      vatType: body.vatType,
-      hasWithholding: body.hasWithholding,
-      withholdingRate: body.withholdingRate,
-      description: body.description,
-      frequency: body.frequency,
-      billingDayOfMonth: body.billingDayOfMonth,
-      dueDayOfMonth: body.dueDayOfMonth,
-      startDate: body.startDate ? new Date(body.startDate) : undefined,
-      endDate: body.endDate ? new Date(body.endDate) : undefined,
-      autoApprove: body.autoApprove,
-      autoSendEnabled: body.autoSendEnabled,
-      remarks: body.remarks,
-      // Custom frequency fields
-      customIntervalValue: body.customIntervalValue,
-      customIntervalUnit: body.customIntervalUnit,
-      // Track creator
-      createdById: (session.user as { id: string }).id,
-    };
+    const scheduledBillingId = await convexClient.mutation(api.scheduledBillings.create, {
+      data: {
+        contractId: body.contractId,
+        billingEntityId: body.billingEntityId,
+        billingAmount: body.billingAmount,
+        vatType: body.vatType,
+        hasWithholding: body.hasWithholding,
+        withholdingRate: body.withholdingRate,
+        description: body.description,
+        frequency: body.frequency || 'MONTHLY',
+        billingDayOfMonth: body.billingDayOfMonth,
+        dueDayOfMonth: body.dueDayOfMonth,
+        startDate: body.startDate ? new Date(body.startDate).getTime() : undefined,
+        endDate: body.endDate ? new Date(body.endDate).getTime() : undefined,
+        autoApprove: body.autoApprove,
+        autoSendEnabled: body.autoSendEnabled,
+        remarks: body.remarks,
+        customIntervalValue: body.customIntervalValue,
+        customIntervalUnit: body.customIntervalUnit,
+        createdById: (session.user as { id: string }).id,
+      },
+    });
 
-    const scheduledBilling = await createScheduledBilling(input);
+    const scheduledBilling = await convexClient.query(api.scheduledBillings.getById, {
+      id: scheduledBillingId,
+    });
 
     // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: (session.user as { id: string }).id,
-        action: 'SCHEDULED_BILLING_CREATED',
-        entityType: 'ScheduledBilling',
-        entityId: scheduledBilling.id,
-        details: {
-          contractId: body.contractId,
-          billingAmount: body.billingAmount,
-          frequency: body.frequency || 'MONTHLY',
-          billingDayOfMonth: body.billingDayOfMonth,
-        },
+    await convexClient.mutation(api.auditLogs.create, {
+      userId: (session.user as { id: string }).id as any,
+      action: 'SCHEDULED_BILLING_CREATED',
+      entityType: 'ScheduledBilling',
+      entityId: scheduledBillingId,
+      details: {
+        contractId: body.contractId,
+        billingAmount: body.billingAmount,
+        frequency: body.frequency || 'MONTHLY',
+        billingDayOfMonth: body.billingDayOfMonth,
       },
     });
 

@@ -1,14 +1,12 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { Prisma } from '@/generated/prisma';
-type Decimal = Prisma.Decimal;
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 // Currency formatting for Philippine Peso
-export function formatCurrency(amount: number | Decimal | null | undefined): string {
+export function formatCurrency(amount: number | null | undefined): string {
   if (amount === null || amount === undefined) return 'P 0.00';
   const num = typeof amount === 'number' ? amount : Number(amount);
   return `P ${num.toLocaleString('en-PH', {
