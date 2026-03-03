@@ -336,7 +336,7 @@ export function InvoiceGenerator() {
         sendImmediately: autoApprove && sendImmediately,
         description: singleItemDescription,
         remarks: remarks || undefined,
-        lineItems: allLineItems.length > 1 || validCustomItems.length > 0
+        lineItems: allLineItems.length > 1 || validCustomItems.length > 0 || allLineItems.some(i => i.discountType)
           ? allLineItems
           : undefined,
         periodStart: periodItems.length > 0 ? billingPeriods[0]?.startDate.toISOString() : undefined,
