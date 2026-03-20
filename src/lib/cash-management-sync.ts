@@ -1,6 +1,6 @@
 import type { Contract, Company, Partner } from '@/generated/prisma';
 
-const SYNC_URL = 'https://intent-yak-558.convex.cloud';
+const SYNC_URL = 'https://intent-yak-558.convex.site';
 
 type ContractWithRelations = Contract & {
   billingEntity: Company;
