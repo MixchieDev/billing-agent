@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { ContractStatus, VatType, BillingType } from '@/generated/prisma';
+import { syncContractToCashManagement } from '@/lib/cash-management-sync';
 
 // GET single contract
 export async function GET(
@@ -121,6 +122,9 @@ export async function PATCH(
         },
       },
     });
+
+    // Fire-and-forget sync to cash management
+    syncContractToCashManagement(contract);
 
     return NextResponse.json(contract);
   } catch (error) {
@@ -267,6 +271,9 @@ export async function PUT(
         },
       },
     });
+
+    // Fire-and-forget sync to cash management
+    syncContractToCashManagement(contract);
 
     return NextResponse.json(contract);
   } catch (error) {

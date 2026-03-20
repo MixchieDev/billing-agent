@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 import { parseContractsCSV, generateContractsTemplate, ContractCSVRow } from '@/lib/csv-parser';
 import { ContractStatus, VatType, BillingType } from '@/generated/prisma';
 import { getProductTypes } from '@/lib/settings';
+import { syncContractsBatchToCashManagement } from '@/lib/cash-management-sync';
 
 // GET - Download template
 export async function GET() {
@@ -332,6 +333,32 @@ async function executeImport(
         parseErrors,
       }, { status: 500 });
     }
+  }
+
+  // Fire-and-forget sync imported contracts to cash management
+  if (results.created > 0 || results.updated > 0) {
+    const contractIds = validatedRows
+      .filter((r) => r.action !== 'skip')
+      .map((r) => r._existingContractId || r.customerNumberToAssign)
+      .filter(Boolean);
+
+    // Fetch the actual contracts with relations for syncing
+    const companyIds = [...new Set(validatedRows.filter((r) => r._companyId).map((r) => r._companyId!))];
+    prisma.contract.findMany({
+      where: {
+        OR: [
+          ...(contractIds.filter((id) => id && !id.includes('-')).length > 0
+            ? [{ id: { in: contractIds.filter((id) => id && !id.includes('-')) as string[] } }]
+            : []),
+          ...(contractIds.filter((id) => id && id.includes('-')).length > 0
+            ? [{ customerNumber: { in: contractIds.filter((id) => id && id.includes('-')) as string[] } }]
+            : []),
+        ],
+      },
+      include: { billingEntity: true, partner: true },
+    })
+      .then((contracts) => syncContractsBatchToCashManagement(contracts))
+      .catch((err) => console.error('[cash-mgmt-sync] Failed to fetch contracts for batch sync:', err));
   }
 
   // Audit log
