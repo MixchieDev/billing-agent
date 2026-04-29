@@ -20,9 +20,11 @@ const defaultConfig: SWRConfiguration = {
 };
 
 // Hook for fetching invoices
-export function useInvoices(status?: string, options?: SWRConfiguration) {
+export function useInvoices(status?: string, page?: number, limit?: number, options?: SWRConfiguration) {
   const params = new URLSearchParams();
   if (status) params.set('status', status);
+  if (page) params.set('page', String(page));
+  if (limit) params.set('limit', String(limit));
   const url = `/api/invoices${params.toString() ? `?${params.toString()}` : ''}`;
 
   return useSWR(url, fetcher, { ...defaultConfig, ...options });

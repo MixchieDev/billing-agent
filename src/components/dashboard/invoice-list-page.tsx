@@ -7,7 +7,7 @@ import { MarkPaidModal, InvoiceForPayment } from '@/components/dashboard/mark-pa
 import { InvoiceEditModal } from '@/components/dashboard/invoice-edit-modal';
 import { InvoiceAuditLogModal } from '@/components/dashboard/invoice-audit-log-modal';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Loader2, Search, X } from 'lucide-react';
+import { RefreshCw, Loader2, Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useInvoices } from '@/lib/hooks/use-api';
 
 interface InvoiceListPageProps {
@@ -27,10 +27,20 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
   const [entityFilter, setEntityFilter] = useState<'ALL' | 'YOWI' | 'ABBA'>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
+
   // Use SWR for data fetching with caching
   const { data: invoicesData, error: invoicesError, isLoading, mutate } = useInvoices(
-    status && !showAllStatuses ? status : undefined
+    status && !showAllStatuses ? status : undefined,
+    currentPage,
+    pageSize,
   );
+
+  // Pagination info from API
+  const totalInvoices = invoicesData?.total ?? 0;
+  const totalPages = invoicesData?.totalPages ?? 1;
 
   // Transform invoices data
   const invoices: InvoiceRow[] = useMemo(() => {
@@ -88,6 +98,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
     setSearchQuery('');
     setEntityFilter('ALL');
     setStatusFilter('ALL');
+    setCurrentPage(1);
   };
 
   // Refresh data using SWR mutate
@@ -280,7 +291,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
             {title}
             {loading && <Loader2 className="ml-2 inline h-4 w-4 animate-spin" />}
             <span className="ml-2 text-sm font-normal text-gray-500">
-              ({filteredInvoices.length}{hasActiveFilters ? ` of ${invoices.length}` : ''} invoice{filteredInvoices.length !== 1 ? 's' : ''})
+              ({filteredInvoices.length} of {totalInvoices} invoice{totalInvoices !== 1 ? 's' : ''})
             </span>
           </h2>
           <Button variant="outline" onClick={refreshData} disabled={loading}>
@@ -377,6 +388,38 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
             <button onClick={clearFilters} className="text-blue-600 hover:underline">
               Clear filters
             </button>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t pt-4">
+            <p className="text-sm text-gray-500">
+              Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalInvoices)} of {totalInvoices}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1 || loading}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </Button>
+              <span className="text-sm text-gray-700">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages || loading}
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
       </div>
