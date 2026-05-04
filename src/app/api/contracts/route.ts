@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const billingEntity = searchParams.get('billingEntity');
     const productType = searchParams.get('productType');
+    const search = searchParams.get('search');
 
     // Pagination params
     const page = parseInt(searchParams.get('page') || '1');
@@ -24,10 +25,17 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     // Build where clause
-    const where = {
+    const where: any = {
       ...(status && { status: status as any }),
       ...(billingEntity && { billingEntity: { code: billingEntity } }),
       ...(productType && { productType: productType as any }),
+      ...(search && {
+        OR: [
+          { companyName: { contains: search, mode: 'insensitive' } },
+          { customerNumber: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+        ],
+      }),
     };
 
     // Check if minimal fields requested (for dropdowns/selects)

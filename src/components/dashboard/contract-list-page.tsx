@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from '@/components/dashboard/header';
 import { ContractTable, ContractRow } from '@/components/dashboard/contract-table';
 import { ContractFormModal } from '@/components/dashboard/contract-form-modal';
 import { CSVImportModal } from '@/components/dashboard/csv-import-modal';
 import { DeleteConfirmationModal } from '@/components/dashboard/delete-confirmation-modal';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Loader2, Upload, Plus } from 'lucide-react';
+import { RefreshCw, Loader2, Upload, Plus, Search, X } from 'lucide-react';
 import { useProductTypes } from '@/lib/hooks/use-api';
 
 interface Partner {
@@ -44,10 +44,24 @@ export function ContractListPage() {
   const [selectedContract, setSelectedContract] = useState<any>(null);
   const [contractToDelete, setContractToDelete] = useState<ContractRow | null>(null);
 
+  // Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const debounceRef = useRef<NodeJS.Timeout>();
+
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [billingEntityFilter, setBillingEntityFilter] = useState<string>('');
   const [productTypeFilter, setProductTypeFilter] = useState<string>('');
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(value);
+      setPage(1);
+    }, 300);
+  };
 
   const fetchContracts = useCallback(async () => {
     try {
@@ -57,6 +71,7 @@ export function ContractListPage() {
       const params = new URLSearchParams();
       params.set('page', String(page));
       params.set('limit', String(limit));
+      if (debouncedSearch) params.set('search', debouncedSearch);
       if (statusFilter) params.set('status', statusFilter);
       if (billingEntityFilter) params.set('billingEntity', billingEntityFilter);
       if (productTypeFilter) params.set('productType', productTypeFilter);
@@ -99,7 +114,7 @@ export function ContractListPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, billingEntityFilter, productTypeFilter, page]);
+  }, [statusFilter, billingEntityFilter, productTypeFilter, debouncedSearch, page]);
 
   const fetchPartnersAndCompanies = async () => {
     try {
@@ -187,6 +202,26 @@ export function ContractListPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search contracts..."
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="h-9 w-56 rounded-md border border-gray-300 bg-white pl-8 pr-8 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => handleSearchChange('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
             {/* Filters */}
             <select
               value={statusFilter}
