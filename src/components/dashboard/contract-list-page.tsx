@@ -32,18 +32,49 @@ interface Company {
   name: string;
 }
 
-export function ContractListPage() {
-  const [contracts, setContracts] = useState<ContractRow[]>([]);
-  const [partners, setPartners] = useState<Partner[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [loading, setLoading] = useState(true);
+// Server-side initial data shape (Dates come over the wire as ISO strings).
+export interface ContractInitialData {
+  contracts: Array<Omit<ContractRow, 'nextDueDate' | 'contractEndDate' | 'billingEntity'> & {
+    nextDueDate: string | null;
+    contractEndDate: string | null;
+    billingEntity: string;
+  }>;
+  total: number;
+  totalPages: number;
+  partners: Partner[];
+  companies: Company[];
+  productTypes: { value: string; label: string }[];
+}
+
+interface ContractListPageProps {
+  initialData?: ContractInitialData;
+}
+
+function hydrateContracts(rows: ContractInitialData['contracts']): ContractRow[] {
+  return rows.map((c) => ({
+    ...c,
+    nextDueDate: c.nextDueDate ? new Date(c.nextDueDate) : null,
+    contractEndDate: c.contractEndDate ? new Date(c.contractEndDate) : null,
+    billingEntity: (c.billingEntity as 'YOWI' | 'ABBA') || 'YOWI',
+  }));
+}
+
+export function ContractListPage({ initialData }: ContractListPageProps = {}) {
+  const [contracts, setContracts] = useState<ContractRow[]>(
+    initialData ? hydrateContracts(initialData.contracts) : []
+  );
+  const [partners, setPartners] = useState<Partner[]>(initialData?.partners ?? []);
+  const [companies, setCompanies] = useState<Company[]>(initialData?.companies ?? []);
+  const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
-  const { data: productTypes } = useProductTypes();
+  const { data: productTypes } = useProductTypes(
+    initialData ? { fallbackData: initialData.productTypes } : undefined
+  );
 
   // Pagination
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(initialData?.totalPages ?? 1);
+  const [total, setTotal] = useState(initialData?.total ?? 0);
   const limit = 50;
 
   // Modal states
@@ -146,10 +177,26 @@ export function ContractListPage() {
     }
   };
 
+  // Skip the initial fetch when the server already seeded us with data —
+  // otherwise we'd re-fetch identical data on mount.
+  const hasInitialData = useRef(!!initialData);
+
   useEffect(() => {
+    if (hasInitialData.current) {
+      hasInitialData.current = false;
+      return;
+    }
     fetchContracts();
-    fetchPartnersAndCompanies();
   }, [fetchContracts]);
+
+  // Partners / companies only need to be fetched if we didn't get them
+  // from the server (e.g. legacy callers without initialData).
+  useEffect(() => {
+    if (!initialData) {
+      fetchPartnersAndCompanies();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleNewContract = () => {
     setSelectedContract(null);
