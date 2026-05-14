@@ -441,20 +441,24 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
         onSave={handleSavePayment}
       />
 
-      {/* Invoice Edit Modal */}
-      <InvoiceEditModal
-        invoiceId={editingInvoiceId}
-        isOpen={!!editingInvoiceId}
-        onClose={() => setEditingInvoiceId(null)}
-        onSave={refreshData}
-      />
+      {/* Invoice Edit Modal — only mount when open so dynamic chunk loads on demand */}
+      {editingInvoiceId && (
+        <InvoiceEditModal
+          invoiceId={editingInvoiceId}
+          isOpen={!!editingInvoiceId}
+          onClose={() => setEditingInvoiceId(null)}
+          onSave={refreshData}
+        />
+      )}
 
-      {/* Invoice Audit Log Modal */}
-      <InvoiceAuditLogModal
-        invoice={selectedInvoiceForHistory}
-        isOpen={!!selectedInvoiceForHistory}
-        onClose={() => setSelectedInvoiceForHistory(null)}
-      />
+      {/* Invoice Audit Log Modal — only mount when open so dynamic chunk loads on demand */}
+      {selectedInvoiceForHistory && (
+        <InvoiceAuditLogModal
+          invoice={selectedInvoiceForHistory}
+          isOpen={!!selectedInvoiceForHistory}
+          onClose={() => setSelectedInvoiceForHistory(null)}
+        />
+      )}
     </div>
   );
 }

@@ -350,29 +350,33 @@ export function ContractListPage() {
         )}
       </div>
 
-      {/* Contract Form Modal */}
-      <ContractFormModal
-        isOpen={showFormModal}
-        onClose={() => {
-          setShowFormModal(false);
-          setSelectedContract(null);
-        }}
-        onSave={() => {
-          fetchContracts();
-        }}
-        contract={selectedContract}
-        partners={partners}
-        companies={companies}
-      />
+      {/* Contract Form Modal — only mount when open so dynamic chunk loads on demand */}
+      {showFormModal && (
+        <ContractFormModal
+          isOpen={showFormModal}
+          onClose={() => {
+            setShowFormModal(false);
+            setSelectedContract(null);
+          }}
+          onSave={() => {
+            fetchContracts();
+          }}
+          contract={selectedContract}
+          partners={partners}
+          companies={companies}
+        />
+      )}
 
-      {/* CSV Import Modal */}
-      <CSVImportModal
-        isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
-        onImportComplete={fetchContracts}
-        importType="contracts"
-        title="Import Contracts"
-      />
+      {/* CSV Import Modal — only mount when open so dynamic chunk loads on demand */}
+      {showImportModal && (
+        <CSVImportModal
+          isOpen={showImportModal}
+          onClose={() => setShowImportModal(false)}
+          onImportComplete={fetchContracts}
+          importType="contracts"
+          title="Import Contracts"
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
       <DeleteConfirmationModal

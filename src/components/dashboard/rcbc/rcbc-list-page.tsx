@@ -517,7 +517,8 @@ export function RcbcListPage() {
         defaultMonth={selectedMonth}
       />
 
-      {/* CSV Import Modal */}
+      {/* CSV Import Modal — only mount when open so dynamic chunk loads on demand */}
+      {showImportModal && (
       <CSVImportModal
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
@@ -529,6 +530,7 @@ export function RcbcListPage() {
         importType="rcbc-clients"
         title="Import RCBC Clients"
       />
+      )}
 
       {/* Delete Confirmation Modal */}
       <DeleteConfirmationModal
