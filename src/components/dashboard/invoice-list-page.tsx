@@ -1,11 +1,20 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { Header } from '@/components/dashboard/header';
 import { InvoiceTable, InvoiceRow } from '@/components/dashboard/invoice-table';
 import { MarkPaidModal, InvoiceForPayment } from '@/components/dashboard/mark-paid-modal';
-import { InvoiceEditModal } from '@/components/dashboard/invoice-edit-modal';
-import { InvoiceAuditLogModal } from '@/components/dashboard/invoice-audit-log-modal';
+
+// Lazy-load heavy modals (only mounted when opened).
+const InvoiceEditModal = dynamic(
+  () => import('@/components/dashboard/invoice-edit-modal').then((m) => m.InvoiceEditModal),
+  { ssr: false }
+);
+const InvoiceAuditLogModal = dynamic(
+  () => import('@/components/dashboard/invoice-audit-log-modal').then((m) => m.InvoiceAuditLogModal),
+  { ssr: false }
+);
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Loader2, Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useInvoices } from '@/lib/hooks/use-api';

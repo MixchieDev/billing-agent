@@ -872,10 +872,11 @@ export async function generateInvoicePdfLib(
         color: rgb(0.3, 0.3, 0.3),
       });
 
-      // Ensure y clears below the invoice details box
-      // Table header draws upward to y+20, so y must be at least boxBottom - 20 - gap
+      // Ensure y clears below both the bill-to content and the invoice details box.
+      // The table header rectangle extends upward to y+20, so we need enough gap
+      // below the last content line to prevent overlap.
       const boxBottomY = billToY - boxHeight + 15;
-      y = Math.min(y, boxBottomY - 20) - 10;
+      y = Math.min(y, boxBottomY - 20) - 30;
     }
 
     // Determine if this page has line items or is a totals-only page

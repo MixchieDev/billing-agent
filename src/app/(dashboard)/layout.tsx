@@ -1,5 +1,12 @@
+import dynamic from 'next/dynamic';
 import { Sidebar } from '@/components/dashboard/sidebar';
-import { ChatPanel } from '@/components/dashboard/chat';
+
+// Lazy-load the AI chat panel — it's heavy (Anthropic SDK) and not
+// needed on first paint. Skip SSR since it's a client-only widget.
+const ChatPanel = dynamic(
+  () => import('@/components/dashboard/chat').then((m) => m.ChatPanel),
+  { ssr: false }
+);
 
 export default function DashboardLayout({
   children,

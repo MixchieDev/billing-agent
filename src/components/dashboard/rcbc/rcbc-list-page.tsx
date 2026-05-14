@@ -1,10 +1,16 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { Header } from '@/components/dashboard/header';
 import { RcbcClientFormModal } from './rcbc-client-form-modal';
-import { CSVImportModal } from '@/components/dashboard/csv-import-modal';
 import { DeleteConfirmationModal } from '@/components/dashboard/delete-confirmation-modal';
+
+// Lazy-load — only mounted when the user opens CSV import.
+const CSVImportModal = dynamic(
+  () => import('@/components/dashboard/csv-import-modal').then((m) => m.CSVImportModal),
+  { ssr: false }
+);
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {

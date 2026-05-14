@@ -1,11 +1,20 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { Header } from '@/components/dashboard/header';
 import { ContractTable, ContractRow } from '@/components/dashboard/contract-table';
-import { ContractFormModal } from '@/components/dashboard/contract-form-modal';
-import { CSVImportModal } from '@/components/dashboard/csv-import-modal';
 import { DeleteConfirmationModal } from '@/components/dashboard/delete-confirmation-modal';
+
+// Lazy-load heavy modals (only mounted when opened).
+const ContractFormModal = dynamic(
+  () => import('@/components/dashboard/contract-form-modal').then((m) => m.ContractFormModal),
+  { ssr: false }
+);
+const CSVImportModal = dynamic(
+  () => import('@/components/dashboard/csv-import-modal').then((m) => m.CSVImportModal),
+  { ssr: false }
+);
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Loader2, Upload, Plus, Search, X } from 'lucide-react';
 import { useProductTypes } from '@/lib/hooks/use-api';

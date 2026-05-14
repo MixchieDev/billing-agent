@@ -184,13 +184,18 @@ export default function DashboardPage() {
     window.open(`/api/invoices/${id}/pdf`, '_blank');
   };
 
-  // Filter invoices
-  const filteredInvoices = invoices.filter((invoice) => {
-    if (filters.billingEntity && invoice.billingEntity !== filters.billingEntity) return false;
-    if (filters.productType && invoice.productType !== filters.productType) return false;
-    if (filters.status && invoice.status !== filters.status) return false;
-    return true;
-  });
+  // Filter invoices — memoized so the downstream table doesn't re-sort
+  // on every parent re-render (filter object identity changes).
+  const filteredInvoices = useMemo(
+    () =>
+      invoices.filter((invoice) => {
+        if (filters.billingEntity && invoice.billingEntity !== filters.billingEntity) return false;
+        if (filters.productType && invoice.productType !== filters.productType) return false;
+        if (filters.status && invoice.status !== filters.status) return false;
+        return true;
+      }),
+    [invoices, filters.billingEntity, filters.productType, filters.status]
+  );
 
   return (
     <div className="flex flex-col">
