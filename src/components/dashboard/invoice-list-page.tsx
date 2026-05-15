@@ -19,14 +19,24 @@ import { Button } from '@/components/ui/button';
 import { RefreshCw, Loader2, Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useInvoices } from '@/lib/hooks/use-api';
 
+// Shape of data pre-fetched on the server (matches /api/invoices response).
+export interface InvoiceListInitialData {
+  invoices: Array<Record<string, any>>;
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 interface InvoiceListPageProps {
   title: string;
   subtitle: string;
   status?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SENT' | 'PAID' | 'CANCELLED' | 'VOID';
   showAllStatuses?: boolean;
+  initialData?: InvoiceListInitialData;
 }
 
-export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: InvoiceListPageProps) {
+export function InvoiceListPage({ title, subtitle, status, showAllStatuses, initialData }: InvoiceListPageProps) {
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<InvoiceForPayment | null>(null);
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
   const [selectedInvoiceForHistory, setSelectedInvoiceForHistory] = useState<{ id: string; billingNo: string | null; customerName: string } | null>(null);
@@ -40,11 +50,15 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50;
 
-  // Use SWR for data fetching with caching
+  // Use SWR for data fetching with caching. Seed with server-prefetched
+  // data on first paint so we skip the initial round-trip.
   const { data: invoicesData, error: invoicesError, isLoading, mutate } = useInvoices(
     status && !showAllStatuses ? status : undefined,
     currentPage,
     pageSize,
+    initialData && currentPage === 1
+      ? { fallbackData: initialData, revalidateOnMount: false }
+      : undefined,
   );
 
   // Pagination info from API
