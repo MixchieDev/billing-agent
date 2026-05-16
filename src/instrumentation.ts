@@ -6,6 +6,13 @@ export async function register() {
     return;
   }
 
+  // In dev, skip unless explicitly enabled — avoids hitting the DB and
+  // registering cron on every restart, which slows down dev startup.
+  if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_SCHEDULER !== 'true') {
+    console.log('[Instrumentation] Scheduler disabled in dev (set ENABLE_SCHEDULER=true to enable)');
+    return;
+  }
+
   // Only run on the server (for local development or self-hosted)
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     try {

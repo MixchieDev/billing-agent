@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from '@/components/dashboard/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,16 +32,61 @@ interface PaidInvoice {
   paymentReference: string | null;
 }
 
-export function PaidInvoicesPage() {
-  const [invoices, setInvoices] = useState<PaidInvoice[]>([]);
-  const [loading, setLoading] = useState(true);
+export interface PaidInvoicesInitialData {
+  invoices: Array<Record<string, any>>;
+  dateFrom: string;
+  dateTo: string;
+}
+
+interface PaidInvoicesPageProps {
+  initialData?: PaidInvoicesInitialData;
+}
+
+function transformPaidInvoices(invoiceList: any[]): PaidInvoice[] {
+  const transformed: PaidInvoice[] = invoiceList.map((inv: any) => ({
+    id: inv.id,
+    billingNo: inv.billingNo,
+    customerName: inv.customerName,
+    serviceFee: Number(inv.serviceFee),
+    vatAmount: Number(inv.vatAmount),
+    netAmount: Number(inv.netAmount),
+    dueDate: new Date(inv.dueDate),
+    billingEntity: inv.company?.code || 'YOWI',
+    paidAt: inv.paidAt ? new Date(inv.paidAt) : null,
+    paidAmount: inv.paidAmount ? Number(inv.paidAmount) : null,
+    paymentMethod: inv.paymentMethod,
+    paymentReference: inv.paymentReference,
+  }));
+
+  // Sort by paid date descending (most recent first)
+  transformed.sort((a, b) => {
+    if (!a.paidAt) return 1;
+    if (!b.paidAt) return -1;
+    return b.paidAt.getTime() - a.paidAt.getTime();
+  });
+
+  return transformed;
+}
+
+export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
+  const [invoices, setInvoices] = useState<PaidInvoice[]>(
+    initialData ? transformPaidInvoices(initialData.invoices) : []
+  );
+  const [loading, setLoading] = useState(!initialData);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Date filter state - default to last 30 days
-  const [dateFrom, setDateFrom] = useState(() => format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-  const [dateTo, setDateTo] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  // Date filter state — match what the server pre-fetched, or default to last 30 days
+  const [dateFrom, setDateFrom] = useState(
+    () => initialData?.dateFrom ?? format(subDays(new Date(), 30), 'yyyy-MM-dd')
+  );
+  const [dateTo, setDateTo] = useState(
+    () => initialData?.dateTo ?? format(new Date(), 'yyyy-MM-dd')
+  );
   const [showFilters, setShowFilters] = useState(true);
+
+  // Skip the initial fetch when the server already seeded us.
+  const hasInitialData = useRef(!!initialData);
 
   const fetchInvoices = useCallback(async () => {
     try {
@@ -59,30 +104,7 @@ export function PaidInvoicesPage() {
 
       const data = await response.json();
       const invoiceList = Array.isArray(data) ? data : (data.invoices || []);
-
-      const transformedInvoices: PaidInvoice[] = invoiceList.map((inv: any) => ({
-        id: inv.id,
-        billingNo: inv.billingNo,
-        customerName: inv.customerName,
-        serviceFee: Number(inv.serviceFee),
-        vatAmount: Number(inv.vatAmount),
-        netAmount: Number(inv.netAmount),
-        dueDate: new Date(inv.dueDate),
-        billingEntity: inv.company?.code || 'YOWI',
-        paidAt: inv.paidAt ? new Date(inv.paidAt) : null,
-        paidAmount: inv.paidAmount ? Number(inv.paidAmount) : null,
-        paymentMethod: inv.paymentMethod,
-        paymentReference: inv.paymentReference,
-      }));
-
-      // Sort by paid date descending (most recent first)
-      transformedInvoices.sort((a, b) => {
-        if (!a.paidAt) return 1;
-        if (!b.paidAt) return -1;
-        return b.paidAt.getTime() - a.paidAt.getTime();
-      });
-
-      setInvoices(transformedInvoices);
+      setInvoices(transformPaidInvoices(invoiceList));
     } catch (err: any) {
       setError(err.message);
       console.error('Error fetching paid invoices:', err);
@@ -92,6 +114,10 @@ export function PaidInvoicesPage() {
   }, [dateFrom, dateTo]);
 
   useEffect(() => {
+    if (hasInitialData.current) {
+      hasInitialData.current = false;
+      return;
+    }
     fetchInvoices();
   }, [fetchInvoices]);
 

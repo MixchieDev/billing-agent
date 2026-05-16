@@ -30,7 +30,13 @@ import {
   History,
   MailWarning,
 } from 'lucide-react';
-import { SendInvoiceModal } from './send-invoice-modal';
+import dynamic from 'next/dynamic';
+
+// Lazy-load — only mounted when an invoice is being sent.
+const SendInvoiceModal = dynamic(
+  () => import('./send-invoice-modal').then((m) => m.SendInvoiceModal),
+  { ssr: false }
+);
 
 type SortField = 'billingNo' | 'customerName' | 'serviceFee' | 'vatAmount' | 'netAmount' | 'dueDate' | 'createdAt' | 'billingEntity' | 'status';
 type SortDirection = 'asc' | 'desc' | null;

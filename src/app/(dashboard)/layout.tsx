@@ -1,5 +1,5 @@
 import { Sidebar } from '@/components/dashboard/sidebar';
-import { ChatPanel } from '@/components/dashboard/chat';
+import { ChatPanelLazy } from '@/components/dashboard/chat/chat-panel-lazy';
 
 export default function DashboardLayout({
   children,
@@ -10,7 +10,7 @@ export default function DashboardLayout({
     <div className="flex h-screen bg-gray-100">
       <Sidebar />
       <main className="flex-1 overflow-auto">{children}</main>
-      <ChatPanel />
+      <ChatPanelLazy />
     </div>
   );
 }

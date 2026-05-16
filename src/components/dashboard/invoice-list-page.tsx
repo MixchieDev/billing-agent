@@ -1,23 +1,42 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { Header } from '@/components/dashboard/header';
 import { InvoiceTable, InvoiceRow } from '@/components/dashboard/invoice-table';
 import { MarkPaidModal, InvoiceForPayment } from '@/components/dashboard/mark-paid-modal';
-import { InvoiceEditModal } from '@/components/dashboard/invoice-edit-modal';
-import { InvoiceAuditLogModal } from '@/components/dashboard/invoice-audit-log-modal';
+
+// Lazy-load heavy modals (only mounted when opened).
+const InvoiceEditModal = dynamic(
+  () => import('@/components/dashboard/invoice-edit-modal').then((m) => m.InvoiceEditModal),
+  { ssr: false }
+);
+const InvoiceAuditLogModal = dynamic(
+  () => import('@/components/dashboard/invoice-audit-log-modal').then((m) => m.InvoiceAuditLogModal),
+  { ssr: false }
+);
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Loader2, Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useInvoices } from '@/lib/hooks/use-api';
+
+// Shape of data pre-fetched on the server (matches /api/invoices response).
+export interface InvoiceListInitialData {
+  invoices: Array<Record<string, any>>;
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
 
 interface InvoiceListPageProps {
   title: string;
   subtitle: string;
   status?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SENT' | 'PAID' | 'CANCELLED' | 'VOID';
   showAllStatuses?: boolean;
+  initialData?: InvoiceListInitialData;
 }
 
-export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: InvoiceListPageProps) {
+export function InvoiceListPage({ title, subtitle, status, showAllStatuses, initialData }: InvoiceListPageProps) {
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<InvoiceForPayment | null>(null);
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
   const [selectedInvoiceForHistory, setSelectedInvoiceForHistory] = useState<{ id: string; billingNo: string | null; customerName: string } | null>(null);
@@ -31,11 +50,15 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50;
 
-  // Use SWR for data fetching with caching
+  // Use SWR for data fetching with caching. Seed with server-prefetched
+  // data on first paint so we skip the initial round-trip.
   const { data: invoicesData, error: invoicesError, isLoading, mutate } = useInvoices(
     status && !showAllStatuses ? status : undefined,
     currentPage,
     pageSize,
+    initialData && currentPage === 1
+      ? { fallbackData: initialData, revalidateOnMount: false }
+      : undefined,
   );
 
   // Pagination info from API
@@ -432,20 +455,24 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses }: In
         onSave={handleSavePayment}
       />
 
-      {/* Invoice Edit Modal */}
-      <InvoiceEditModal
-        invoiceId={editingInvoiceId}
-        isOpen={!!editingInvoiceId}
-        onClose={() => setEditingInvoiceId(null)}
-        onSave={refreshData}
-      />
+      {/* Invoice Edit Modal — only mount when open so dynamic chunk loads on demand */}
+      {editingInvoiceId && (
+        <InvoiceEditModal
+          invoiceId={editingInvoiceId}
+          isOpen={!!editingInvoiceId}
+          onClose={() => setEditingInvoiceId(null)}
+          onSave={refreshData}
+        />
+      )}
 
-      {/* Invoice Audit Log Modal */}
-      <InvoiceAuditLogModal
-        invoice={selectedInvoiceForHistory}
-        isOpen={!!selectedInvoiceForHistory}
-        onClose={() => setSelectedInvoiceForHistory(null)}
-      />
+      {/* Invoice Audit Log Modal — only mount when open so dynamic chunk loads on demand */}
+      {selectedInvoiceForHistory && (
+        <InvoiceAuditLogModal
+          invoice={selectedInvoiceForHistory}
+          isOpen={!!selectedInvoiceForHistory}
+          onClose={() => setSelectedInvoiceForHistory(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { RefreshCw, Edit, Building2, Mail, MapPin, User, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -36,14 +36,25 @@ interface Company {
   name: string;
 }
 
-export function PartnersPage() {
-  const [partners, setPartners] = useState<Partner[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
+export interface PartnersPageInitialData {
+  partners: Partner[];
+  companies: Company[];
+  emailTemplates: EmailTemplate[];
+}
+
+interface PartnersPageProps {
+  initialData?: PartnersPageInitialData;
+}
+
+export function PartnersPage({ initialData }: PartnersPageProps = {}) {
+  const [partners, setPartners] = useState<Partner[]>(initialData?.partners ?? []);
+  const [companies, setCompanies] = useState<Company[]>(initialData?.companies ?? []);
+  const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>(initialData?.emailTemplates ?? []);
+  const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
   const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
   const [saving, setSaving] = useState(false);
+  const hasInitialData = useRef(!!initialData);
 
   const fetchPartners = async () => {
     try {
@@ -83,6 +94,11 @@ export function PartnersPage() {
   };
 
   useEffect(() => {
+    // Skip initial fetch if server already seeded us with data.
+    if (hasInitialData.current) {
+      hasInitialData.current = false;
+      return;
+    }
     fetchPartners();
     fetchCompanies();
     fetchEmailTemplates();
