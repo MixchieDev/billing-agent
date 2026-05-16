@@ -19,10 +19,13 @@ export async function GET(request: NextRequest) {
     const productType = searchParams.get('productType');
     const search = searchParams.get('search');
 
-    // Pagination params
+    // Pagination params. Callers populating dropdowns (e.g. schedule creation)
+    // pass `limit=all` to opt out of pagination and get every matching row.
+    const rawLimit = searchParams.get('limit') || '50';
+    const fetchAll = rawLimit === 'all';
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const skip = (page - 1) * limit;
+    const limit = fetchAll ? 0 : parseInt(rawLimit);
+    const skip = fetchAll ? 0 : (page - 1) * limit;
 
     // Build where clause
     const where: any = {
@@ -46,6 +49,10 @@ export async function GET(request: NextRequest) {
 
     // Get contracts - use separate queries for TypeScript
     let contracts;
+    // When `limit=all`, pass undefined for skip/take so Prisma returns every match.
+    const prismaSkip = fetchAll ? undefined : skip;
+    const prismaTake = fetchAll ? undefined : limit;
+
     if (minimal) {
       contracts = await prisma.contract.findMany({
         where,
@@ -59,6 +66,7 @@ export async function GET(request: NextRequest) {
           emails: true,
           tin: true,
           vatType: true,
+          withholdingRate: true,
           billingEntityId: true,
           paymentPlan: true,
           billingEntity: {
@@ -70,8 +78,8 @@ export async function GET(request: NextRequest) {
           },
         },
         orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
+        skip: prismaSkip,
+        take: prismaTake,
       });
     } else {
       contracts = await prisma.contract.findMany({
@@ -81,17 +89,17 @@ export async function GET(request: NextRequest) {
           partner: true,
         },
         orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
+        skip: prismaSkip,
+        take: prismaTake,
       });
     }
 
     return NextResponse.json({
       contracts,
       total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      page: fetchAll ? 1 : page,
+      limit: fetchAll ? total : limit,
+      totalPages: fetchAll ? 1 : Math.max(1, Math.ceil(total / Math.max(limit, 1))),
     });
   } catch (error) {
     console.error('Error fetching contracts:', error);

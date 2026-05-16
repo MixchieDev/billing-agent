@@ -59,7 +59,9 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
     const fetchData = async () => {
       try {
         const [contractsRes, companiesRes, settingsRes] = await Promise.all([
-          fetch('/api/contracts'),
+          // `limit=all` opts out of the default 50-row pagination so every
+          // customer appears in the picker, even when there are >50 contracts.
+          fetch('/api/contracts?limit=all&minimal=true'),
           fetch('/api/companies'),
           fetch('/api/settings'),
         ]);
