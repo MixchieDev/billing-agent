@@ -98,10 +98,11 @@ export async function autoSendInvoice(invoiceId: string): Promise<AutoSendResult
     // Clear template cache to ensure we always use the latest template
     clearTemplateCache();
 
-    const [soaSettings, template] = await Promise.all([
-      getSOASettings(companyCode),
-      getInvoiceTemplate(companyCode),
-    ]);
+    // Sequential (not Promise.all): the billing job runs this for many
+    // invoices and production's Prisma connection pool can be as small as 1.
+    // Concurrent queries would time out fetching a connection.
+    const soaSettings = await getSOASettings(companyCode);
+    const template = await getInvoiceTemplate(companyCode);
 
     // Generate PDF with template
     const pdfBytes = await generateInvoicePdfLib(invoice, soaSettings, template);

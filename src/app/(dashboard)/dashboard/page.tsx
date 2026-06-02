@@ -10,10 +10,10 @@ export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
 
-  const [invoices, stats] = await Promise.all([
-    fetchInvoicesForServer(),
-    fetchInvoiceStatsForServer(),
-  ]);
+  // Sequential (not Promise.all) to avoid exhausting the production Prisma
+  // connection pool, which can be as small as 1.
+  const invoices = await fetchInvoicesForServer();
+  const stats = await fetchInvoiceStatsForServer();
 
   return <DashboardView initialData={{ invoices, stats }} />;
 }

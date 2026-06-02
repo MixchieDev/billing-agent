@@ -16,24 +16,28 @@ export default async function ContractsPage() {
     redirect('/login');
   }
 
-  // Pre-fetch everything the page needs in parallel, on the server.
-  // Replaces 4 separate client-side API round-trips:
-  //   /api/contracts, /api/partners, /api/companies, /api/product-types
-  const [contracts, total, partners, companies, productTypes] = await Promise.all([
-    prisma.contract.findMany({
-      include: { billingEntity: true, partner: true },
-      orderBy: { createdAt: 'desc' },
-      take: PAGE_SIZE,
-    }),
-    prisma.contract.count(),
-    prisma.partner.findMany({
-      select: { id: true, code: true, name: true, billingModel: true },
-    }),
-    prisma.company.findMany({
-      select: { id: true, code: true, name: true },
-    }),
-    getProductTypes(),
-  ]);
+  // Pre-fetch everything the page needs, on the server. Replaces 4 separate
+  // client-side API round-trips (/api/contracts, /api/partners, /api/companies,
+  // /api/product-types).
+  //
+  // Queries run SEQUENTIALLY (not Promise.all) on purpose: production runs
+  // Prisma with a small connection pool, and firing these concurrently can
+  // exhaust it ("Timed out fetching a new connection from the connection
+  // pool"), which crashes this server-rendered page. Sequential is slightly
+  // slower but safe regardless of connection_limit.
+  const contracts = await prisma.contract.findMany({
+    include: { billingEntity: true, partner: true },
+    orderBy: { createdAt: 'desc' },
+    take: PAGE_SIZE,
+  });
+  const total = await prisma.contract.count();
+  const partners = await prisma.partner.findMany({
+    select: { id: true, code: true, name: true, billingModel: true },
+  });
+  const companies = await prisma.company.findMany({
+    select: { id: true, code: true, name: true },
+  });
+  const productTypes = await getProductTypes();
 
   // Shape contracts into the ContractRow form the client component expects.
   // (Also converts Decimal/Date into plain JSON-safe values for the
