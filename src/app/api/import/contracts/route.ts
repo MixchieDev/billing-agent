@@ -68,12 +68,12 @@ interface ValidatedRow {
 
 // Shared validation logic for both CSV and JSON input
 async function validateRows(rows: ContractCSVRow[], startRowNumber: number = 2) {
-  // Load reference data from DB (3 parallel queries)
-  const [partners, companies, configuredTypes] = await Promise.all([
-    prisma.partner.findMany(),
-    prisma.company.findMany(),
-    getProductTypes(),
-  ]);
+  // Load reference data from DB.
+  // Sequential (not Promise.all): production's Prisma connection pool can be as
+  // small as 1, and concurrent queries would time out fetching a connection.
+  const partners = await prisma.partner.findMany();
+  const companies = await prisma.company.findMany();
+  const configuredTypes = await getProductTypes();
 
   const validProductTypes = configuredTypes.map(t => t.value);
   const partnerMap = new Map(partners.map(p => [p.code, p]));

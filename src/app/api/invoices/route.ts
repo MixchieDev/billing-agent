@@ -43,48 +43,48 @@ export async function GET(request: NextRequest) {
       ...(Object.keys(paidAtFilter).length > 0 && { paidAt: paidAtFilter }),
     };
 
-    // Get invoices and total count in parallel
-    // Optimized: only select needed fields to reduce payload
-    const [invoices, total] = await Promise.all([
-      prisma.invoice.findMany({
-        where,
-        select: {
-          id: true,
-          billingNo: true,
-          customerName: true,
-          customerEmail: true,
-          customerEmails: true,
-          serviceFee: true,
-          vatAmount: true,
-          netAmount: true,
-          dueDate: true,
-          createdAt: true,
-          billingModel: true,
-          productType: true,
-          status: true,
-          paidAt: true,
-          paidAmount: true,
-          // Follow-up tracking fields
-          followUpEnabled: true,
-          followUpCount: true,
-          lastFollowUpLevel: true,
-          company: {
-            select: { code: true },
-          },
-          lineItems: {
-            select: { description: true },
-            take: 1, // Only need first item for product type detection
-          },
-          approvedBy: {
-            select: { name: true, email: true },
-          },
+    // Get invoices and total count.
+    // Sequential (not Promise.all): production's Prisma connection pool can be
+    // as small as 1, and concurrent queries would time out fetching a connection.
+    // Optimized: only select needed fields to reduce payload.
+    const invoices = await prisma.invoice.findMany({
+      where,
+      select: {
+        id: true,
+        billingNo: true,
+        customerName: true,
+        customerEmail: true,
+        customerEmails: true,
+        serviceFee: true,
+        vatAmount: true,
+        netAmount: true,
+        dueDate: true,
+        createdAt: true,
+        billingModel: true,
+        productType: true,
+        status: true,
+        paidAt: true,
+        paidAmount: true,
+        // Follow-up tracking fields
+        followUpEnabled: true,
+        followUpCount: true,
+        lastFollowUpLevel: true,
+        company: {
+          select: { code: true },
         },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-      }),
-      prisma.invoice.count({ where }),
-    ]);
+        lineItems: {
+          select: { description: true },
+          take: 1, // Only need first item for product type detection
+        },
+        approvedBy: {
+          select: { name: true, email: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    });
+    const total = await prisma.invoice.count({ where });
 
     return NextResponse.json({
       invoices,

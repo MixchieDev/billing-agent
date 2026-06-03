@@ -537,12 +537,12 @@ export async function checkExistingInvoiceForPeriod(
 
 // Get stats for dashboard
 export async function getScheduledBillingStats() {
-  const [pending, active, paused, ended] = await Promise.all([
-    prisma.scheduledBilling.count({ where: { status: ScheduleStatus.PENDING } }),
-    prisma.scheduledBilling.count({ where: { status: ScheduleStatus.ACTIVE } }),
-    prisma.scheduledBilling.count({ where: { status: ScheduleStatus.PAUSED } }),
-    prisma.scheduledBilling.count({ where: { status: ScheduleStatus.ENDED } }),
-  ]);
+  // Sequential (not Promise.all): production's Prisma connection pool can be as
+  // small as 1, and concurrent queries would time out fetching a connection.
+  const pending = await prisma.scheduledBilling.count({ where: { status: ScheduleStatus.PENDING } });
+  const active = await prisma.scheduledBilling.count({ where: { status: ScheduleStatus.ACTIVE } });
+  const paused = await prisma.scheduledBilling.count({ where: { status: ScheduleStatus.PAUSED } });
+  const ended = await prisma.scheduledBilling.count({ where: { status: ScheduleStatus.ENDED } });
 
   // Get schedules due in next 7 days
   const today = new Date();

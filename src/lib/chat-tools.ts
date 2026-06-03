@@ -211,13 +211,13 @@ export async function getContractDetails(companyName: string): Promise<ContractD
 
 // Get dashboard invoice statistics
 export async function getInvoiceStats(): Promise<InvoiceStats> {
-  const [pending, approved, rejected, sent, paid] = await Promise.all([
-    prisma.invoice.findMany({ where: { status: 'PENDING' } }),
-    prisma.invoice.findMany({ where: { status: 'APPROVED' } }),
-    prisma.invoice.findMany({ where: { status: 'REJECTED' } }),
-    prisma.invoice.findMany({ where: { status: 'SENT' } }),
-    prisma.invoice.findMany({ where: { status: 'PAID' } }),
-  ]);
+  // Sequential (not Promise.all): production's Prisma connection pool can be as
+  // small as 1, and concurrent queries would time out fetching a connection.
+  const pending = await prisma.invoice.findMany({ where: { status: 'PENDING' } });
+  const approved = await prisma.invoice.findMany({ where: { status: 'APPROVED' } });
+  const rejected = await prisma.invoice.findMany({ where: { status: 'REJECTED' } });
+  const sent = await prisma.invoice.findMany({ where: { status: 'SENT' } });
+  const paid = await prisma.invoice.findMany({ where: { status: 'PAID' } });
 
   const pendingAmount = pending.reduce((sum, inv) => sum + Number(inv.netAmount), 0);
   const approvedAmount = approved.reduce((sum, inv) => sum + Number(inv.netAmount), 0);
@@ -517,28 +517,28 @@ export async function getInvoiceActivity(args: {
 
   if (!invoiceId) return null;
 
-  const [invoice, auditLogs, emailLogs, followUpLogs] = await Promise.all([
-    prisma.invoice.findUnique({
-      where: { id: invoiceId },
-      select: { id: true, billingNo: true, customerName: true },
-    }),
-    prisma.auditLog.findMany({
-      where: { entityId: invoiceId, entityType: 'Invoice' },
-      include: { user: { select: { name: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    }),
-    prisma.emailLog.findMany({
-      where: { invoiceId },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-    }),
-    prisma.followUpLog.findMany({
-      where: { invoiceId },
-      orderBy: { sentAt: 'desc' },
-      take: 10,
-    }),
-  ]);
+  // Sequential (not Promise.all): production's Prisma connection pool can be as
+  // small as 1, and concurrent queries would time out fetching a connection.
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    select: { id: true, billingNo: true, customerName: true },
+  });
+  const auditLogs = await prisma.auditLog.findMany({
+    where: { entityId: invoiceId, entityType: 'Invoice' },
+    include: { user: { select: { name: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  });
+  const emailLogs = await prisma.emailLog.findMany({
+    where: { invoiceId },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+  });
+  const followUpLogs = await prisma.followUpLog.findMany({
+    where: { invoiceId },
+    orderBy: { sentAt: 'desc' },
+    take: 10,
+  });
 
   if (!invoice) return null;
 
@@ -666,14 +666,14 @@ export async function getAgingReport(billingEntity?: string): Promise<AgingRepor
   const totalOutstanding = sentInvoices.reduce((sum, inv) => sum + Number(inv.netAmount), 0);
 
   // Collection rate
-  const [paidCount, sentCount] = await Promise.all([
-    prisma.invoice.count({
-      where: { status: 'PAID', ...(billingEntity && { company: { code: billingEntity } }) },
-    }),
-    prisma.invoice.count({
-      where: { status: 'SENT', ...(billingEntity && { company: { code: billingEntity } }) },
-    }),
-  ]);
+  // Sequential (not Promise.all): production's Prisma connection pool can be as
+  // small as 1, and concurrent queries would time out fetching a connection.
+  const paidCount = await prisma.invoice.count({
+    where: { status: 'PAID', ...(billingEntity && { company: { code: billingEntity } }) },
+  });
+  const sentCount = await prisma.invoice.count({
+    where: { status: 'SENT', ...(billingEntity && { company: { code: billingEntity } }) },
+  });
   const collectionRate = paidCount + sentCount > 0 ? paidCount / (paidCount + sentCount) : 0;
 
   // Payment method breakdown from paid invoices

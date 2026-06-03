@@ -66,26 +66,26 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Get total count and logs
-    const [total, logs] = await Promise.all([
-      prisma.auditLog.count({ where }),
-      prisma.auditLog.findMany({
-        where,
-        include: {
-          user: {
-            select: {
-              name: true,
-              email: true,
-            },
+    // Get total count and logs.
+    // Sequential (not Promise.all): production's Prisma connection pool can be
+    // as small as 1, and concurrent queries would time out fetching a connection.
+    const total = await prisma.auditLog.count({ where });
+    const logs = await prisma.auditLog.findMany({
+      where,
+      include: {
+        user: {
+          select: {
+            name: true,
+            email: true,
           },
         },
-        orderBy: {
-          createdAt: 'desc',
-        },
-        skip,
-        take: limit,
-      }),
-    ]);
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      skip,
+      take: limit,
+    });
 
     return NextResponse.json({
       logs: logs.map((log) => ({

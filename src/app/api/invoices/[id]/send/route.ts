@@ -97,10 +97,10 @@ export async function POST(
     // Clear template cache to ensure we always use the latest template
     clearTemplateCache();
 
-    const [soaSettings, template] = await Promise.all([
-      getSOASettings(companyCode),
-      getInvoiceTemplate(companyCode),
-    ]);
+    // Sequential (not Promise.all): production's Prisma connection pool can be
+    // as small as 1, and concurrent queries would time out fetching a connection.
+    const soaSettings = await getSOASettings(companyCode);
+    const template = await getInvoiceTemplate(companyCode);
 
     // Generate PDF using shared multi-page generator with template
     const pdfBytes = await generateInvoicePdfLib(invoice, soaSettings, template);

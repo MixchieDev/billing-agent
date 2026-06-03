@@ -94,29 +94,31 @@ export async function processChat(
 
       if (toolUseBlocks.length === 0) break;
 
-      // Execute all tool calls
-      const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
-        toolUseBlocks.map(async (toolUse) => {
-          try {
-            const result = await executeTool(
-              toolUse.name,
-              toolUse.input as Record<string, unknown>
-            );
-            return {
-              type: 'tool_result' as const,
-              tool_use_id: toolUse.id,
-              content: JSON.stringify(result, null, 2),
-            };
-          } catch (error) {
-            return {
-              type: 'tool_result' as const,
-              tool_use_id: toolUse.id,
-              content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-              is_error: true,
-            };
-          }
-        })
-      );
+      // Execute all tool calls.
+      // Sequential (not Promise.all): each tool hits Prisma, and production's
+      // connection pool can be as small as 1. Running multiple tools from a
+      // single turn concurrently would time out fetching a connection.
+      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+      for (const toolUse of toolUseBlocks) {
+        try {
+          const result = await executeTool(
+            toolUse.name,
+            toolUse.input as Record<string, unknown>
+          );
+          toolResults.push({
+            type: 'tool_result' as const,
+            tool_use_id: toolUse.id,
+            content: JSON.stringify(result, null, 2),
+          });
+        } catch (error) {
+          toolResults.push({
+            type: 'tool_result' as const,
+            tool_use_id: toolUse.id,
+            content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            is_error: true,
+          });
+        }
+      }
 
       // Continue conversation with tool results
       response = await anthropic.messages.create({
