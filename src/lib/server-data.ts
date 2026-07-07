@@ -55,40 +55,42 @@ export async function fetchInvoicesForServer(
     ...(Object.keys(paidAtFilter).length > 0 && { paidAt: paidAtFilter }),
   };
 
-  // Run sequentially (not Promise.all): production's Prisma connection pool
-  // can be as small as 1, and concurrent queries would time out waiting for a
-  // connection. Slightly slower, but safe regardless of connection_limit.
-  const invoices = await prisma.invoice.findMany({
-    where,
-    select: {
-      id: true,
-      billingNo: true,
-      customerName: true,
-      customerEmail: true,
-      customerEmails: true,
-      serviceFee: true,
-      vatAmount: true,
-      netAmount: true,
-      dueDate: true,
-      createdAt: true,
-      billingModel: true,
-      productType: true,
-      status: true,
-      paidAt: true,
-      paidAmount: true,
-      paymentMethod: true,
-      paymentReference: true,
-      followUpEnabled: true,
-      followUpCount: true,
-      lastFollowUpLevel: true,
-      company: { select: { code: true } },
-      lineItems: { select: { description: true }, take: 1 },
-    },
-    orderBy: { createdAt: 'desc' },
-    skip,
-    take: limit,
-  });
-  const total = await prisma.invoice.count({ where });
+  // Batched via prisma.$transaction([...]): both queries run over a single
+  // pooled connection in one round-trip — safe at connection_limit=1 and
+  // faster than two sequential awaits.
+  const [invoices, total] = await prisma.$transaction([
+    prisma.invoice.findMany({
+      where,
+      select: {
+        id: true,
+        billingNo: true,
+        customerName: true,
+        customerEmail: true,
+        customerEmails: true,
+        serviceFee: true,
+        vatAmount: true,
+        netAmount: true,
+        dueDate: true,
+        createdAt: true,
+        billingModel: true,
+        productType: true,
+        status: true,
+        paidAt: true,
+        paidAmount: true,
+        paymentMethod: true,
+        paymentReference: true,
+        followUpEnabled: true,
+        followUpCount: true,
+        lastFollowUpLevel: true,
+        company: { select: { code: true } },
+        lineItems: { select: { description: true }, take: 1 },
+      },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.invoice.count({ where }),
+  ]);
 
   // Serialize Decimal/Date so the server→client boundary is JSON-safe.
   const serialized = invoices.map((inv) => ({

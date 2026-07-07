@@ -211,26 +211,50 @@ export async function getContractDetails(companyName: string): Promise<ContractD
 
 // Get dashboard invoice statistics
 export async function getInvoiceStats(): Promise<InvoiceStats> {
-  // Sequential (not Promise.all): production's Prisma connection pool can be as
-  // small as 1, and concurrent queries would time out fetching a connection.
-  const pending = await prisma.invoice.findMany({ where: { status: 'PENDING' } });
-  const approved = await prisma.invoice.findMany({ where: { status: 'APPROVED' } });
-  const rejected = await prisma.invoice.findMany({ where: { status: 'REJECTED' } });
-  const sent = await prisma.invoice.findMany({ where: { status: 'SENT' } });
-  const paid = await prisma.invoice.findMany({ where: { status: 'PAID' } });
+  // Let the database do the counting and summing instead of loading every
+  // invoice row into memory. A single groupBy returns per-status counts plus
+  // the netAmount totals; the only thing it can't express is the paid-amount
+  // fallback (paidAmount, or netAmount when paidAmount is null), so we fetch
+  // just those two columns for PAID invoices. Both run in one batched
+  // round-trip (safe at connection_limit=1).
+  const [byStatus, paidRows] = await prisma.$transaction([
+    prisma.invoice.groupBy({
+      by: ['status'],
+      _count: true,
+      _sum: { netAmount: true },
+      // orderBy is required by groupBy's type when inferred inside
+      // $transaction; the grouped rows are read into a Map by status, so the
+      // ordering itself is immaterial.
+      orderBy: { status: 'asc' },
+    }),
+    prisma.invoice.findMany({
+      where: { status: 'PAID' },
+      select: { paidAmount: true, netAmount: true },
+    }),
+  ]);
 
-  const pendingAmount = pending.reduce((sum, inv) => sum + Number(inv.netAmount), 0);
-  const approvedAmount = approved.reduce((sum, inv) => sum + Number(inv.netAmount), 0);
-  const paidAmount = paid.reduce((sum, inv) => sum + Number(inv.paidAmount || inv.netAmount), 0);
+  const statsByStatus = new Map(
+    byStatus.map((s) => [
+      s.status,
+      { count: Number(s._count) || 0, netSum: Number(s._sum?.netAmount || 0) },
+    ])
+  );
+
+  // paidAmount keeps the original per-row semantics: use paidAmount when set,
+  // otherwise fall back to netAmount.
+  const paidAmount = paidRows.reduce(
+    (sum, inv) => sum + Number(inv.paidAmount || inv.netAmount),
+    0
+  );
 
   return {
-    pending: pending.length,
-    approved: approved.length,
-    rejected: rejected.length,
-    sent: sent.length,
-    paid: paid.length,
-    pendingAmount,
-    approvedAmount,
+    pending: statsByStatus.get('PENDING')?.count || 0,
+    approved: statsByStatus.get('APPROVED')?.count || 0,
+    rejected: statsByStatus.get('REJECTED')?.count || 0,
+    sent: statsByStatus.get('SENT')?.count || 0,
+    paid: statsByStatus.get('PAID')?.count || 0,
+    pendingAmount: statsByStatus.get('PENDING')?.netSum || 0,
+    approvedAmount: statsByStatus.get('APPROVED')?.netSum || 0,
     paidAmount,
   };
 }
@@ -517,18 +541,21 @@ export async function getInvoiceActivity(args: {
 
   if (!invoiceId) return null;
 
-  // Sequential (not Promise.all): production's Prisma connection pool can be as
-  // small as 1, and concurrent queries would time out fetching a connection.
-  const invoice = await prisma.invoice.findUnique({
-    where: { id: invoiceId },
-    select: { id: true, billingNo: true, customerName: true },
-  });
-  const auditLogs = await prisma.auditLog.findMany({
-    where: { entityId: invoiceId, entityType: 'Invoice' },
-    include: { user: { select: { name: true } } },
-    orderBy: { createdAt: 'desc' },
-    take: 20,
-  });
+  // Batched via prisma.$transaction([...]): both queries run over a single
+  // pooled connection in one round-trip — safe at connection_limit=1 and
+  // faster than two sequential awaits.
+  const [invoice, auditLogs] = await prisma.$transaction([
+    prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      select: { id: true, billingNo: true, customerName: true },
+    }),
+    prisma.auditLog.findMany({
+      where: { entityId: invoiceId, entityType: 'Invoice' },
+      include: { user: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    }),
+  ]);
   const emailLogs = await prisma.emailLog.findMany({
     where: { invoiceId },
     orderBy: { createdAt: 'desc' },
@@ -666,14 +693,17 @@ export async function getAgingReport(billingEntity?: string): Promise<AgingRepor
   const totalOutstanding = sentInvoices.reduce((sum, inv) => sum + Number(inv.netAmount), 0);
 
   // Collection rate
-  // Sequential (not Promise.all): production's Prisma connection pool can be as
-  // small as 1, and concurrent queries would time out fetching a connection.
-  const paidCount = await prisma.invoice.count({
-    where: { status: 'PAID', ...(billingEntity && { company: { code: billingEntity } }) },
-  });
-  const sentCount = await prisma.invoice.count({
-    where: { status: 'SENT', ...(billingEntity && { company: { code: billingEntity } }) },
-  });
+  // Batched via prisma.$transaction([...]): both counts run over a single
+  // pooled connection in one round-trip — safe at connection_limit=1 and
+  // faster than two sequential awaits.
+  const [paidCount, sentCount] = await prisma.$transaction([
+    prisma.invoice.count({
+      where: { status: 'PAID', ...(billingEntity && { company: { code: billingEntity } }) },
+    }),
+    prisma.invoice.count({
+      where: { status: 'SENT', ...(billingEntity && { company: { code: billingEntity } }) },
+    }),
+  ]);
   const collectionRate = paidCount + sentCount > 0 ? paidCount / (paidCount + sentCount) : 0;
 
   // Payment method breakdown from paid invoices

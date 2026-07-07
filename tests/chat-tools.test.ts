@@ -118,23 +118,18 @@ describe('Chat Tools', () => {
 
   describe('getInvoiceStats', () => {
     it('returns aggregated invoice statistics', async () => {
-      const mockPending = [
-        { netAmount: 10000 },
-        { netAmount: 15000 },
-      ];
-      const mockApproved = [{ netAmount: 20000 }];
-      const mockRejected = [{ netAmount: 5000 }];
-      const mockSent = [{ netAmount: 12000 }];
-      const mockPaid = [
+      // Counts + netAmount sums come from a single groupBy...
+      prismaMock.invoice.groupBy.mockResolvedValueOnce([
+        { status: 'PENDING', _count: 2, _sum: { netAmount: 25000 } },
+        { status: 'APPROVED', _count: 1, _sum: { netAmount: 20000 } },
+        { status: 'REJECTED', _count: 1, _sum: { netAmount: 5000 } },
+        { status: 'SENT', _count: 1, _sum: { netAmount: 12000 } },
+        { status: 'PAID', _count: 1, _sum: { netAmount: 8000 } },
+      ] as any);
+      // ...and paidAmount from the slim PAID-only fetch (paidAmount || netAmount).
+      prismaMock.invoice.findMany.mockResolvedValueOnce([
         { netAmount: 8000, paidAmount: 8000 },
-      ];
-
-      prismaMock.invoice.findMany
-        .mockResolvedValueOnce(mockPending as any) // PENDING
-        .mockResolvedValueOnce(mockApproved as any) // APPROVED
-        .mockResolvedValueOnce(mockRejected as any) // REJECTED
-        .mockResolvedValueOnce(mockSent as any) // SENT
-        .mockResolvedValueOnce(mockPaid as any); // PAID
+      ] as any);
 
       const result = await getInvoiceStats();
 
@@ -146,6 +141,21 @@ describe('Chat Tools', () => {
       expect(result.pendingAmount).toBe(25000);
       expect(result.approvedAmount).toBe(20000);
       expect(result.paidAmount).toBe(8000);
+    });
+
+    it('falls back to netAmount when a paid invoice has no paidAmount', async () => {
+      prismaMock.invoice.groupBy.mockResolvedValueOnce([
+        { status: 'PAID', _count: 2, _sum: { netAmount: 18000 } },
+      ] as any);
+      prismaMock.invoice.findMany.mockResolvedValueOnce([
+        { netAmount: 10000, paidAmount: 9500 }, // uses paidAmount
+        { netAmount: 8000, paidAmount: null }, // falls back to netAmount
+      ] as any);
+
+      const result = await getInvoiceStats();
+
+      expect(result.paid).toBe(2);
+      expect(result.paidAmount).toBe(17500);
     });
   });
 
@@ -354,8 +364,10 @@ describe('Chat Tools', () => {
     });
 
     it('executes get_invoice_stats', async () => {
+      prismaMock.invoice.groupBy.mockResolvedValueOnce([] as any);
+      prismaMock.invoice.findMany.mockResolvedValueOnce([] as any);
       await executeTool('get_invoice_stats', {});
-      expect(prismaMock.invoice.findMany).toHaveBeenCalled();
+      expect(prismaMock.invoice.groupBy).toHaveBeenCalled();
     });
 
     it('executes get_pending_invoices', async () => {

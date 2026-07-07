@@ -537,27 +537,30 @@ export async function checkExistingInvoiceForPeriod(
 
 // Get stats for dashboard
 export async function getScheduledBillingStats() {
-  // Sequential (not Promise.all): production's Prisma connection pool can be as
-  // small as 1, and concurrent queries would time out fetching a connection.
-  const pending = await prisma.scheduledBilling.count({ where: { status: ScheduleStatus.PENDING } });
-  const active = await prisma.scheduledBilling.count({ where: { status: ScheduleStatus.ACTIVE } });
-  const paused = await prisma.scheduledBilling.count({ where: { status: ScheduleStatus.PAUSED } });
-  const ended = await prisma.scheduledBilling.count({ where: { status: ScheduleStatus.ENDED } });
-
-  // Get schedules due in next 7 days
+  // Schedules due in next 7 days — compute the window before the batch so all
+  // five counts can be issued together.
   const today = new Date();
   const nextWeek = new Date();
   nextWeek.setDate(today.getDate() + 7);
 
-  const dueThisWeek = await prisma.scheduledBilling.count({
-    where: {
-      status: ScheduleStatus.ACTIVE,
-      nextBillingDate: {
-        gte: today,
-        lte: nextWeek,
+  // Batched via prisma.$transaction([...]): all five counts run over a single
+  // pooled connection in one round-trip — safe at connection_limit=1 and
+  // faster than five sequential awaits.
+  const [pending, active, paused, ended, dueThisWeek] = await prisma.$transaction([
+    prisma.scheduledBilling.count({ where: { status: ScheduleStatus.PENDING } }),
+    prisma.scheduledBilling.count({ where: { status: ScheduleStatus.ACTIVE } }),
+    prisma.scheduledBilling.count({ where: { status: ScheduleStatus.PAUSED } }),
+    prisma.scheduledBilling.count({ where: { status: ScheduleStatus.ENDED } }),
+    prisma.scheduledBilling.count({
+      where: {
+        status: ScheduleStatus.ACTIVE,
+        nextBillingDate: {
+          gte: today,
+          lte: nextWeek,
+        },
       },
-    },
-  });
+    }),
+  ]);
 
   return {
     pending,
