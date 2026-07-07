@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { Header } from '@/components/dashboard/header';
 import { InvoiceTable, InvoiceRow } from '@/components/dashboard/invoice-table';
@@ -50,15 +50,42 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50;
 
-  // Use SWR for data fetching with caching. Seed with server-prefetched
-  // data on first paint so we skip the initial round-trip.
+  // Debounce the search box so we hit the server once the user pauses typing,
+  // not on every keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // Resolve the filter state into server query params. Status-specific pages
+  // (e.g. Pending) pin `status`; the all-invoices page drives it from the
+  // dropdown instead.
+  const effectiveStatus = showAllStatuses
+    ? statusFilter !== 'ALL'
+      ? statusFilter
+      : undefined
+    : status;
+  const effectiveEntity = entityFilter !== 'ALL' ? entityFilter : undefined;
+  const hasServerFilters = !!debouncedSearch || !!effectiveEntity || (showAllStatuses && statusFilter !== 'ALL');
+
+  // Any filter change should return to the first page, otherwise we could land
+  // on a now-empty page of a smaller filtered result set.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, entityFilter, statusFilter]);
+
+  // Use SWR for data fetching, with all filters applied server-side so search
+  // and pagination span the whole table. The server-prefetched fallback is the
+  // unfiltered first page, so only use it when no filters are active.
   const { data: invoicesData, error: invoicesError, isLoading, mutate } = useInvoices(
-    status && !showAllStatuses ? status : undefined,
-    currentPage,
-    pageSize,
-    initialData && currentPage === 1
-      ? { fallbackData: initialData, revalidateOnMount: false }
-      : undefined,
+    { status: effectiveStatus, billingEntity: effectiveEntity, search: debouncedSearch, page: currentPage, limit: pageSize },
+    {
+      keepPreviousData: true,
+      ...(initialData && currentPage === 1 && !hasServerFilters
+        ? { fallbackData: initialData, revalidateOnMount: false }
+        : {}),
+    },
   );
 
   // Pagination info from API
@@ -94,28 +121,10 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
   const loading = isLoading;
   const error = invoicesError?.message || null;
 
-  // Filter invoices based on search and filters
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter((inv) => {
-      // Search filter (client name or billing number)
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        const matchesName = inv.customerName.toLowerCase().includes(query);
-        const matchesBillingNo = inv.billingNo?.toLowerCase().includes(query);
-        if (!matchesName && !matchesBillingNo) return false;
-      }
-
-      // Entity filter
-      if (entityFilter !== 'ALL' && inv.billingEntity !== entityFilter) return false;
-
-      // Status filter (only when showing all statuses)
-      if (showAllStatuses && statusFilter !== 'ALL' && inv.status !== statusFilter) return false;
-
-      return true;
-    });
-  }, [invoices, searchQuery, entityFilter, statusFilter, showAllStatuses]);
-
-  const hasActiveFilters = searchQuery || entityFilter !== 'ALL' || (showAllStatuses && statusFilter !== 'ALL');
+  // Filtering now happens server-side, so `invoices` is already the filtered
+  // page. `hasActiveFilters` tracks the immediate input state to toggle the
+  // Clear button and the empty-state messaging.
+  const hasActiveFilters = !!searchQuery || entityFilter !== 'ALL' || (showAllStatuses && statusFilter !== 'ALL');
 
   const clearFilters = () => {
     setSearchQuery('');
@@ -314,7 +323,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
             {title}
             {loading && <Loader2 className="ml-2 inline h-4 w-4 animate-spin" />}
             <span className="ml-2 text-sm font-normal text-gray-500">
-              ({filteredInvoices.length} of {totalInvoices} invoice{totalInvoices !== 1 ? 's' : ''})
+              ({invoices.length} of {totalInvoices} invoice{totalInvoices !== 1 ? 's' : ''})
             </span>
           </h2>
           <Button variant="outline" onClick={refreshData} disabled={loading}>
@@ -383,7 +392,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
 
         {/* Invoice Table */}
         <InvoiceTable
-          invoices={filteredInvoices}
+          invoices={invoices}
           onApprove={handleApprove}
           onReject={handleReject}
           onVoid={handleVoid}
@@ -397,21 +406,22 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
           onSendFollowUp={handleSendFollowUp}
         />
 
-        {/* Empty state */}
+        {/* Empty state — distinguishes "no invoices at all" from "no match for
+            the active filters" (results are filtered server-side, so a no-match
+            search returns an empty page). */}
         {!loading && invoices.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
-            No {status?.toLowerCase() || ''} invoices found.
-          </div>
-        )}
-
-        {/* No results from filter */}
-        {!loading && invoices.length > 0 && filteredInvoices.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            No invoices match your filters.{' '}
-            <button onClick={clearFilters} className="text-blue-600 hover:underline">
-              Clear filters
-            </button>
-          </div>
+          hasActiveFilters ? (
+            <div className="text-center py-8 text-gray-500">
+              No invoices match your filters.{' '}
+              <button onClick={clearFilters} className="text-blue-600 hover:underline">
+                Clear filters
+              </button>
+            </div>
+          ) : (
+            <div className="text-center py-12 text-gray-500">
+              No {status?.toLowerCase() || ''} invoices found.
+            </div>
+          )
         )}
 
         {/* Pagination */}

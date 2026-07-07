@@ -19,12 +19,24 @@ const defaultConfig: SWRConfiguration = {
   dedupingInterval: 5000,   // Dedupe requests within 5 seconds
 };
 
-// Hook for fetching invoices
-export function useInvoices(status?: string, page?: number, limit?: number, options?: SWRConfiguration) {
+// Hook for fetching invoices. All filtering (status, billing entity, and the
+// search term) is applied server-side so results and pagination span the whole
+// table, not just the rows already loaded on the current page.
+export interface InvoiceQuery {
+  status?: string;
+  billingEntity?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+export function useInvoices(query: InvoiceQuery = {}, options?: SWRConfiguration) {
   const params = new URLSearchParams();
-  if (status) params.set('status', status);
-  if (page) params.set('page', String(page));
-  if (limit) params.set('limit', String(limit));
+  if (query.status) params.set('status', query.status);
+  if (query.billingEntity) params.set('billingEntity', query.billingEntity);
+  if (query.search) params.set('search', query.search);
+  if (query.page) params.set('page', String(query.page));
+  if (query.limit) params.set('limit', String(query.limit));
   const url = `/api/invoices${params.toString() ? `?${params.toString()}` : ''}`;
 
   return useSWR(url, fetcher, { ...defaultConfig, ...options });

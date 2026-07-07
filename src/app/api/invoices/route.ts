@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     const partner = searchParams.get('partner');
     const paidFrom = searchParams.get('paidFrom');
     const paidTo = searchParams.get('paidTo');
+    const search = searchParams.get('search')?.trim();
 
     // Pagination params
     const page = parseInt(searchParams.get('page') || '1');
@@ -41,6 +42,14 @@ export async function GET(request: NextRequest) {
       ...(billingEntity && { company: { code: billingEntity } }),
       ...(partner && { billingModel: partner as any }),
       ...(Object.keys(paidAtFilter).length > 0 && { paidAt: paidAtFilter }),
+      // Search across the whole table (customer name or billing number), so a
+      // match on any page is found — not just rows already loaded client-side.
+      ...(search && {
+        OR: [
+          { customerName: { contains: search, mode: 'insensitive' as const } },
+          { billingNo: { contains: search, mode: 'insensitive' as const } },
+        ],
+      }),
     };
 
     // Get invoices and total count.
