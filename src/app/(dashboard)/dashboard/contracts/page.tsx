@@ -20,23 +20,25 @@ export default async function ContractsPage() {
   // client-side API round-trips (/api/contracts, /api/partners, /api/companies,
   // /api/product-types).
   //
-  // Queries run SEQUENTIALLY (not Promise.all) on purpose: production runs
-  // Prisma with a small connection pool, and firing these concurrently can
-  // exhaust it ("Timed out fetching a new connection from the connection
-  // pool"), which crashes this server-rendered page. Sequential is slightly
-  // slower but safe regardless of connection_limit.
-  const contracts = await prisma.contract.findMany({
-    include: { billingEntity: true, partner: true },
-    orderBy: { createdAt: 'desc' },
-    take: PAGE_SIZE,
-  });
-  const total = await prisma.contract.count();
-  const partners = await prisma.partner.findMany({
-    select: { id: true, code: true, name: true, billingModel: true },
-  });
-  const companies = await prisma.company.findMany({
-    select: { id: true, code: true, name: true },
-  });
+  // Batched via prisma.$transaction([...]): all four queries run over a single
+  // pooled connection in one round-trip, so this is both safe at
+  // connection_limit=1 (no "Timed out fetching a new connection" errors) AND
+  // faster than issuing them as separate sequential awaits.
+  const [contracts, total, partners, companies] = await prisma.$transaction([
+    prisma.contract.findMany({
+      include: { billingEntity: true, partner: true },
+      orderBy: { createdAt: 'desc' },
+      take: PAGE_SIZE,
+    }),
+    prisma.contract.count(),
+    prisma.partner.findMany({
+      select: { id: true, code: true, name: true, billingModel: true },
+    }),
+    prisma.company.findMany({
+      select: { id: true, code: true, name: true },
+    }),
+  ]);
+  // Settings lookup (cached, not a Prisma query) stays outside the batch.
   const productTypes = await getProductTypes();
 
   // Shape contracts into the ContractRow form the client component expects.
