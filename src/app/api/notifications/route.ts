@@ -15,28 +15,31 @@ export async function GET(request: NextRequest) {
     const unreadOnly = searchParams.get('unread') === 'true';
     const limit = parseInt(searchParams.get('limit') || '20');
 
-    const notifications = await prisma.notification.findMany({
-      where: {
-        OR: [
-          { userId: session.user.id },
-          { userId: null }, // Broadcast notifications
-        ],
-        ...(unreadOnly && { isRead: false }),
-      },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    });
-
-    // Get unread count
-    const unreadCount = await prisma.notification.count({
-      where: {
-        OR: [
-          { userId: session.user.id },
-          { userId: null },
-        ],
-        isRead: false,
-      },
-    });
+    // Batched via prisma.$transaction([...]): the list and the unread count
+    // run over a single pooled connection in one round-trip — safe at
+    // connection_limit=1 and faster than two sequential awaits.
+    const [notifications, unreadCount] = await prisma.$transaction([
+      prisma.notification.findMany({
+        where: {
+          OR: [
+            { userId: session.user.id },
+            { userId: null }, // Broadcast notifications
+          ],
+          ...(unreadOnly && { isRead: false }),
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+      }),
+      prisma.notification.count({
+        where: {
+          OR: [
+            { userId: session.user.id },
+            { userId: null },
+          ],
+          isRead: false,
+        },
+      }),
+    ]);
 
     return NextResponse.json({ notifications, unreadCount });
   } catch (error) {
