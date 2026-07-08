@@ -41,9 +41,7 @@ export function DashboardView({ initialData }: DashboardViewProps = {}) {
   // SWR, seeded with server-prefetched data so the first paint has rows
   // without waiting for a client-side fetch.
   const { data: invoicesData, error: invoicesError, isLoading: invoicesLoading, mutate: mutateInvoices } = useInvoices(
-    undefined,
-    undefined,
-    undefined,
+    {},
     initialData ? { fallbackData: initialData.invoices, revalidateOnMount: false } : undefined,
   );
   const { data: statsData, error: statsError, mutate: mutateStats } = useStats(
