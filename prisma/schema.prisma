@@ -151,7 +151,7 @@ model EmailTemplate {
   closing       String
   isDefault     Boolean       @default(false)
   templateType  String        @default("BILLING") // "BILLING" | "FOLLOW_UP"
-  followUpLevel Int?          // 1, 2, or 3 for follow-up templates
+  followUpLevel Int? // 1, 2, or 3 for follow-up templates
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   partners      Partner[]
@@ -267,7 +267,7 @@ model Invoice {
   updatedAt             DateTime               @updatedAt
   partnerId             String?
   withholdingRate       Decimal?               @db.Decimal(5, 4)
-  discountAmount        Decimal?               @db.Decimal(15, 2)  // Sum of all line item discounts
+  discountAmount        Decimal?               @db.Decimal(15, 2) // Sum of all line item discounts
   customerEmails        String?
   voidReason            String?
   voidedAt              DateTime?
@@ -277,6 +277,19 @@ model Invoice {
   followUpCount         Int                    @default(0)
   lastFollowUpAt        DateTime?
   lastFollowUpLevel     Int                    @default(0)
+  // --- Collections upgrade (Phase 1) ---
+  createdById           String? // maker id (Phase 5 maker≠checker); unused until then
+  reviewFlag            ReviewFlag             @default(CHANGED) // risk tiering (Phase 5); unused until then
+  amountPaidTotal       Decimal                @default(0) @db.Decimal(15, 2)
+  balanceDue            Decimal?               @db.Decimal(15, 2) // netAmount − amountPaidTotal
+  wht2307Status         Wht2307Status          @default(NOT_APPLICABLE)
+  wht2307ReceivedAt     DateTime?
+  followUpPausedUntil   DateTime? // set by an open promise-to-pay
+  suspensionNoticeAt    DateTime?
+  suspendedAt           DateTime?
+  payments              InvoicePayment[]
+  promises              PromiseToPay[]
+  pdcChecks             PdcCheck[]
   emailLogs             EmailLog[]
   followUpLogs          FollowUpLog[]
   hitpayPaymentRequests HitpayPaymentRequest[]
@@ -300,6 +313,8 @@ model Invoice {
   @@index([dueDate])
   @@index([emailStatus])
   @@index([followUpEnabled, status])
+  @@index([wht2307Status])
+  @@index([followUpPausedUntil])
 }
 
 model InvoiceLineItem {
@@ -373,7 +388,7 @@ model EmailLog {
 model FollowUpLog {
   id         String         @id @default(cuid())
   invoiceId  String
-  level      Int            // 1, 2, or 3 (escalation level)
+  level      Int // 1, 2, or 3 (escalation level)
   sentAt     DateTime       @default(now())
   toEmail    String
   subject    String
@@ -543,6 +558,77 @@ model HitpayPaymentRequest {
   @@index([hitpayRequestId])
 }
 
+// --- Collections upgrade (Phase 1) ---
+
+model InvoicePayment {
+  id         String   @id @default(cuid())
+  invoiceId  String
+  amount     Decimal  @db.Decimal(15, 2)
+  method     String // CASH | BANK_TRANSFER | CHECK | HITPAY
+  reference  String?
+  paidDate   DateTime
+  isEwtShort Boolean  @default(false) // settled net of EWT → 2307 pending
+  source     String   @default("MANUAL") // MANUAL | HITPAY_WEBHOOK | BANKREC_SUGGESTED
+  recordedBy String?
+  createdAt  DateTime @default(now())
+  invoice    Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@index([paidDate])
+}
+
+model PromiseToPay {
+  id             String    @id @default(cuid())
+  invoiceId      String
+  promisedDate   DateTime
+  promisedAmount Decimal?  @db.Decimal(15, 2)
+  madeBy         String? // client contact who promised
+  capturedBy     String // staff user id who logged it
+  channel        String? // EMAIL | CALL | VIBER | MEETING
+  status         PtpStatus @default(OPEN)
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  invoice        Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@index([status, promisedDate])
+}
+
+model PdcCheck {
+  id          String    @id @default(cuid())
+  invoiceId   String?
+  checkNo     String
+  bankName    String
+  amount      Decimal   @db.Decimal(15, 2)
+  checkDate   DateTime // clearing / deposit-eligible date
+  status      PdcStatus @default(WAREHOUSED)
+  location    String? // physical custody
+  depositedAt DateTime?
+  clearedAt   DateTime?
+  bouncedAt   DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  invoice     Invoice?  @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@index([status, checkDate])
+}
+
+model CollectionRun {
+  id              String    @id @default(cuid())
+  runDate         DateTime  @default(now())
+  status          JobStatus @default(RUNNING)
+  invoicesScanned Int       @default(0)
+  followUpsSent   Int       @default(0)
+  promisesBroken  Int       @default(0)
+  errors          Json?
+  createdAt       DateTime  @default(now())
+
+  @@index([runDate])
+}
+
 enum UserRole {
   ADMIN
   APPROVER
@@ -589,9 +675,36 @@ enum InvoiceStatus {
   APPROVED
   REJECTED
   SENT
+  PARTIALLY_PAID
   PAID
   CANCELLED
   VOID
+}
+
+// --- Collections upgrade (Phase 1) ---
+
+enum Wht2307Status {
+  NOT_APPLICABLE
+  PENDING
+  RECEIVED
+}
+
+enum ReviewFlag {
+  UNCHANGED
+  CHANGED
+}
+
+enum PtpStatus {
+  OPEN
+  KEPT
+  BROKEN
+}
+
+enum PdcStatus {
+  WAREHOUSED
+  DEPOSITED
+  CLEARED
+  BOUNCED
 }
 
 enum EmailStatus {
