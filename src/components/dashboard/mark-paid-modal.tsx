@@ -10,6 +10,8 @@ export interface InvoiceForPayment {
   billingNo: string | null;
   customerName: string;
   netAmount: number;
+  amountPaidTotal?: number;
+  balanceDue?: number | null;
 }
 
 interface MarkPaidModalProps {
@@ -35,10 +37,16 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Remaining balance to collect (falls back to the full net for a first payment).
+  const remaining =
+    invoice && invoice.balanceDue != null ? invoice.balanceDue : invoice?.netAmount ?? 0;
+  const partiallyPaid = !!invoice && (invoice.amountPaidTotal ?? 0) > 0;
+
   // Update form when invoice changes
   useEffect(() => {
     if (invoice) {
-      setPaidAmount(invoice.netAmount.toFixed(2));
+      const bal = invoice.balanceDue != null ? invoice.balanceDue : invoice.netAmount;
+      setPaidAmount(bal.toFixed(2));
       setPaymentMethod('BANK_TRANSFER');
       setPaymentReference('');
       setPaidAt(new Date().toISOString().split('T')[0]);
@@ -89,7 +97,7 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
       <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Mark Invoice as Paid</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Record Payment</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -131,6 +139,12 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
             />
             <p className="text-xs text-gray-500 mt-1">
               Invoice amount: PHP {invoice.netAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+              {partiallyPaid && (
+                <>
+                  {' · '}Paid: PHP {(invoice.amountPaidTotal ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  {' · '}<span className="font-medium text-gray-700">Balance: PHP {remaining.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                </>
+              )}
             </p>
           </div>
 

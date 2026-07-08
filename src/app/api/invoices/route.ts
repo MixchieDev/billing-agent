@@ -76,6 +76,8 @@ export async function GET(request: NextRequest) {
           status: true,
           paidAt: true,
           paidAmount: true,
+          amountPaidTotal: true,
+          balanceDue: true,
           // Follow-up tracking fields
           followUpEnabled: true,
           followUpCount: true,

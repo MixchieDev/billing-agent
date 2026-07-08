@@ -60,6 +60,8 @@ export function DashboardView({ initialData }: DashboardViewProps = {}) {
       serviceFee: Number(inv.serviceFee),
       vatAmount: Number(inv.vatAmount),
       netAmount: Number(inv.netAmount),
+      amountPaidTotal: inv.amountPaidTotal != null ? Number(inv.amountPaidTotal) : undefined,
+      balanceDue: inv.balanceDue != null ? Number(inv.balanceDue) : null,
       dueDate: new Date(inv.dueDate),
       billingEntity: inv.company?.code || 'YOWI',
       billingModel: inv.billingModel,

@@ -55,7 +55,9 @@ export interface InvoiceRow {
   createdAt: Date;
   billingEntity: 'YOWI' | 'ABBA';
   billingModel: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SENT' | 'PAID' | 'VOID';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SENT' | 'PARTIALLY_PAID' | 'PAID' | 'VOID';
+  amountPaidTotal?: number;
+  balanceDue?: number | null;
   emailStatus?: string;
   // Follow-up tracking fields
   followUpEnabled?: boolean;
@@ -232,10 +234,12 @@ export function InvoiceTable({
       APPROVED: 'success',
       REJECTED: 'destructive',
       SENT: 'default',
+      PARTIALLY_PAID: 'warning',
       PAID: 'success',
       VOID: 'secondary',
     };
-    return <Badge variant={variants[status] || 'secondary'}>{status}</Badge>;
+    const labels: Record<string, string> = { PARTIALLY_PAID: 'PARTIAL' };
+    return <Badge variant={variants[status] || 'secondary'}>{labels[status] || status}</Badge>;
   };
 
   const getDaysUntilBadge = (dueDate: Date) => {
@@ -436,7 +440,7 @@ export function InvoiceTable({
                         )}
                       </>
                     )}
-                    {invoice.status === 'SENT' && (
+                    {(invoice.status === 'SENT' || invoice.status === 'PARTIALLY_PAID') && (
                       <>
                         <Button
                           variant="outline"

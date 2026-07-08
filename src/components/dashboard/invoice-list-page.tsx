@@ -106,6 +106,8 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
       serviceFee: Number(inv.serviceFee),
       vatAmount: Number(inv.vatAmount),
       netAmount: Number(inv.netAmount),
+      amountPaidTotal: inv.amountPaidTotal != null ? Number(inv.amountPaidTotal) : undefined,
+      balanceDue: inv.balanceDue != null ? Number(inv.balanceDue) : null,
       dueDate: new Date(inv.dueDate),
       createdAt: new Date(inv.createdAt),
       billingEntity: inv.company?.code || 'YOWI',
@@ -199,6 +201,8 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
       billingNo: invoice.billingNo,
       customerName: invoice.customerName,
       netAmount: invoice.netAmount,
+      amountPaidTotal: invoice.amountPaidTotal,
+      balanceDue: invoice.balanceDue,
     });
   };
 
@@ -368,6 +372,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
               <option value="PENDING">Pending</option>
               <option value="APPROVED">Approved</option>
               <option value="SENT">Sent</option>
+              <option value="PARTIALLY_PAID">Partially Paid</option>
               <option value="PAID">Paid</option>
               <option value="REJECTED">Rejected</option>
               <option value="VOID">Void</option>

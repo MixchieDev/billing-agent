@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
-import { notifyInvoicePaid } from '@/lib/notifications';
+import { recordPayment } from '@/lib/payment-service';
 
 interface MarkPaidRequest {
   paidAmount: number;
@@ -13,7 +12,9 @@ interface MarkPaidRequest {
 
 /**
  * POST /api/invoices/[id]/mark-paid
- * Marks an invoice as PAID with payment details
+ * Records a payment against an invoice. Supports partial payments: the invoice
+ * becomes PARTIALLY_PAID until the balance is settled, then PAID. (Kept at this
+ * path so the existing Record-payment modal keeps working.)
  */
 export async function POST(
   request: NextRequest,
@@ -56,76 +57,25 @@ export async function POST(
       );
     }
 
-    // Get the invoice
-    const invoice = await prisma.invoice.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        billingNo: true,
-        customerName: true,
-        status: true,
-        netAmount: true,
-      },
+    const result = await recordPayment({
+      invoiceId: id,
+      amount: body.paidAmount,
+      method: body.paymentMethod,
+      reference: body.paymentReference || null,
+      paidDate: body.paidAt ? new Date(body.paidAt) : new Date(),
+      source: 'MANUAL',
+      recordedBy: session.user.id,
     });
 
-    if (!invoice) {
-      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
-    }
-
-    // Only SENT invoices can be marked as paid
-    if (invoice.status !== 'SENT') {
-      return NextResponse.json(
-        { error: `Cannot mark invoice as paid. Current status: ${invoice.status}. Only SENT invoices can be marked as paid.` },
-        { status: 400 }
-      );
-    }
-
-    // Update invoice to PAID status with payment details
-    const paidAt = body.paidAt ? new Date(body.paidAt) : new Date();
-
-    const updatedInvoice = await prisma.invoice.update({
-      where: { id },
-      data: {
-        status: 'PAID',
-        paidAt,
-        paidAmount: body.paidAmount,
-        paymentMethod: body.paymentMethod,
-        paymentReference: body.paymentReference || null,
-      },
-    });
-
-    // Log the action
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'INVOICE_PAID',
-        entityType: 'Invoice',
-        entityId: id,
-        details: {
-          billingNo: invoice.billingNo,
-          paidAmount: body.paidAmount,
-          paymentMethod: body.paymentMethod,
-          paymentReference: body.paymentReference,
-          paidAt: paidAt.toISOString(),
-        },
-      },
-    });
-
-    // Create notification
-    await notifyInvoicePaid({
-      id: invoice.id,
-      billingNo: invoice.billingNo,
-      customerName: invoice.customerName,
-      paidAmount: body.paidAmount,
-      paymentMethod: body.paymentMethod,
-    });
-
-    return NextResponse.json(updatedInvoice);
+    return NextResponse.json(result);
   } catch (error) {
-    console.error('Error marking invoice as paid:', error);
-    return NextResponse.json(
-      { error: 'Failed to mark invoice as paid' },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : 'Failed to record payment';
+    console.error('Error recording payment:', error);
+    // Client errors (not found / wrong status / bad amount) → 400; else 500.
+    const isClientError =
+      message.includes('Invoice not found') ||
+      message.includes('Cannot record a payment') ||
+      message.includes('greater than zero');
+    return NextResponse.json({ error: message }, { status: isClientError ? 400 : 500 });
   }
 }

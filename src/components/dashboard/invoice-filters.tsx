@@ -122,6 +122,7 @@ export function InvoiceFiltersComponent({
               <option value="APPROVED">Approved</option>
               <option value="REJECTED">Rejected</option>
               <option value="SENT">Sent</option>
+              <option value="PARTIALLY_PAID">Partially Paid</option>
               <option value="PAID">Paid</option>
             </Select>
           </div>
