@@ -41,6 +41,14 @@ const DEFAULTS: Record<string, any> = {
     { value: 'COMPLIANCE', label: 'Compliance' },
     { value: 'HR', label: 'HR' },
   ],
+
+  // Collections ladder (days overdue at which each follow-up level fires; which
+  // levels the nightly sweep auto-sends). L4 (suspension) + PDC lead times are
+  // Phase 3.
+  'collections.l1Days': 1,
+  'collections.l2Days': 7,
+  'collections.l3Days': 15,
+  'collections.autoSendLevels': [1, 2, 3],
 };
 
 // Cache for settings (refreshed every 5 minutes)

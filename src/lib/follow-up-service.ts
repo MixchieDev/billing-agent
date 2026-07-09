@@ -49,8 +49,8 @@ export async function canSendFollowUp(invoiceId: string): Promise<CanSendFollowU
     return { canSend: false, reason: 'Invoice not found' };
   }
 
-  if (invoice.status !== 'SENT') {
-    return { canSend: false, reason: 'Invoice must be in SENT status to send follow-up' };
+  if (invoice.status !== 'SENT' && invoice.status !== 'PARTIALLY_PAID') {
+    return { canSend: false, reason: 'Invoice must be SENT or PARTIALLY_PAID to send follow-up' };
   }
 
   if (!invoice.followUpEnabled) {

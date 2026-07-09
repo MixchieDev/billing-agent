@@ -39,10 +39,28 @@ export async function GET(request: NextRequest) {
     const { triggerBillingJob } = await import('@/lib/scheduler');
     const result = await triggerBillingJob();
 
+    // Second phase: the collections sweep (follow-up ladder + broken promises).
+    // Isolated so a sweep failure never breaks the billing run.
+    let collections;
+    try {
+      const { runCollectionsSweep } = await import('@/lib/collections-service');
+      const sweep = await runCollectionsSweep();
+      collections = {
+        invoicesScanned: sweep.invoicesScanned,
+        followUpsSent: sweep.followUpsSent,
+        promisesBroken: sweep.promisesBroken,
+      };
+      console.log('[Cron Trigger] Collections sweep:', collections);
+    } catch (sweepError) {
+      console.error('[Cron Trigger] Collections sweep failed:', sweepError);
+      collections = { error: sweepError instanceof Error ? sweepError.message : 'sweep failed' };
+    }
+
     return NextResponse.json({
       message: 'Billing job triggered successfully',
       source,
       ...result,
+      collections,
     });
   } catch (error) {
     console.error('[Cron Trigger] Error:', error);
@@ -72,10 +90,24 @@ export async function POST(request: NextRequest) {
     const { triggerBillingJob } = await import('@/lib/scheduler');
     const result = await triggerBillingJob();
 
+    let collections;
+    try {
+      const { runCollectionsSweep } = await import('@/lib/collections-service');
+      const sweep = await runCollectionsSweep();
+      collections = {
+        invoicesScanned: sweep.invoicesScanned,
+        followUpsSent: sweep.followUpsSent,
+        promisesBroken: sweep.promisesBroken,
+      };
+    } catch (sweepError) {
+      collections = { error: sweepError instanceof Error ? sweepError.message : 'sweep failed' };
+    }
+
     return NextResponse.json({
       message: 'Billing job triggered successfully',
       source: 'manual',
       ...result,
+      collections,
     });
   } catch (error) {
     console.error('[Cron Trigger] Error:', error);
