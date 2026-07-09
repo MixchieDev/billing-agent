@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Header } from '@/components/dashboard/header';
 import { InvoiceTable, InvoiceRow } from '@/components/dashboard/invoice-table';
 import { MarkPaidModal, InvoiceForPayment } from '@/components/dashboard/mark-paid-modal';
+import { PromiseToPayModal, InvoiceForPromise } from '@/components/dashboard/promise-to-pay-modal';
 
 // Lazy-load heavy modals (only mounted when opened).
 const InvoiceEditModal = dynamic(
@@ -38,6 +39,7 @@ interface InvoiceListPageProps {
 
 export function InvoiceListPage({ title, subtitle, status, showAllStatuses, initialData }: InvoiceListPageProps) {
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<InvoiceForPayment | null>(null);
+  const [selectedInvoiceForPromise, setSelectedInvoiceForPromise] = useState<InvoiceForPromise | null>(null);
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
   const [selectedInvoiceForHistory, setSelectedInvoiceForHistory] = useState<{ id: string; billingNo: string | null; customerName: string } | null>(null);
 
@@ -108,6 +110,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
       netAmount: Number(inv.netAmount),
       amountPaidTotal: inv.amountPaidTotal != null ? Number(inv.amountPaidTotal) : undefined,
       balanceDue: inv.balanceDue != null ? Number(inv.balanceDue) : null,
+      followUpPausedUntil: inv.followUpPausedUntil ? new Date(inv.followUpPausedUntil) : null,
       dueDate: new Date(inv.dueDate),
       createdAt: new Date(inv.createdAt),
       billingEntity: inv.company?.code || 'YOWI',
@@ -204,6 +207,32 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
       amountPaidTotal: invoice.amountPaidTotal,
       balanceDue: invoice.balanceDue,
     });
+  };
+
+  const handlePromise = (invoice: InvoiceRow) => {
+    setSelectedInvoiceForPromise({
+      id: invoice.id,
+      billingNo: invoice.billingNo,
+      customerName: invoice.customerName,
+      netAmount: invoice.netAmount,
+      balanceDue: invoice.balanceDue,
+    });
+  };
+
+  const handleSavePromise = async (
+    invoiceId: string,
+    data: { promisedDate: string; promisedAmount?: number; channel?: string; notes?: string }
+  ) => {
+    const response = await fetch(`/api/invoices/${invoiceId}/promises`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Failed to log promise');
+    }
+    mutate();
   };
 
   const handleSavePayment = async (
@@ -410,6 +439,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
           onPayOnline={handlePayOnline}
           onViewHistory={handleViewHistory}
           onSendFollowUp={handleSendFollowUp}
+          onPromise={handlePromise}
         />
 
         {/* Empty state — distinguishes "no invoices at all" from "no match for
@@ -469,6 +499,13 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
         isOpen={!!selectedInvoiceForPayment}
         onClose={() => setSelectedInvoiceForPayment(null)}
         onSave={handleSavePayment}
+      />
+
+      <PromiseToPayModal
+        invoice={selectedInvoiceForPromise}
+        isOpen={!!selectedInvoiceForPromise}
+        onClose={() => setSelectedInvoiceForPromise(null)}
+        onSave={handleSavePromise}
       />
 
       {/* Invoice Edit Modal — only mount when open so dynamic chunk loads on demand */}

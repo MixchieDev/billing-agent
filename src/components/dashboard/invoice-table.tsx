@@ -29,6 +29,7 @@ import {
   CreditCard,
   History,
   MailWarning,
+  CalendarClock,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
@@ -58,6 +59,7 @@ export interface InvoiceRow {
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SENT' | 'PARTIALLY_PAID' | 'PAID' | 'VOID';
   amountPaidTotal?: number;
   balanceDue?: number | null;
+  followUpPausedUntil?: Date | null;
   emailStatus?: string;
   // Follow-up tracking fields
   followUpEnabled?: boolean;
@@ -78,6 +80,7 @@ interface InvoiceTableProps {
   onPayOnline?: (invoice: InvoiceRow) => void;
   onViewHistory?: (invoice: InvoiceRow) => void;
   onSendFollowUp?: (invoice: InvoiceRow) => void;
+  onPromise?: (invoice: InvoiceRow) => void;
   showBulkActions?: boolean;
 }
 
@@ -94,6 +97,7 @@ export function InvoiceTable({
   onPayOnline,
   onViewHistory,
   onSendFollowUp,
+  onPromise,
   showBulkActions = true,
 }: InvoiceTableProps) {
   const [sendingInvoice, setSendingInvoice] = useState<InvoiceRow | null>(null);
@@ -485,6 +489,28 @@ export function InvoiceTable({
                             >
                               {invoice.lastFollowUpLevel ?? 0}/3
                             </Badge>
+                          </Button>
+                        )}
+                        {invoice.followUpPausedUntil &&
+                          new Date(invoice.followUpPausedUntil) > new Date() && (
+                            <span
+                              className="inline-flex items-center rounded bg-purple-50 px-2 py-1 text-xs text-purple-700"
+                              title="Follow-ups paused by a promise to pay"
+                            >
+                              <CalendarClock className="mr-1 h-3 w-3" />
+                              Paused until {formatDateShort(new Date(invoice.followUpPausedUntil))}
+                            </span>
+                          )}
+                        {onPromise && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onPromise(invoice)}
+                            className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                            title="Log a promise to pay"
+                          >
+                            <CalendarClock className="mr-1 h-4 w-4" />
+                            Promise
                           </Button>
                         )}
                         {onPayOnline && (
