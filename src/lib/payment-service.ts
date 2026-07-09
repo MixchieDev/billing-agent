@@ -66,7 +66,18 @@ export interface RecordPaymentInput {
   paidDate?: Date;
   source?: string; // MANUAL | HITPAY_WEBHOOK | BANKREC_SUGGESTED
   recordedBy?: string | null;
+  /**
+   * Operator override: the client deducted withholding tax that was NOT billed
+   * on this invoice, so the remaining shortfall is a 2307 (not an underpayment).
+   * When set and a shortfall remains, the invoice settles as PAID + 2307 pending.
+   */
+  settleWithholding?: boolean;
 }
+
+// A shortfall larger than this fraction of the net can't plausibly be EWT
+// (Philippine EWT rates top out ~15%); reject the override so a real
+// underpayment can't be mislabeled as withholding.
+const MAX_WITHHOLDING_FRACTION = 0.2;
 
 export interface RecordPaymentResult {
   invoiceId: string;
@@ -132,11 +143,29 @@ export async function recordPayment(
     });
     const amountPaidTotal = agg._sum.amount ?? new Prisma.Decimal(0);
 
-    const settlement = computeSettlement(
+    let settlement = computeSettlement(
       invoice.netAmount,
       invoice.withholdingTax ?? new Prisma.Decimal(0),
       amountPaidTotal
     );
+
+    // Operator override: an unbilled withholding deduction. If a shortfall
+    // remains and the operator confirms it's withholding, settle it as PAID with
+    // the 2307 pending — but only if the shortfall is small enough to be EWT.
+    if (settlement.status === 'PARTIALLY_PAID' && input.settleWithholding) {
+      const cap = invoice.netAmount.times(MAX_WITHHOLDING_FRACTION);
+      if (settlement.balanceDue.greaterThan(cap)) {
+        throw new Error(
+          'Shortfall is too large to be withholding tax; record it as a partial payment instead.'
+        );
+      }
+      settlement = {
+        status: 'PAID',
+        balanceDue: settlement.balanceDue,
+        wht2307Pending: true,
+        isEwtShort: true,
+      };
+    }
 
     if (settlement.isEwtShort) {
       await tx.invoicePayment.update({
@@ -177,6 +206,7 @@ export async function recordPayment(
           status: settlement.status,
           isEwtShort: settlement.isEwtShort,
           wht2307Pending: settlement.wht2307Pending,
+          settleWithholding: !!input.settleWithholding,
         },
       },
     });

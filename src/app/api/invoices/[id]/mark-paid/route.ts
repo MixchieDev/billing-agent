@@ -8,6 +8,7 @@ interface MarkPaidRequest {
   paymentMethod: 'CASH' | 'BANK_TRANSFER' | 'CHECK' | 'HITPAY';
   paymentReference?: string;
   paidAt?: string; // ISO date string, defaults to now
+  settleWithholding?: boolean; // shortfall is an unbilled 2307 deduction
 }
 
 /**
@@ -65,6 +66,7 @@ export async function POST(
       paidDate: body.paidAt ? new Date(body.paidAt) : new Date(),
       source: 'MANUAL',
       recordedBy: session.user.id,
+      settleWithholding: body.settleWithholding,
     });
 
     return NextResponse.json(result);
@@ -75,7 +77,8 @@ export async function POST(
     const isClientError =
       message.includes('Invoice not found') ||
       message.includes('Cannot record a payment') ||
-      message.includes('greater than zero');
+      message.includes('greater than zero') ||
+      message.includes('too large to be withholding');
     return NextResponse.json({ error: message }, { status: isClientError ? 400 : 500 });
   }
 }

@@ -213,6 +213,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
       paymentMethod: 'CASH' | 'BANK_TRANSFER' | 'CHECK';
       paymentReference?: string;
       paidAt?: string;
+      settleWithholding?: boolean;
     }
   ) => {
     const response = await fetch(`/api/invoices/${invoiceId}/mark-paid`, {

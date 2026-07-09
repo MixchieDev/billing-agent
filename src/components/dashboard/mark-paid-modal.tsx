@@ -25,6 +25,7 @@ interface MarkPaidModalProps {
       paymentMethod: 'CASH' | 'BANK_TRANSFER' | 'CHECK';
       paymentReference?: string;
       paidAt?: string;
+      settleWithholding?: boolean;
     }
   ) => Promise<void>;
 }
@@ -34,6 +35,7 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK_TRANSFER' | 'CHECK'>('BANK_TRANSFER');
   const [paymentReference, setPaymentReference] = useState('');
   const [paidAt, setPaidAt] = useState('');
+  const [settleWithholding, setSettleWithholding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,6 +43,10 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
   const remaining =
     invoice && invoice.balanceDue != null ? invoice.balanceDue : invoice?.netAmount ?? 0;
   const partiallyPaid = !!invoice && (invoice.amountPaidTotal ?? 0) > 0;
+  const enteredAmount = parseFloat(paidAmount);
+  const shortfall = !isNaN(enteredAmount) ? remaining - enteredAmount : 0;
+  // Offer the withholding override only when the payment is short of the balance.
+  const showWithholdingOption = shortfall > 1;
 
   // Update form when invoice changes
   useEffect(() => {
@@ -50,6 +56,7 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
       setPaymentMethod('BANK_TRANSFER');
       setPaymentReference('');
       setPaidAt(new Date().toISOString().split('T')[0]);
+      setSettleWithholding(false);
       setError(null);
     }
   }, [invoice]);
@@ -72,6 +79,7 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
         paymentMethod,
         paymentReference: paymentReference || undefined,
         paidAt: paidAt || undefined,
+        settleWithholding,
       });
       onClose();
     } catch (err) {
@@ -190,6 +198,26 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
               className="w-full"
             />
           </div>
+
+          {/* Withholding override — only when the payment is short of the balance */}
+          {showWithholdingOption && (
+            <label className="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-200 p-3 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settleWithholding}
+                onChange={(e) => setSettleWithholding(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span className="text-gray-700">
+                Client deducted withholding tax (2307 to follow)
+                <span className="block text-xs text-gray-500 mt-0.5">
+                  Marks the invoice <span className="font-medium">Paid</span> and books the remaining{' '}
+                  PHP {shortfall.toLocaleString('en-PH', { minimumFractionDigits: 2 })} as a pending 2307,
+                  instead of a partial payment.
+                </span>
+              </span>
+            </label>
+          )}
         </div>
 
         {/* Footer Actions */}
