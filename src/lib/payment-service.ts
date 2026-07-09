@@ -16,6 +16,7 @@
 import { Prisma } from '@/generated/prisma';
 import prisma from './prisma';
 import { notifyInvoicePaid } from './notifications';
+import { markOpenPromisesKept } from './promise-service';
 
 // Peso tolerance for "close enough to settled" (rounding / bank fees).
 export const SETTLE_TOLERANCE = new Prisma.Decimal(1);
@@ -184,10 +185,16 @@ export async function recordPayment(
       data.paidAt = paidDate;
       data.paymentMethod = method;
       data.paymentReference = reference;
+      data.followUpPausedUntil = null; // settled — no reason to keep follow-ups paused
       if (settlement.wht2307Pending) data.wht2307Status = 'PENDING';
     }
 
     await tx.invoice.update({ where: { id: invoice.id }, data });
+
+    // A settled invoice keeps any outstanding promise.
+    if (settlement.status === 'PAID') {
+      await markOpenPromisesKept(tx, invoice.id);
+    }
 
     await tx.auditLog.create({
       data: {
