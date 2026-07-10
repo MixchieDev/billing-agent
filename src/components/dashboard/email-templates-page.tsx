@@ -189,68 +189,68 @@ export function EmailTemplatesPage() {
           </Button>
         </div>
 
-        <div className="bg-white rounded-lg border p-6 space-y-4">
+        <div className="bg-card rounded-lg border p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Template Name
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               placeholder="e.g., Globe Innove Template"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Email Subject
             </label>
             <input
               type="text"
               value={formData.subject}
               onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               placeholder="Billing Statement - {{billingNo}}"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Greeting
             </label>
             <textarea
               value={formData.greeting}
               onChange={(e) => setFormData({ ...formData, greeting: e.target.value })}
               rows={2}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               placeholder="A blessed day, Beloved Client!"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Body
             </label>
             <textarea
               value={formData.body}
               onChange={(e) => setFormData({ ...formData, body: e.target.value })}
               rows={8}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring font-mono"
               placeholder="Main email content..."
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Closing
             </label>
             <textarea
               value={formData.closing}
               onChange={(e) => setFormData({ ...formData, closing: e.target.value })}
               rows={4}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               placeholder="Thank you and God bless!"
             />
           </div>
@@ -261,21 +261,21 @@ export function EmailTemplatesPage() {
               id="isDefault"
               checked={formData.isDefault}
               onChange={(e) => setFormData({ ...formData, isDefault: e.target.checked })}
-              className="rounded border-gray-300"
+              className="rounded border-border"
             />
-            <label htmlFor="isDefault" className="text-sm text-gray-700">
+            <label htmlFor="isDefault" className="text-sm text-foreground">
               Set as Default Template
             </label>
           </div>
 
           {/* Placeholders Reference */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">Available Placeholders</h4>
+          <div className="bg-muted rounded-lg p-4">
+            <h4 className="text-sm font-medium text-foreground mb-2">Available Placeholders</h4>
             <div className="flex flex-wrap gap-2">
               {PLACEHOLDERS.map((p) => (
                 <span
                   key={p.key}
-                  className="inline-flex items-center px-2 py-1 bg-white rounded border text-xs font-mono cursor-pointer hover:bg-blue-50"
+                  className="inline-flex items-center px-2 py-1 bg-card rounded border text-xs font-mono cursor-pointer hover:bg-blue-50"
                   onClick={() => navigator.clipboard.writeText(p.key)}
                   title={`${p.desc} - Click to copy`}
                 >
@@ -283,7 +283,7 @@ export function EmailTemplatesPage() {
                 </span>
               ))}
             </div>
-            <p className="text-xs text-gray-500 mt-2">Click a placeholder to copy it</p>
+            <p className="text-xs text-muted-foreground mt-2">Click a placeholder to copy it</p>
           </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t">
@@ -320,12 +320,12 @@ export function EmailTemplatesPage() {
         {templates.map((template) => (
           <div
             key={template.id}
-            className="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow"
+            className="bg-card rounded-lg border p-4 hover:shadow-md transition-shadow"
           >
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Mail className="h-5 w-5 text-blue-600" />
-                <h3 className="font-semibold text-gray-900">{template.name}</h3>
+                <h3 className="font-semibold text-foreground">{template.name}</h3>
               </div>
               {template.isDefault && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-medium rounded">
@@ -337,12 +337,12 @@ export function EmailTemplatesPage() {
 
             <div className="space-y-2 mb-4">
               <div className="text-sm">
-                <span className="text-gray-500">Subject:</span>
-                <p className="text-gray-700 truncate">{template.subject}</p>
+                <span className="text-muted-foreground">Subject:</span>
+                <p className="text-foreground truncate">{template.subject}</p>
               </div>
 
               {template.partners.length > 0 && (
-                <div className="flex items-center gap-1 text-sm text-gray-600">
+                <div className="flex items-center gap-1 text-sm text-muted-foreground">
                   <Users className="h-4 w-4" />
                   <span>
                     Assigned to: {template.partners.map((p) => p.name).join(', ')}
@@ -377,9 +377,9 @@ export function EmailTemplatesPage() {
       </div>
 
       {templates.length === 0 && (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <Mail className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600">No email templates found</p>
+        <div className="text-center py-12 bg-muted rounded-lg">
+          <Mail className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">No email templates found</p>
           <Button className="mt-4" onClick={handleCreate}>
             Create Your First Template
           </Button>

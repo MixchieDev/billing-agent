@@ -85,7 +85,7 @@ export function RunHistoryTab() {
         );
       case 'SKIPPED':
         return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+          <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
             <AlertTriangle className="h-3 w-3" />
             Skipped
           </span>
@@ -115,7 +115,7 @@ export function RunHistoryTab() {
       case 'REJECTED':
         return <span className="text-xs text-red-600">Rejected</span>;
       default:
-        return <span className="text-xs text-gray-500">{status}</span>;
+        return <span className="text-xs text-muted-foreground">{status}</span>;
     }
   };
 
@@ -127,14 +127,14 @@ export function RunHistoryTab() {
           <select
             value={daysBack}
             onChange={(e) => setDaysBack(parseInt(e.target.value))}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="rounded-lg border border-border px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
           >
             <option value={7}>Last 7 days</option>
             <option value={30}>Last 30 days</option>
             <option value={90}>Last 90 days</option>
             <option value={0}>All time</option>
           </select>
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-muted-foreground">
             {runs.length} run{runs.length !== 1 ? 's' : ''} found
           </span>
         </div>
@@ -151,14 +151,14 @@ export function RunHistoryTab() {
       )}
 
       {/* Runs Table */}
-      <div className="rounded-lg border bg-white">
+      <div className="rounded-lg border bg-card">
         {loading ? (
           <div className="flex h-64 items-center justify-center">
-            <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+            <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : runs.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            <Clock className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+          <div className="p-8 text-center text-muted-foreground">
+            <Clock className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
             <p className="text-lg font-medium">No runs found</p>
             <p className="text-sm mt-1">
               {daysBack > 0
@@ -169,51 +169,51 @@ export function RunHistoryTab() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-muted">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Run Date</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Client</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Entity</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-500">Amount</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Run Status</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Generated Invoice</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Details</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Run Date</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Client</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Entity</th>
+                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">Amount</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Run Status</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Generated Invoice</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {runs.map((run) => (
-                  <tr key={run.id} className="hover:bg-gray-50">
+                  <tr key={run.id} className="hover:bg-muted">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900">
+                      <div className="font-medium text-foreground">
                         {format(new Date(run.runDate), 'MMM d, yyyy')}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-muted-foreground">
                         {format(new Date(run.runDate), 'h:mm a')}
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900">
+                      <div className="font-medium text-foreground">
                         {run.scheduledBilling.contract.companyName}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-muted-foreground">
                         {run.scheduledBilling.contract.productType}
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                      <span className="inline-flex items-center rounded bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
                         {run.scheduledBilling.billingEntity.code}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       {run.invoice ? (
-                        <span className="font-medium text-gray-900">
+                        <span className="font-medium text-foreground">
                           {new Intl.NumberFormat('en-PH', {
                             style: 'currency',
                             currency: 'PHP',
                           }).format(Number(run.invoice.netAmount))}
                         </span>
                       ) : (
-                        <span className="text-gray-400">-</span>
+                        <span className="text-muted-foreground">-</span>
                       )}
                     </td>
                     <td className="px-4 py-3">{getStatusBadge(run.status)}</td>
@@ -222,8 +222,8 @@ export function RunHistoryTab() {
                         <div className="flex items-center gap-2">
                           <div>
                             <div className="flex items-center gap-2">
-                              <FileText className="h-4 w-4 text-gray-400" />
-                              <span className="font-mono text-xs text-gray-700">
+                              <FileText className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-mono text-xs text-foreground">
                                 {run.invoice.billingNo || 'Draft'}
                               </span>
                             </div>
@@ -235,14 +235,14 @@ export function RunHistoryTab() {
                             href={`/api/invoices/${run.invoice.id}/pdf`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-muted-foreground"
                             title="View PDF"
                           >
                             <ExternalLink className="h-4 w-4" />
                           </a>
                         </div>
                       ) : (
-                        <span className="text-gray-400">-</span>
+                        <span className="text-muted-foreground">-</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -253,13 +253,13 @@ export function RunHistoryTab() {
                           </span>
                         </div>
                       ) : run.status === 'SKIPPED' ? (
-                        <span className="text-xs text-gray-500">Already invoiced</span>
+                        <span className="text-xs text-muted-foreground">Already invoiced</span>
                       ) : run.status === 'SUCCESS' ? (
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-muted-foreground">
                           {formatDistanceToNow(new Date(run.runDate), { addSuffix: true })}
                         </span>
                       ) : (
-                        <span className="text-gray-400">-</span>
+                        <span className="text-muted-foreground">-</span>
                       )}
                     </td>
                   </tr>
@@ -273,27 +273,27 @@ export function RunHistoryTab() {
       {/* Summary Stats */}
       {runs.length > 0 && (
         <div className="grid grid-cols-4 gap-4">
-          <div className="rounded-lg border bg-white p-4 text-center">
-            <div className="text-2xl font-bold text-gray-900">{runs.length}</div>
-            <p className="text-sm text-gray-500">Total Runs</p>
+          <div className="rounded-lg border bg-card p-4 text-center">
+            <div className="text-2xl font-bold text-foreground">{runs.length}</div>
+            <p className="text-sm text-muted-foreground">Total Runs</p>
           </div>
-          <div className="rounded-lg border bg-white p-4 text-center">
+          <div className="rounded-lg border bg-card p-4 text-center">
             <div className="text-2xl font-bold text-green-600">
               {runs.filter((r) => r.status === 'SUCCESS').length}
             </div>
-            <p className="text-sm text-gray-500">Successful</p>
+            <p className="text-sm text-muted-foreground">Successful</p>
           </div>
-          <div className="rounded-lg border bg-white p-4 text-center">
+          <div className="rounded-lg border bg-card p-4 text-center">
             <div className="text-2xl font-bold text-red-600">
               {runs.filter((r) => r.status === 'FAILED').length}
             </div>
-            <p className="text-sm text-gray-500">Failed</p>
+            <p className="text-sm text-muted-foreground">Failed</p>
           </div>
-          <div className="rounded-lg border bg-white p-4 text-center">
-            <div className="text-2xl font-bold text-gray-600">
+          <div className="rounded-lg border bg-card p-4 text-center">
+            <div className="text-2xl font-bold text-muted-foreground">
               {runs.filter((r) => r.status === 'SKIPPED').length}
             </div>
-            <p className="text-sm text-gray-500">Skipped</p>
+            <p className="text-sm text-muted-foreground">Skipped</p>
           </div>
         </div>
       )}

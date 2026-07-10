@@ -49,16 +49,16 @@ const actionConfig: Record<string, { icon: any; color: string; label: string }> 
   INVOICE_REJECTED: { icon: XCircle, color: 'text-red-500', label: 'Rejected' },
   INVOICE_SENT: { icon: Mail, color: 'text-blue-500', label: 'Sent' },
   INVOICE_PAID: { icon: DollarSign, color: 'text-green-500', label: 'Paid' },
-  INVOICE_VOIDED: { icon: Ban, color: 'text-gray-500', label: 'Voided' },
+  INVOICE_VOIDED: { icon: Ban, color: 'text-muted-foreground', label: 'Voided' },
   INVOICE_UPDATED: { icon: Edit, color: 'text-yellow-500', label: 'Updated' },
   INVOICE_AUTO_SENT: { icon: Send, color: 'text-purple-500', label: 'Auto-sent' },
   INVOICE_SEND_FAILED: { icon: AlertCircle, color: 'text-red-500', label: 'Send Failed' },
-  INVOICE_PDF_GENERATED: { icon: FileText, color: 'text-gray-500', label: 'PDF Generated' },
+  INVOICE_PDF_GENERATED: { icon: FileText, color: 'text-muted-foreground', label: 'PDF Generated' },
   INVOICE_EMAIL_SENT: { icon: Mail, color: 'text-blue-500', label: 'Email Sent' },
   INVOICE_REMINDER_SENT: { icon: RefreshCw, color: 'text-orange-500', label: 'Reminder Sent' },
 };
 
-const defaultActionConfig = { icon: Clock, color: 'text-gray-400', label: 'Activity' };
+const defaultActionConfig = { icon: Clock, color: 'text-muted-foreground', label: 'Activity' };
 
 function getActionConfig(action: string) {
   return actionConfig[action] || defaultActionConfig;
@@ -168,18 +168,18 @@ export function InvoiceAuditLogModal({ invoice, isOpen, onClose }: InvoiceAuditL
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col">
+      <div className="relative bg-card rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Invoice History</h2>
-            <p className="text-sm text-gray-600">
+            <h2 className="text-lg font-semibold text-foreground">Invoice History</h2>
+            <p className="text-sm text-muted-foreground">
               {invoice.billingNo || invoice.id.slice(0, 8)} - {invoice.customerName}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-muted-foreground hover:text-muted-foreground transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -189,16 +189,16 @@ export function InvoiceAuditLogModal({ invoice, isOpen, onClose }: InvoiceAuditL
         <div className="flex-1 overflow-y-auto p-4">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-              <span className="ml-2 text-sm text-gray-500">Loading history...</span>
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-sm text-muted-foreground">Loading history...</span>
             </div>
           ) : error ? (
             <div className="p-4 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
               {error}
             </div>
           ) : logs.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Clock className="h-10 w-10 mx-auto mb-2 text-gray-300" />
+            <div className="text-center py-8 text-muted-foreground">
+              <Clock className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
               <p>No history available for this invoice.</p>
             </div>
           ) : (
@@ -213,31 +213,31 @@ export function InvoiceAuditLogModal({ invoice, isOpen, onClose }: InvoiceAuditL
                   <div key={log.id} className="relative flex">
                     {/* Timeline line */}
                     {!isLast && (
-                      <div className="absolute left-4 top-8 w-0.5 h-full bg-gray-200" />
+                      <div className="absolute left-4 top-8 w-0.5 h-full bg-muted" />
                     )}
 
                     {/* Icon */}
-                    <div className={`relative z-10 flex-shrink-0 w-8 h-8 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center ${config.color}`}>
+                    <div className={`relative z-10 flex-shrink-0 w-8 h-8 rounded-full bg-card border-2 border-border flex items-center justify-center ${config.color}`}>
                       <Icon className="h-4 w-4" />
                     </div>
 
                     {/* Content */}
                     <div className="ml-4 pb-6 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900">{config.label}</span>
-                        <span className="text-xs text-gray-500">
+                        <span className="font-medium text-foreground">{config.label}</span>
+                        <span className="text-xs text-muted-foreground">
                           {formatDateTime(log.createdAt)}
                         </span>
                       </div>
 
                       {log.user && (
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-muted-foreground">
                           By: {log.user.name || log.user.email}
                         </p>
                       )}
 
                       {log.details && (
-                        <p className="text-sm text-gray-500 mt-1">
+                        <p className="text-sm text-muted-foreground mt-1">
                           {formatActionDetails(log.action, log.details)}
                         </p>
                       )}
@@ -251,7 +251,7 @@ export function InvoiceAuditLogModal({ invoice, isOpen, onClose }: InvoiceAuditL
 
         {/* Footer */}
         <div className="border-t p-4 flex items-center justify-between">
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-muted-foreground">
             {total > 0 ? `${logs.length} of ${total} entries` : ''}
           </span>
           <div className="flex gap-2">

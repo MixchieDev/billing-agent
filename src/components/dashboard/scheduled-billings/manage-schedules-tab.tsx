@@ -220,7 +220,7 @@ export function ManageSchedulesTab({
       case 'ACTIVE':
         return <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700"><CheckCircle className="h-3 w-3" />Active</span>;
       case 'PAUSED':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700"><Pause className="h-3 w-3" />Paused</span>;
+        return <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground"><Pause className="h-3 w-3" />Paused</span>;
       case 'ENDED':
         return <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700"><StopCircle className="h-3 w-3" />Ended</span>;
       default:
@@ -256,32 +256,32 @@ export function ManageSchedulesTab({
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
-        <div className="rounded-lg border bg-white p-4">
-          <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-          <p className="text-sm text-gray-500">Total</p>
+        <div className="rounded-lg border bg-card p-4">
+          <div className="text-2xl font-bold text-foreground">{stats.total}</div>
+          <p className="text-sm text-muted-foreground">Total</p>
         </div>
-        <div className="rounded-lg border bg-white p-4 cursor-pointer hover:border-amber-300" onClick={() => setStatusFilter('PENDING')}>
+        <div className="rounded-lg border bg-card p-4 cursor-pointer hover:border-amber-300" onClick={() => setStatusFilter('PENDING')}>
           <div className="text-2xl font-bold text-amber-600">{stats.pending}</div>
-          <p className="text-sm text-gray-500">Pending</p>
+          <p className="text-sm text-muted-foreground">Pending</p>
         </div>
-        <div className="rounded-lg border bg-white p-4 cursor-pointer hover:border-green-300" onClick={() => setStatusFilter('ACTIVE')}>
+        <div className="rounded-lg border bg-card p-4 cursor-pointer hover:border-green-300" onClick={() => setStatusFilter('ACTIVE')}>
           <div className="text-2xl font-bold text-green-600">{stats.active}</div>
-          <p className="text-sm text-gray-500">Active</p>
+          <p className="text-sm text-muted-foreground">Active</p>
         </div>
-        <div className="rounded-lg border bg-white p-4 cursor-pointer hover:border-gray-400" onClick={() => setStatusFilter('PAUSED')}>
-          <div className="text-2xl font-bold text-gray-600">{stats.paused}</div>
-          <p className="text-sm text-gray-500">Paused</p>
+        <div className="rounded-lg border bg-card p-4 cursor-pointer hover:border-border" onClick={() => setStatusFilter('PAUSED')}>
+          <div className="text-2xl font-bold text-muted-foreground">{stats.paused}</div>
+          <p className="text-sm text-muted-foreground">Paused</p>
         </div>
-        <div className="rounded-lg border bg-white p-4 cursor-pointer hover:border-red-300" onClick={() => setStatusFilter('ENDED')}>
+        <div className="rounded-lg border bg-card p-4 cursor-pointer hover:border-red-300" onClick={() => setStatusFilter('ENDED')}>
           <div className="text-2xl font-bold text-red-600">{stats.ended}</div>
-          <p className="text-sm text-gray-500">Ended</p>
+          <p className="text-sm text-muted-foreground">Ended</p>
         </div>
-        <div className="rounded-lg border bg-white p-4">
+        <div className="rounded-lg border bg-card p-4">
           <div className="flex items-center gap-2">
             <Calendar className="h-5 w-5 text-blue-500" />
             <span className="text-2xl font-bold text-blue-600">{stats.dueThisWeek}</span>
           </div>
-          <p className="text-sm text-gray-500">Due This Week</p>
+          <p className="text-sm text-muted-foreground">Due This Week</p>
         </div>
       </div>
 
@@ -294,7 +294,7 @@ export function ManageSchedulesTab({
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               statusFilter === filter
                 ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
             {filter === 'all' ? 'All' : filter === 'PENDING' ? 'Pending Approval' : filter.charAt(0) + filter.slice(1).toLowerCase()}
@@ -303,11 +303,11 @@ export function ManageSchedulesTab({
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border bg-white">
+      <div className="rounded-lg border bg-card">
         <div className="overflow-x-auto">
           {filteredBillings.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              <Calendar className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+            <div className="p-8 text-center text-muted-foreground">
+              <Calendar className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
               <p className="text-lg font-medium">No scheduled billings found</p>
               <p className="text-sm mt-1">
                 {statusFilter === 'all'
@@ -317,55 +317,55 @@ export function ManageSchedulesTab({
             </div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-muted">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Client</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Entity</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-500">Amount</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Schedule</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Next Billing</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Automation</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Status</th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-500">Runs</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-500">Actions</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Client</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Entity</th>
+                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">Amount</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Schedule</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Next Billing</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Automation</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
+                  <th className="px-4 py-3 text-center font-medium text-muted-foreground">Runs</th>
+                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {filteredBillings.map((billing) => (
-                  <tr key={billing.id} className="hover:bg-gray-50">
+                  <tr key={billing.id} className="hover:bg-muted">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900">{billing.companyName}</div>
+                      <div className="font-medium text-foreground">{billing.companyName}</div>
                       {billing.description && (
-                        <div className="text-xs text-gray-500 truncate max-w-[200px]">{billing.description}</div>
+                        <div className="text-xs text-muted-foreground truncate max-w-[200px]">{billing.description}</div>
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                      <span className="inline-flex items-center rounded bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
                         {billing.billingEntity.code}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right font-medium text-gray-900">
+                    <td className="px-4 py-3 text-right font-medium text-foreground">
                       {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(billing.billingAmount)}
                     </td>
-                    <td className="px-4 py-3 text-gray-600">
+                    <td className="px-4 py-3 text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <span>{billing.billingDayOfMonth}{getOrdinalSuffix(billing.billingDayOfMonth)}</span>
-                        <span className="text-gray-400">|</span>
-                        <span className="text-xs text-gray-500">{getFrequencyLabel(billing)}</span>
+                        <span className="text-muted-foreground">|</span>
+                        <span className="text-xs text-muted-foreground">{getFrequencyLabel(billing)}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">
+                    <td className="px-4 py-3 text-muted-foreground">
                       {billing.status === 'PENDING' ? (
-                        <span className="text-gray-400 text-xs">Awaiting approval</span>
+                        <span className="text-muted-foreground text-xs">Awaiting approval</span>
                       ) : billing.nextBillingDate ? (
                         <div>
                           <div>{format(new Date(billing.nextBillingDate), 'MMM d, yyyy')}</div>
-                          <div className="text-xs text-gray-400">
+                          <div className="text-xs text-muted-foreground">
                             {formatDistanceToNow(new Date(billing.nextBillingDate), { addSuffix: true })}
                           </div>
                         </div>
                       ) : (
-                        <span className="text-gray-400">-</span>
+                        <span className="text-muted-foreground">-</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -386,7 +386,7 @@ export function ManageSchedulesTab({
                       {getStatusBadge(billing.status)}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className="inline-flex items-center gap-1 text-sm text-gray-600">
+                      <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
                         <FileText className="h-3 w-3" />
                         {billing.runCount}
                       </span>
@@ -449,7 +449,7 @@ export function ManageSchedulesTab({
                               setOpenMenu(openMenu === billing.id ? null : billing.id);
                             }}
                             disabled={actionLoading === billing.id}
-                            className="rounded p-1 hover:bg-gray-100 disabled:opacity-50"
+                            className="rounded p-1 hover:bg-muted disabled:opacity-50"
                           >
                             {actionLoading === billing.id && billing.status !== 'PENDING' && billing.status !== 'PAUSED' ? (
                               <RefreshCw className="h-4 w-4 animate-spin" />
@@ -458,19 +458,19 @@ export function ManageSchedulesTab({
                             )}
                           </button>
                           {openMenu === billing.id && (
-                            <div className="absolute right-0 z-10 mt-1 w-48 rounded-lg border bg-white py-1 shadow-lg">
+                            <div className="absolute right-0 z-10 mt-1 w-48 rounded-lg border bg-card py-1 shadow-lg">
                               {billing.status === 'ACTIVE' && (
                                 <>
                                   <button
                                     onClick={() => runNow(billing.id)}
-                                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-gray-50"
+                                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-muted"
                                   >
                                     <Play className="h-4 w-4 text-green-600" />
                                     Run Now
                                   </button>
                                   <button
                                     onClick={() => pauseSchedule(billing.id)}
-                                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-gray-50"
+                                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-muted"
                                   >
                                     <Pause className="h-4 w-4 text-amber-600" />
                                     Pause
@@ -481,9 +481,9 @@ export function ManageSchedulesTab({
                                 <>
                                   <button
                                     onClick={() => endSchedule(billing.id)}
-                                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-gray-50"
+                                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-muted"
                                   >
-                                    <StopCircle className="h-4 w-4 text-gray-600" />
+                                    <StopCircle className="h-4 w-4 text-muted-foreground" />
                                     End Schedule
                                   </button>
                                   <hr className="my-1" />

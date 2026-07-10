@@ -145,7 +145,7 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
   if (loading && partners.length === 0) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -163,8 +163,8 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Partners</h2>
-          <p className="text-sm text-gray-500">
+          <h2 className="text-lg font-semibold text-foreground">Partners</h2>
+          <p className="text-sm text-muted-foreground">
             Manage billing partners and their contact information
           </p>
         </div>
@@ -179,14 +179,14 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
         {partners.map((partner) => (
           <div
             key={partner.id}
-            className="rounded-lg border bg-white p-5 shadow-sm hover:shadow-md transition-shadow"
+            className="rounded-lg border bg-card p-5 shadow-sm hover:shadow-md transition-shadow"
           >
             <div className="flex items-start justify-between">
               <div>
                 <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
                   {partner.code}
                 </span>
-                <h3 className="mt-2 font-semibold text-gray-900">{partner.name}</h3>
+                <h3 className="mt-2 font-semibold text-foreground">{partner.name}</h3>
               </div>
               <Button
                 variant="ghost"
@@ -199,25 +199,25 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
 
             <div className="mt-4 space-y-2 text-sm">
               {partner.invoiceTo && (
-                <div className="flex items-start gap-2 text-gray-600">
+                <div className="flex items-start gap-2 text-muted-foreground">
                   <Building2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
                   <span>{partner.invoiceTo}</span>
                 </div>
               )}
               {partner.attention && (
-                <div className="flex items-start gap-2 text-gray-600">
+                <div className="flex items-start gap-2 text-muted-foreground">
                   <User className="h-4 w-4 mt-0.5 flex-shrink-0" />
                   <span>{partner.attention}</span>
                 </div>
               )}
               {(partner.emails || partner.email) && (
-                <div className="flex items-start gap-2 text-gray-600">
+                <div className="flex items-start gap-2 text-muted-foreground">
                   <Mail className="h-4 w-4 mt-0.5 flex-shrink-0" />
                   <span className="break-all">{partner.emails || partner.email}</span>
                 </div>
               )}
               {partner.address && (
-                <div className="flex items-start gap-2 text-gray-600">
+                <div className="flex items-start gap-2 text-muted-foreground">
                   <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
                   <span className="line-clamp-2">{partner.address}</span>
                 </div>
@@ -226,10 +226,10 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
 
             <div className="mt-4 flex flex-col gap-2 border-t pt-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-muted-foreground">
                   {getBillingModelLabel(partner.billingModel)}
                 </span>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-muted-foreground">
                   {partner.company?.code}
                 </span>
               </div>
@@ -247,14 +247,14 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
       {/* Edit Modal */}
       {editingPartner && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-900">
+          <div className="w-full max-w-lg rounded-lg bg-card p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-foreground">
               Edit Partner: {editingPartner.code}
             </h3>
 
             <div className="mt-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-foreground">
                   Name
                 </label>
                 <input
@@ -263,12 +263,12 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
                   onChange={(e) =>
                     setEditingPartner({ ...editingPartner, name: e.target.value })
                   }
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-border px-3 py-2 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-foreground">
                   Invoice To (Company Name)
                 </label>
                 <input
@@ -277,12 +277,12 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
                   onChange={(e) =>
                     setEditingPartner({ ...editingPartner, invoiceTo: e.target.value })
                   }
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-border px-3 py-2 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-foreground">
                   Attention (Contact Person)
                 </label>
                 <input
@@ -291,12 +291,12 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
                   onChange={(e) =>
                     setEditingPartner({ ...editingPartner, attention: e.target.value })
                   }
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-border px-3 py-2 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-foreground">
                   Email(s)
                 </label>
                 <textarea
@@ -309,16 +309,16 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
                     })
                   }
                   rows={2}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-border px-3 py-2 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                   placeholder="billing@example.com, accounts@example.com"
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Separate multiple emails with commas
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-foreground">
                   Address
                 </label>
                 <textarea
@@ -327,12 +327,12 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
                     setEditingPartner({ ...editingPartner, address: e.target.value })
                   }
                   rows={2}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-border px-3 py-2 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-foreground">
                   Billing Entity
                 </label>
                 <select
@@ -340,7 +340,7 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
                   onChange={(e) =>
                     setEditingPartner({ ...editingPartner, companyId: e.target.value })
                   }
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-border px-3 py-2 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 >
                   {companies.map((company) => (
                     <option key={company.id} value={company.id}>
@@ -351,7 +351,7 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-foreground">
                   Billing Model
                 </label>
                 <select
@@ -359,7 +359,7 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
                   onChange={(e) =>
                     setEditingPartner({ ...editingPartner, billingModel: e.target.value })
                   }
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-border px-3 py-2 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 >
                   <option value="DIRECT">Direct</option>
                   <option value="GLOBE_INNOVE">Globe Innove</option>
@@ -368,7 +368,7 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-foreground">
                   Email Template
                 </label>
                 <select
@@ -376,7 +376,7 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
                   onChange={(e) =>
                     setEditingPartner({ ...editingPartner, emailTemplateId: e.target.value || null })
                   }
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 block w-full rounded-md border border-border px-3 py-2 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 >
                   <option value="">Use Default Template</option>
                   {emailTemplates.map((template) => (
@@ -385,7 +385,7 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Select a custom email template for invoices sent to this partner
                 </p>
               </div>

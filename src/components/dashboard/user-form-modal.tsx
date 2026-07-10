@@ -110,7 +110,7 @@ export function UserFormModal({ isOpen, onClose, onSave, user }: UserFormModalPr
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+      <div className="relative z-10 w-full max-w-md rounded-lg bg-card p-6 shadow-xl">
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">
@@ -118,7 +118,7 @@ export function UserFormModal({ isOpen, onClose, onSave, user }: UserFormModalPr
           </h2>
           <button
             onClick={onClose}
-            className="rounded-full p-1 hover:bg-gray-100"
+            className="rounded-full p-1 hover:bg-muted"
           >
             <X className="h-5 w-5" />
           </button>
@@ -135,21 +135,21 @@ export function UserFormModal({ isOpen, onClose, onSave, user }: UserFormModalPr
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Name */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
+            <label className="mb-1 block text-sm font-medium text-foreground">
               Name
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
               placeholder="John Doe"
             />
           </div>
 
           {/* Email */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
+            <label className="mb-1 block text-sm font-medium text-foreground">
               Email <span className="text-red-500">*</span>
             </label>
             <input
@@ -157,26 +157,26 @@ export function UserFormModal({ isOpen, onClose, onSave, user }: UserFormModalPr
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={isEditing}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring disabled:bg-muted disabled:cursor-not-allowed"
               placeholder="john@example.com"
               required
             />
             {isEditing && (
-              <p className="mt-1 text-xs text-gray-500">Email cannot be changed</p>
+              <p className="mt-1 text-xs text-muted-foreground">Email cannot be changed</p>
             )}
           </div>
 
           {/* Password (only for create) */}
           {!isEditing && (
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
+              <label className="mb-1 block text-sm font-medium text-foreground">
                 Password <span className="text-red-500">*</span>
               </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 placeholder="Minimum 8 characters"
                 minLength={8}
                 required
@@ -186,13 +186,13 @@ export function UserFormModal({ isOpen, onClose, onSave, user }: UserFormModalPr
 
           {/* Role */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
+            <label className="mb-1 block text-sm font-medium text-foreground">
               Role <span className="text-red-500">*</span>
             </label>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as any)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
             >
               <option value="VIEWER">Viewer - Read-only access</option>
               <option value="APPROVER">Approver - Can approve/reject invoices</option>

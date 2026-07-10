@@ -73,25 +73,25 @@ export function PromiseToPayModal({ invoice, isOpen, onClose, onSave }: PromiseT
   if (!isOpen || !invoice) return null;
 
   const selectClassName =
-    'h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+    'h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+      <div className="relative mx-4 w-full max-w-md rounded-lg bg-card p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Log Promise to Pay</h2>
-          <button onClick={onClose} className="text-gray-400 transition-colors hover:text-gray-600">
+          <h2 className="text-lg font-semibold text-foreground">Log Promise to Pay</h2>
+          <button onClick={onClose} className="text-muted-foreground transition-colors hover:text-muted-foreground">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="mb-6 border-b pb-4">
-          <p className="text-sm font-medium text-gray-900">
+          <p className="text-sm font-medium text-foreground">
             {invoice.billingNo || invoice.id.slice(0, 8)}
           </p>
-          <p className="text-sm text-gray-600">{invoice.customerName}</p>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="text-sm text-muted-foreground">{invoice.customerName}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
             Follow-ups will be paused until the promised date.
           </p>
         </div>
@@ -104,15 +104,15 @@ export function PromiseToPayModal({ invoice, isOpen, onClose, onSave }: PromiseT
 
         <div className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-900">Promised Date</label>
+            <label className="mb-1 block text-sm font-medium text-foreground">Promised Date</label>
             <Input type="date" value={promisedDate} onChange={(e) => setPromisedDate(e.target.value)} className="w-full" />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-900">Promised Amount (Optional)</label>
+            <label className="mb-1 block text-sm font-medium text-foreground">Promised Amount (Optional)</label>
             <Input type="number" step="0.01" min="0" value={promisedAmount} onChange={(e) => setPromisedAmount(e.target.value)} className="w-full" placeholder="0.00" />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-900">Channel</label>
+            <label className="mb-1 block text-sm font-medium text-foreground">Channel</label>
             <select value={channel} onChange={(e) => setChannel(e.target.value)} className={selectClassName}>
               <option value="CALL">Call</option>
               <option value="EMAIL">Email</option>
@@ -121,12 +121,12 @@ export function PromiseToPayModal({ invoice, isOpen, onClose, onSave }: PromiseT
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-900">Notes (Optional)</label>
+            <label className="mb-1 block text-sm font-medium text-foreground">Notes (Optional)</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
               placeholder="Who promised, any conditions, etc."
             />
           </div>

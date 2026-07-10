@@ -248,8 +248,8 @@ export function RcbcListPage() {
   const tabClassName = (tab: 'master' | 'billing') =>
     `px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
       activeTab === tab
-        ? 'bg-white text-blue-600 border-blue-600'
-        : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+        ? 'bg-card text-blue-600 border-blue-600'
+        : 'text-muted-foreground border-transparent hover:text-foreground hover:border-border'
     }`;
 
   return (
@@ -264,7 +264,7 @@ export function RcbcListPage() {
               RCBC End-Clients
               {loading && <Loader2 className="ml-2 inline h-4 w-4 animate-spin" />}
             </h2>
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-muted-foreground">
               ({clients.length} client{clients.length !== 1 ? 's' : ''})
             </span>
           </div>
@@ -274,7 +274,7 @@ export function RcbcListPage() {
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="h-9 rounded-md border border-gray-300 bg-white px-3 py-1 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-9 rounded-md border border-border bg-card px-3 py-1 text-sm shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
             >
               {availableMonths.map(month => (
                 <option key={month} value={month}>{formatMonth(month)}</option>
@@ -336,7 +336,7 @@ export function RcbcListPage() {
 
         {/* Master List Tab */}
         {activeTab === 'master' && (
-          <div className="rounded-lg border bg-white">
+          <div className="rounded-lg border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -352,7 +352,7 @@ export function RcbcListPage() {
               <TableBody>
                 {clients.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-gray-500">
+                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                       No RCBC clients found for this month
                     </TableCell>
                   </TableRow>
@@ -375,14 +375,14 @@ export function RcbcListPage() {
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => handleEditClient(client)}
-                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            className="p-1.5 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                             title="Edit Client"
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => handleDeleteClient(client)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                             title="Delete Client"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -404,28 +404,28 @@ export function RcbcListPage() {
               <>
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="bg-white rounded-lg border p-4">
-                    <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+                  <div className="bg-card rounded-lg border p-4">
+                    <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
                       <Building2 className="h-4 w-4" />
                       Total Clients
                     </div>
                     <div className="text-2xl font-bold">{summary.totalClients}</div>
                   </div>
-                  <div className="bg-white rounded-lg border p-4">
-                    <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+                  <div className="bg-card rounded-lg border p-4">
+                    <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
                       <Users className="h-4 w-4" />
                       Total Employees
                     </div>
                     <div className="text-2xl font-bold">{summary.totalEmployees.toLocaleString()}</div>
                   </div>
-                  <div className="bg-white rounded-lg border p-4">
-                    <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+                  <div className="bg-card rounded-lg border p-4">
+                    <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
                       <DollarSign className="h-4 w-4" />
                       Service Fee
                     </div>
                     <div className="text-2xl font-bold">{formatCurrency(summary.serviceFee)}</div>
                   </div>
-                  <div className="bg-white rounded-lg border p-4 bg-green-50">
+                  <div className="bg-card rounded-lg border p-4 bg-green-50">
                     <div className="flex items-center gap-2 text-green-600 text-sm mb-1">
                       <DollarSign className="h-4 w-4" />
                       Net Amount
@@ -435,24 +435,24 @@ export function RcbcListPage() {
                 </div>
 
                 {/* Billing Breakdown */}
-                <div className="bg-white rounded-lg border p-6">
+                <div className="bg-card rounded-lg border p-6">
                   <h3 className="text-lg font-semibold mb-4">Billing Summary for {summary.monthLabel}</h3>
 
                   <div className="space-y-3">
                     <div className="flex justify-between py-2 border-b">
-                      <span className="text-gray-600">Service Fee ({summary.totalClients} clients)</span>
+                      <span className="text-muted-foreground">Service Fee ({summary.totalClients} clients)</span>
                       <span className="font-medium">{formatCurrency(summary.serviceFee)}</span>
                     </div>
                     <div className="flex justify-between py-2 border-b">
-                      <span className="text-gray-600">VAT (12%)</span>
+                      <span className="text-muted-foreground">VAT (12%)</span>
                       <span className="font-medium">+ {formatCurrency(summary.vatAmount)}</span>
                     </div>
                     <div className="flex justify-between py-2 border-b">
-                      <span className="text-gray-600">Gross Amount</span>
+                      <span className="text-muted-foreground">Gross Amount</span>
                       <span className="font-medium">{formatCurrency(summary.grossAmount)}</span>
                     </div>
                     <div className="flex justify-between py-2 border-b">
-                      <span className="text-gray-600">Withholding Tax (2%)</span>
+                      <span className="text-muted-foreground">Withholding Tax (2%)</span>
                       <span className="font-medium text-red-600">- {formatCurrency(summary.withholdingTax)}</span>
                     </div>
                     <div className="flex justify-between py-3 text-lg font-bold">
@@ -484,8 +484,8 @@ export function RcbcListPage() {
                 </div>
               </>
             ) : (
-              <div className="text-center py-12 text-gray-500">
-                <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              <div className="text-center py-12 text-muted-foreground">
+                <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <p>No billing data available for the selected month.</p>
                 <p className="mt-2">
                   <button
@@ -549,14 +549,14 @@ export function RcbcListPage() {
       {showDeleteAllModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => !isDeletingAll && setShowDeleteAllModal(false)} />
-          <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+          <div className="relative bg-card rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
                 <AlertTriangle className="h-5 w-5 text-red-600" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900">Delete All Clients</h3>
+              <h3 className="text-lg font-semibold text-foreground">Delete All Clients</h3>
             </div>
-            <p className="text-gray-600 mb-2">
+            <p className="text-muted-foreground mb-2">
               Are you sure you want to delete <strong>all {clients.length} RCBC client(s)</strong> for{' '}
               <strong>{formatMonth(selectedMonth)}</strong>?
             </p>

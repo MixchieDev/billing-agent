@@ -92,7 +92,7 @@ export function ChangePasswordModal({ isOpen, onClose, userId, isOwnAccount }: C
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+      <div className="relative z-10 w-full max-w-md rounded-lg bg-card p-6 shadow-xl">
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">
@@ -100,7 +100,7 @@ export function ChangePasswordModal({ isOpen, onClose, userId, isOwnAccount }: C
           </h2>
           <button
             onClick={onClose}
-            className="rounded-full p-1 hover:bg-gray-100"
+            className="rounded-full p-1 hover:bg-muted"
           >
             <X className="h-5 w-5" />
           </button>
@@ -125,14 +125,14 @@ export function ChangePasswordModal({ isOpen, onClose, userId, isOwnAccount }: C
           {/* Current Password (only for own account) */}
           {isOwnAccount && (
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
+              <label className="mb-1 block text-sm font-medium text-foreground">
                 Current Password <span className="text-red-500">*</span>
               </label>
               <input
                 type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 required
               />
             </div>
@@ -146,14 +146,14 @@ export function ChangePasswordModal({ isOpen, onClose, userId, isOwnAccount }: C
 
           {/* New Password */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
+            <label className="mb-1 block text-sm font-medium text-foreground">
               New Password <span className="text-red-500">*</span>
             </label>
             <input
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
               placeholder="Minimum 8 characters"
               minLength={8}
               required
@@ -162,14 +162,14 @@ export function ChangePasswordModal({ isOpen, onClose, userId, isOwnAccount }: C
 
           {/* Confirm Password */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
+            <label className="mb-1 block text-sm font-medium text-foreground">
               Confirm New Password <span className="text-red-500">*</span>
             </label>
             <input
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
               required
             />
           </div>

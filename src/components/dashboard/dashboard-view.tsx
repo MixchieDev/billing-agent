@@ -281,7 +281,7 @@ export function DashboardView({ initialData }: DashboardViewProps = {}) {
 
         {/* Empty state */}
         {!loading && invoices.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-muted-foreground">
             No invoices found. Click "Run Billing" to generate invoices for due contracts.
           </div>
         )}

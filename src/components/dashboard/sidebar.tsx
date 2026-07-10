@@ -57,28 +57,28 @@ export function Sidebar() {
   return (
     <div
       className={cn(
-        'flex h-full flex-col bg-gray-900 transition-all duration-300',
+        'flex h-full flex-col bg-sidebar text-sidebar-foreground transition-all duration-300',
         collapsed ? 'w-16' : 'w-64'
       )}
     >
       {/* Logo */}
-      <div className="flex h-16 items-center justify-center border-b border-gray-800">
+      <div className="flex h-16 items-center justify-center border-b border-sidebar-border">
         {collapsed ? (
-          <span className="text-xl font-bold text-white">YA</span>
+          <span className="text-xl font-bold text-sidebar-foreground">YA</span>
         ) : (
-          <h1 className="text-xl font-bold text-white">YAHSHUA-ABBA</h1>
+          <h1 className="text-xl font-bold text-sidebar-foreground">YAHSHUA-ABBA</h1>
         )}
       </div>
       {!collapsed && (
-        <div className="flex h-8 items-center justify-center bg-gray-800">
-          <span className="text-xs text-gray-400">Billing Agent</span>
+        <div className="flex h-8 items-center justify-center bg-sidebar-accent">
+          <span className="text-xs text-muted-foreground">Billing Agent</span>
         </div>
       )}
 
       {/* Collapse Toggle */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex items-center justify-center h-10 border-b border-gray-800 text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+        className="flex items-center justify-center h-10 border-b border-sidebar-border text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
         {collapsed ? (
@@ -100,8 +100,8 @@ export function Sidebar() {
                 'flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors',
                 collapsed ? 'justify-center' : 'gap-3',
                 isActive
-                  ? 'bg-gray-800 text-white'
-                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'bg-sidebar-accent text-sidebar-foreground'
+                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
               )}
               title={collapsed ? item.name : undefined}
             >
@@ -113,11 +113,11 @@ export function Sidebar() {
       </nav>
 
       {/* User section */}
-      <div className="border-t border-gray-800 p-2">
+      <div className="border-t border-sidebar-border p-2">
         <button
           onClick={() => signOut({ callbackUrl: '/login' })}
           className={cn(
-            'flex w-full items-center rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white transition-colors',
+            'flex w-full items-center rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors',
             collapsed ? 'justify-center' : 'gap-3'
           )}
           title={collapsed ? 'Sign Out' : undefined}

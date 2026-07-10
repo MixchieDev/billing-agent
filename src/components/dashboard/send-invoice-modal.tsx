@@ -212,7 +212,7 @@ export function SendInvoiceModal({ isOpen, onClose, invoice, onSent }: SendInvoi
       return <FileSpreadsheet className="h-4 w-4 text-green-500" />;
     if (mimeType.includes('word') || mimeType.includes('document'))
       return <FileText className="h-4 w-4 text-blue-600" />;
-    return <File className="h-4 w-4 text-gray-500" />;
+    return <File className="h-4 w-4 text-muted-foreground" />;
   };
 
   if (!isOpen) return null;
@@ -221,39 +221,39 @@ export function SendInvoiceModal({ isOpen, onClose, invoice, onSent }: SendInvoi
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
+      <div className="w-full max-w-lg rounded-lg bg-card shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b px-6 py-4">
-          <h3 className="text-lg font-semibold text-gray-900">Send Invoice</h3>
+          <h3 className="text-lg font-semibold text-foreground">Send Invoice</h3>
           <button
             onClick={onClose}
-            className="rounded-full p-1 hover:bg-gray-100"
+            className="rounded-full p-1 hover:bg-muted"
             disabled={sending}
           >
-            <X className="h-5 w-5 text-gray-500" />
+            <X className="h-5 w-5 text-muted-foreground" />
           </button>
         </div>
 
         {/* Content */}
         <div className="px-6 py-4 space-y-4">
           {/* Invoice details */}
-          <div className="rounded-lg bg-gray-50 p-4 space-y-2">
+          <div className="rounded-lg bg-muted p-4 space-y-2">
             <div className="flex justify-between">
-              <span className="text-sm text-gray-500">Invoice</span>
+              <span className="text-sm text-muted-foreground">Invoice</span>
               <span className="text-sm font-medium">{invoice.billingNo || invoice.id}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm text-gray-500">To</span>
+              <span className="text-sm text-muted-foreground">To</span>
               <span className="text-sm font-medium">{invoice.customerName}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm text-gray-500">Email</span>
-              <span className="text-sm text-gray-700 max-w-[250px] truncate" title={emailDisplay}>
+              <span className="text-sm text-muted-foreground">Email</span>
+              <span className="text-sm text-foreground max-w-[250px] truncate" title={emailDisplay}>
                 {emailDisplay}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm text-gray-500">Amount</span>
+              <span className="text-sm text-muted-foreground">Amount</span>
               <span className="text-sm font-medium">{formatCurrency(invoice.netAmount)}</span>
             </div>
           </div>
@@ -269,40 +269,40 @@ export function SendInvoiceModal({ isOpen, onClose, invoice, onSent }: SendInvoi
           {/* Attachments section */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">
+              <span className="text-sm font-medium text-foreground">
                 Attachments ({attachments.length}/{MAX_FILES})
               </span>
-              {uploading && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+              {uploading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
             </div>
 
             {/* Attachment list */}
             {loading ? (
               <div className="flex justify-center py-4">
-                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : attachments.length > 0 ? (
               <div className="rounded-lg border divide-y mb-3">
                 {attachments.map((att) => (
                   <div
                     key={att.id}
-                    className="flex items-center justify-between px-3 py-2 hover:bg-gray-50"
+                    className="flex items-center justify-between px-3 py-2 hover:bg-muted"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       {getFileIcon(att.mimeType)}
                       <span className="text-sm truncate max-w-[200px]" title={att.filename}>
                         {att.filename}
                       </span>
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-muted-foreground">
                         ({formatFileSize(att.size)})
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleDownload(att.id, att.filename)}
-                        className="rounded p-1 hover:bg-gray-100"
+                        className="rounded p-1 hover:bg-muted"
                         title="Download"
                       >
-                        <Download className="h-4 w-4 text-gray-500" />
+                        <Download className="h-4 w-4 text-muted-foreground" />
                       </button>
                       <button
                         onClick={() => handleDelete(att.id)}
@@ -321,7 +321,7 @@ export function SendInvoiceModal({ isOpen, onClose, invoice, onSent }: SendInvoi
             {attachments.length < MAX_FILES && (
               <div
                 className={`rounded-lg border-2 border-dashed p-4 text-center transition-colors ${
-                  dragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
+                  dragOver ? 'border-blue-400 bg-blue-50' : 'border-border hover:border-border'
                 }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
@@ -340,11 +340,11 @@ export function SendInvoiceModal({ isOpen, onClose, invoice, onSent }: SendInvoi
                   onChange={(e) => handleUpload(e.target.files)}
                   disabled={uploading}
                 />
-                <Upload className="mx-auto h-8 w-8 text-gray-400" />
-                <p className="mt-2 text-sm text-gray-600">
+                <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
+                <p className="mt-2 text-sm text-muted-foreground">
                   Drop files here or click to upload
                 </p>
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="mt-1 text-xs text-muted-foreground">
                   PDF, Images, Word, Excel (max 5MB each)
                 </p>
               </div>
@@ -358,9 +358,9 @@ export function SendInvoiceModal({ isOpen, onClose, invoice, onSent }: SendInvoi
               id="includePaymentLink"
               checked={includePaymentLink}
               onChange={(e) => setIncludePaymentLink(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              className="h-4 w-4 rounded border-border text-blue-600 focus:ring-ring"
             />
-            <label htmlFor="includePaymentLink" className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <label htmlFor="includePaymentLink" className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
               <CreditCard className="h-4 w-4 text-blue-500" />
               Include payment link (HitPay)
             </label>

@@ -136,10 +136,10 @@ export function NotificationDropdown() {
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-96 rounded-lg border bg-white shadow-lg z-50">
+        <div className="absolute right-0 top-full mt-2 w-96 rounded-lg border bg-card shadow-lg z-50">
           {/* Header */}
           <div className="flex items-center justify-between border-b px-4 py-3">
-            <h3 className="font-semibold text-gray-900">Notifications</h3>
+            <h3 className="font-semibold text-foreground">Notifications</h3>
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
@@ -154,11 +154,11 @@ export function NotificationDropdown() {
           {/* Notifications List */}
           <div className="max-h-96 overflow-y-auto">
             {loading && notifications.length === 0 ? (
-              <div className="px-4 py-8 text-center text-gray-500">
+              <div className="px-4 py-8 text-center text-muted-foreground">
                 Loading...
               </div>
             ) : notifications.length === 0 ? (
-              <div className="px-4 py-8 text-center text-gray-500">
+              <div className="px-4 py-8 text-center text-muted-foreground">
                 No notifications yet
               </div>
             ) : (
@@ -166,7 +166,7 @@ export function NotificationDropdown() {
                 <div
                   key={notification.id}
                   onClick={() => handleNotificationClick(notification)}
-                  className={`flex gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 border-b last:border-b-0 ${
+                  className={`flex gap-3 px-4 py-3 cursor-pointer hover:bg-muted border-b last:border-b-0 ${
                     !notification.isRead ? 'bg-blue-50' : ''
                   }`}
                 >
@@ -174,13 +174,13 @@ export function NotificationDropdown() {
                     {getNotificationIcon(notification.type)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm ${!notification.isRead ? 'font-semibold' : ''} text-gray-900`}>
+                    <p className={`text-sm ${!notification.isRead ? 'font-semibold' : ''} text-foreground`}>
                       {notification.title}
                     </p>
-                    <p className="text-sm text-gray-600 truncate">
+                    <p className="text-sm text-muted-foreground truncate">
                       {notification.message}
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
                     </p>
                   </div>
@@ -199,7 +199,7 @@ export function NotificationDropdown() {
             <div className="border-t px-4 py-2">
               <button
                 onClick={() => setIsOpen(false)}
-                className="w-full text-center text-sm text-gray-500 hover:text-gray-700"
+                className="w-full text-center text-sm text-muted-foreground hover:text-foreground"
               >
                 Close
               </button>

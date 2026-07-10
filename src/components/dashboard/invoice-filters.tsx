@@ -37,11 +37,11 @@ export function InvoiceFiltersComponent({
   const hasActiveFilters = Object.values(filters).some((v) => v !== '');
 
   return (
-    <div className="rounded-lg border bg-white p-4">
+    <div className="rounded-lg border bg-card p-4">
       <div className="flex items-center justify-between">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+          className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-foreground"
         >
           <Filter className="h-4 w-4" />
           Filters
@@ -63,7 +63,7 @@ export function InvoiceFiltersComponent({
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {/* Billing Entity */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-700">
+            <label className="mb-1 block text-xs font-medium text-foreground">
               Billing Entity
             </label>
             <Select
@@ -78,7 +78,7 @@ export function InvoiceFiltersComponent({
 
           {/* Partner */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-700">
+            <label className="mb-1 block text-xs font-medium text-foreground">
               Partner
             </label>
             <Select
@@ -94,7 +94,7 @@ export function InvoiceFiltersComponent({
 
           {/* Product Type */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-700">
+            <label className="mb-1 block text-xs font-medium text-foreground">
               Product Type
             </label>
             <Select
@@ -110,7 +110,7 @@ export function InvoiceFiltersComponent({
 
           {/* Status */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-700">
+            <label className="mb-1 block text-xs font-medium text-foreground">
               Status
             </label>
             <Select
@@ -129,7 +129,7 @@ export function InvoiceFiltersComponent({
 
           {/* Date From */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-700">
+            <label className="mb-1 block text-xs font-medium text-foreground">
               Due Date From
             </label>
             <Input
@@ -141,7 +141,7 @@ export function InvoiceFiltersComponent({
 
           {/* Date To */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-700">
+            <label className="mb-1 block text-xs font-medium text-foreground">
               Due Date To
             </label>
             <Input

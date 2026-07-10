@@ -171,7 +171,7 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
   };
 
   const getPaymentMethodBadge = (method: string | null) => {
-    if (!method) return <span className="text-gray-400">-</span>;
+    if (!method) return <span className="text-muted-foreground">-</span>;
     const labels: Record<string, string> = {
       CASH: 'Cash',
       BANK_TRANSFER: 'Bank Transfer',
@@ -201,7 +201,7 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
               Paid Invoices
               {loading && <Loader2 className="ml-2 inline h-4 w-4 animate-spin" />}
             </h2>
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-muted-foreground">
               ({invoices.length} invoice{invoices.length !== 1 ? 's' : ''})
             </span>
           </div>
@@ -235,10 +235,10 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
 
         {/* Date Filters */}
         {showFilters && (
-          <div className="rounded-lg border bg-white p-4">
+          <div className="rounded-lg border bg-card p-4">
             <div className="flex flex-wrap items-end gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Payment Date From
                 </label>
                 <Input
@@ -249,7 +249,7 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Payment Date To
                 </label>
                 <Input
@@ -271,17 +271,17 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
 
         {/* Summary */}
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-          <div className="rounded-lg border bg-white p-4">
-            <div className="text-2xl font-bold text-gray-900">{invoices.length}</div>
-            <p className="text-sm text-gray-500">Paid Invoices</p>
+          <div className="rounded-lg border bg-card p-4">
+            <div className="text-2xl font-bold text-foreground">{invoices.length}</div>
+            <p className="text-sm text-muted-foreground">Paid Invoices</p>
           </div>
-          <div className="rounded-lg border bg-white p-4">
+          <div className="rounded-lg border bg-card p-4">
             <div className="text-2xl font-bold text-green-600">{formatCurrency(totalAmount)}</div>
-            <p className="text-sm text-gray-500">Total Invoice Amount</p>
+            <p className="text-sm text-muted-foreground">Total Invoice Amount</p>
           </div>
-          <div className="rounded-lg border bg-white p-4">
+          <div className="rounded-lg border bg-card p-4">
             <div className="text-2xl font-bold text-green-600">{formatCurrency(totalPaid)}</div>
-            <p className="text-sm text-gray-500">Total Amount Received</p>
+            <p className="text-sm text-muted-foreground">Total Amount Received</p>
           </div>
         </div>
 
@@ -293,7 +293,7 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
         )}
 
         {/* Invoice Table */}
-        <div className="rounded-lg border bg-white">
+        <div className="rounded-lg border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -311,7 +311,7 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
             <TableBody>
               {invoices.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center text-gray-500">
+                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                     {loading ? 'Loading...' : 'No paid invoices found'}
                   </TableCell>
                 </TableRow>
@@ -333,7 +333,7 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
                       {invoice.paidAmount ? formatCurrency(invoice.paidAmount) : formatCurrency(invoice.netAmount)}
                     </TableCell>
                     <TableCell>{getPaymentMethodBadge(invoice.paymentMethod)}</TableCell>
-                    <TableCell className="text-sm text-gray-600">
+                    <TableCell className="text-sm text-muted-foreground">
                       {invoice.paymentReference || '-'}
                     </TableCell>
                     <TableCell>
@@ -350,7 +350,7 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
 
         {/* Empty state */}
         {!loading && invoices.length === 0 && !error && (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-muted-foreground">
             No paid invoices found for the selected date range.
             {(dateFrom || dateTo) && (
               <button

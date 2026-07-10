@@ -258,7 +258,7 @@ export function InvoiceTable({
   };
 
   return (
-    <div className="rounded-lg border bg-white">
+    <div className="rounded-lg border bg-card">
       {/* Bulk actions */}
       {showBulkActions && selectedIds.size > 0 && (
         <div className="flex items-center gap-4 border-b bg-blue-50 px-4 py-3">
@@ -291,7 +291,7 @@ export function InvoiceTable({
                   type="checkbox"
                   checked={selectedIds.size === sortedInvoices.length && sortedInvoices.length > 0}
                   onChange={toggleSelectAll}
-                  className="h-4 w-4 rounded border-gray-300"
+                  className="h-4 w-4 rounded border-border"
                 />
               </TableHead>
             )}
@@ -314,7 +314,7 @@ export function InvoiceTable({
             <TableRow>
               <TableCell
                 colSpan={showBulkActions ? 13 : 12}
-                className="h-24 text-center text-gray-500"
+                className="h-24 text-center text-muted-foreground"
               >
                 No invoices found
               </TableCell>
@@ -328,11 +328,11 @@ export function InvoiceTable({
                       type="checkbox"
                       checked={selectedIds.has(invoice.id)}
                       onChange={() => toggleSelect(invoice.id)}
-                      className="h-4 w-4 rounded border-gray-300"
+                      className="h-4 w-4 rounded border-border"
                     />
                   </TableCell>
                 )}
-                <TableCell className="font-mono text-xs text-gray-600">
+                <TableCell className="font-mono text-xs text-muted-foreground">
                   {invoice.billingNo || '-'}
                 </TableCell>
                 <TableCell className="font-medium">
@@ -436,7 +436,7 @@ export function InvoiceTable({
                             size="sm"
                             onClick={() => onVoid(invoice.id)}
                             title="Void Invoice"
-                            className="text-gray-600 hover:text-gray-800 hover:bg-gray-100"
+                            className="text-muted-foreground hover:text-foreground hover:bg-muted"
                           >
                             <Ban className="mr-1 h-4 w-4" />
                             Void
@@ -472,7 +472,7 @@ export function InvoiceTable({
                             disabled={(invoice.lastFollowUpLevel ?? 0) >= 3}
                             className={`${
                               (invoice.lastFollowUpLevel ?? 0) >= 3
-                                ? 'text-gray-400 cursor-not-allowed'
+                                ? 'text-muted-foreground cursor-not-allowed'
                                 : 'text-orange-600 hover:text-orange-700 hover:bg-orange-50'
                             }`}
                             title={

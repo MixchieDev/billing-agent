@@ -69,20 +69,20 @@ export function ContractSettingsModal({ contract, isOpen, onClose, onSave }: Con
       />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+      <div className="relative bg-card rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Contract Settings</h2>
+          <h2 className="text-lg font-semibold text-foreground">Contract Settings</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-muted-foreground hover:text-muted-foreground transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Contract Name */}
-        <p className="text-sm text-gray-600 mb-6 pb-4 border-b">
+        <p className="text-sm text-muted-foreground mb-6 pb-4 border-b">
           {contract.companyName}
         </p>
 
@@ -98,10 +98,10 @@ export function ContractSettingsModal({ contract, isOpen, onClose, onSave }: Con
           {/* Auto-Send Toggle */}
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
-              <label className="text-sm font-medium text-gray-900">
+              <label className="text-sm font-medium text-foreground">
                 Auto-Send Invoices
               </label>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 When enabled, monthly and quarterly invoices are automatically approved and sent.
                 When disabled, all invoices require manual approval.
               </p>
@@ -113,16 +113,16 @@ export function ContractSettingsModal({ contract, isOpen, onClose, onSave }: Con
                 onChange={(e) => setAutoSendEnabled(e.target.checked)}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-100 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-100 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-card after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
 
           {/* Contract End Date */}
           <div>
-            <label className="block text-sm font-medium text-gray-900 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Contract End Date
             </label>
-            <p className="text-xs text-gray-500 mb-2">
+            <p className="text-xs text-muted-foreground mb-2">
               No invoices will be generated after this date. Leave empty for no end date.
             </p>
             <Input
