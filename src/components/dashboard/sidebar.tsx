@@ -23,10 +23,12 @@ import {
   Handshake,
   FilePlus,
   History,
+  Wallet,
 } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Collections', href: '/dashboard/collections', icon: Wallet },
   { name: 'Pending Approval', href: '/dashboard/pending', icon: Clock },
   { name: 'Approved', href: '/dashboard/approved', icon: CheckCircle },
   { name: 'Rejected', href: '/dashboard/rejected', icon: XCircle },

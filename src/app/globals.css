@@ -24,11 +24,12 @@
   --border: oklch(0.922 0.005 34.3);
   --input: oklch(0.922 0.005 34.3);
   --ring: oklch(0.714 0.014 41.2);
-  --chart-1: oklch(0.879 0.169 91.605);
-  --chart-2: oklch(0.769 0.188 70.08);
-  --chart-3: oklch(0.666 0.179 58.318);
-  --chart-4: oklch(0.555 0.163 48.998);
-  --chart-5: oklch(0.473 0.137 46.201);
+  /* Ordinal amber ramp (single hue 65, monotone L) — validated vs light surface. */
+  --chart-1: oklch(0.72 0.15 65);
+  --chart-2: oklch(0.63 0.15 65);
+  --chart-3: oklch(0.55 0.15 65);
+  --chart-4: oklch(0.47 0.15 65);
+  --chart-5: oklch(0.4 0.15 65);
   --sidebar: oklch(0.986 0.002 67.8);
   --sidebar-foreground: oklch(0.147 0.004 49.3);
   --sidebar-primary: oklch(0.214 0.009 43.1);
@@ -60,11 +61,12 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.879 0.169 91.605);
-  --chart-2: oklch(0.769 0.188 70.08);
-  --chart-3: oklch(0.666 0.179 58.318);
-  --chart-4: oklch(0.555 0.163 48.998);
-  --chart-5: oklch(0.473 0.137 46.201);
+  /* Dark gets its own ramp anchors (same hue), validated vs the dark card surface. */
+  --chart-1: oklch(0.8 0.15 65);
+  --chart-2: oklch(0.72 0.15 65);
+  --chart-3: oklch(0.64 0.15 65);
+  --chart-4: oklch(0.57 0.15 65);
+  --chart-5: oklch(0.5 0.15 65);
   --sidebar: oklch(0.208 0.042 265.755);
   --sidebar-foreground: oklch(0.984 0.003 247.858);
   --sidebar-primary: oklch(0.488 0.243 264.376);
