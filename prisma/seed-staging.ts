@@ -63,6 +63,7 @@ async function main() {
       withholdingTax: D(wht), netAmount: D(net),
       amountPaidTotal: D(0), balanceDue: D(net),
       productType: 'ACCOUNTING',
+      customerEmail: `ap@${customerName.toLowerCase().replace(/[^a-z]/g, '')}.test`,
     };
   };
 
@@ -133,6 +134,15 @@ async function main() {
       { invoiceId: 'demo-61-90', checkNo: '001234', bankName: 'Demo Bank', amount: D(27000), checkDate: days(7), status: 'WAREHOUSED', location: 'Office safe' },
       { checkNo: '005678', bankName: 'Demo Bank', amount: D(12500), checkDate: days(3), status: 'DEPOSITED', depositedAt: days(-1) },
     ],
+  });
+
+  // ---- Ladder config: L1 auto-sends, L2/L3 draft-for-review (the brief's
+  // recommended first-month setup) so the queue shows both modes ----
+  await prisma.settings.upsert({
+    where: { key: 'collections.autoSendLevels' },
+    update: { value: [1] },
+    create: { key: 'collections.autoSendLevels', value: [1], category: 'collections',
+      description: 'Follow-up levels the nightly sweep may send without review' },
   });
 
   console.log('[seed-staging] done.');
