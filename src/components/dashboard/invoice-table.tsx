@@ -506,6 +506,18 @@ export function InvoiceTable({
                             Mark Paid
                           </Button>
                         )}
+                        {onVoid && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onVoid(invoice.id)}
+                            title="Void Invoice (already sent to the client)"
+                            className="text-gray-600 hover:text-gray-800 hover:bg-gray-100"
+                          >
+                            <Ban className="mr-1 h-4 w-4" />
+                            Void
+                          </Button>
+                        )}
                       </>
                     )}
                   </div>

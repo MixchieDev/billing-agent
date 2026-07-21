@@ -53,10 +53,14 @@ export async function POST(
       );
     }
 
-    // Only APPROVED invoices can be voided
-    if (existingInvoice.status !== InvoiceStatus.APPROVED) {
+    // APPROVED and SENT invoices can be voided. (PAID cannot — money already
+    // received; that is a refund/credit situation, not a void.)
+    if (
+      existingInvoice.status !== InvoiceStatus.APPROVED &&
+      existingInvoice.status !== InvoiceStatus.SENT
+    ) {
       return NextResponse.json(
-        { error: 'Only approved invoices can be voided. This invoice is ' + existingInvoice.status },
+        { error: 'Only approved or sent invoices can be voided. This invoice is ' + existingInvoice.status },
         { status: 400 }
       );
     }
@@ -72,6 +76,16 @@ export async function POST(
       },
     });
 
+    // A sent invoice may carry a live HitPay checkout link; close out any
+    // pending payment requests so they aren't left dangling. (The webhook also
+    // guards against paying a VOID invoice.)
+    if (existingInvoice.status === InvoiceStatus.SENT) {
+      await prisma.hitpayPaymentRequest.updateMany({
+        where: { invoiceId: id, status: 'PENDING' },
+        data: { status: 'FAILED' },
+      });
+    }
+
     // Log the action
     await prisma.auditLog.create({
       data: {
@@ -79,7 +93,7 @@ export async function POST(
         action: 'INVOICE_VOIDED',
         entityType: 'Invoice',
         entityId: id,
-        details: { invoiceNo: invoice.billingNo, reason },
+        details: { invoiceNo: invoice.billingNo, reason, previousStatus: existingInvoice.status },
       },
     });
 
