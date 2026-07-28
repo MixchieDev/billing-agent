@@ -31,6 +31,7 @@ interface InvoiceTemplate {
   bankName: string;
   bankAccountName: string;
   bankAccountNo: string;
+  bankAccounts?: { bankName: string; bankAccountName: string; bankAccountNo: string }[];
   // Invoice numbering
   invoicePrefix: string;
   nextInvoiceNo: number;
@@ -322,10 +323,8 @@ export default function SettingsPage() {
           footerText: template.footerText,
           showDisclaimer: template.showDisclaimer,
           notes: template.notes,
-          // Bank details
-          bankName: template.bankName,
-          bankAccountName: template.bankAccountName,
-          bankAccountNo: template.bankAccountNo,
+          // Bank details (full list; the API mirrors the first into legacy fields)
+          bankAccounts: bankAccountsOf(template),
           // Invoice numbering
           invoicePrefix: template.invoicePrefix,
           nextInvoiceNo: template.nextInvoiceNo,
@@ -353,6 +352,24 @@ export default function SettingsPage() {
       setAbbaTemplate({ ...abbaTemplate, [field]: value });
     }
     setSuccess(null);
+  };
+
+  // The template's bank-account list (legacy single fields as the fallback row).
+  const bankAccountsOf = (t: InvoiceTemplate) =>
+    t.bankAccounts && t.bankAccounts.length > 0
+      ? t.bankAccounts
+      : [{ bankName: t.bankName || '', bankAccountName: t.bankAccountName || '', bankAccountNo: t.bankAccountNo || '' }];
+
+  const updateBankAccount = (
+    companyCode: 'YOWI' | 'ABBA',
+    idx: number,
+    field: 'bankName' | 'bankAccountName' | 'bankAccountNo',
+    value: string
+  ) => {
+    const t = companyCode === 'YOWI' ? yowiTemplate : abbaTemplate;
+    if (!t) return;
+    const accounts = bankAccountsOf(t).map((a, i) => (i === idx ? { ...a, [field]: value } : a));
+    updateTemplate(companyCode, 'bankAccounts', accounts);
   };
 
   // Update company field
@@ -686,8 +703,12 @@ export default function SettingsPage() {
           <div className="p-4 flex justify-between items-end">
             <div className="text-xs text-gray-500">
               <div className="font-medium text-gray-700 mb-1">Payment Details</div>
-              <div>Bank: {template.bankName || 'BDO'}</div>
-              <div>Account: {template.bankAccountNo || 'xxxxxxxxxx'}</div>
+              {bankAccountsOf(template).map((acct, i) => (
+                <div key={i} className={i > 0 ? 'mt-1' : undefined}>
+                  <div>Bank: {acct.bankName || 'BDO'}</div>
+                  <div>Account: {acct.bankAccountNo || 'xxxxxxxxxx'}</div>
+                </div>
+              ))}
               {template.notes && (
                 <div className="mt-2 text-gray-400 italic whitespace-pre-line">
                   {template.notes}
@@ -845,47 +866,83 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        {/* Bank Details Section */}
+        {/* Bank Details Section — one or more accounts shown on the invoice */}
         <div className="pt-4 border-t">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3">Payment Details</h4>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Bank Name
-              </label>
-              <input
-                type="text"
-                value={template.bankName}
-                onChange={(e) => updateTemplate(companyCode, 'bankName', e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                placeholder="BDO"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Account Name
-              </label>
-              <input
-                type="text"
-                value={template.bankAccountName}
-                onChange={(e) => updateTemplate(companyCode, 'bankAccountName', e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                placeholder="Company Name"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Account Number
-              </label>
-              <input
-                type="text"
-                value={template.bankAccountNo}
-                onChange={(e) => updateTemplate(companyCode, 'bankAccountNo', e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                placeholder="xxxx-xxxx-xxxx"
-              />
-            </div>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold text-gray-900">Payment Details</h4>
+            <button
+              type="button"
+              onClick={() =>
+                updateTemplate(companyCode, 'bankAccounts', [
+                  ...bankAccountsOf(template),
+                  { bankName: '', bankAccountName: template.bankAccountName || '', bankAccountNo: '' },
+                ])
+              }
+              className="text-sm font-medium text-blue-600 hover:text-blue-700"
+            >
+              + Add Bank Account
+            </button>
           </div>
+          <div className="space-y-3">
+            {bankAccountsOf(template).map((acct, idx) => (
+              <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-4 items-end">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Bank Name
+                  </label>
+                  <input
+                    type="text"
+                    value={acct.bankName}
+                    onChange={(e) => updateBankAccount(companyCode, idx, 'bankName', e.target.value)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    placeholder="BDO"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Account Name
+                  </label>
+                  <input
+                    type="text"
+                    value={acct.bankAccountName}
+                    onChange={(e) => updateBankAccount(companyCode, idx, 'bankAccountName', e.target.value)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    placeholder="Company Name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Account Number
+                  </label>
+                  <input
+                    type="text"
+                    value={acct.bankAccountNo}
+                    onChange={(e) => updateBankAccount(companyCode, idx, 'bankAccountNo', e.target.value)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    placeholder="xxxx-xxxx-xxxx"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateTemplate(
+                      companyCode,
+                      'bankAccounts',
+                      bankAccountsOf(template).filter((_, i) => i !== idx)
+                    )
+                  }
+                  disabled={bankAccountsOf(template).length <= 1}
+                  className="mb-1 rounded-md px-2 py-2 text-sm text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-gray-300"
+                  title={bankAccountsOf(template).length <= 1 ? 'At least one account is required' : 'Remove this account'}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-gray-500">
+            All accounts appear in the invoice&apos;s Payment Details box, in this order.
+          </p>
         </div>
 
         {/* Invoice Numbering Section */}

@@ -111,14 +111,41 @@ export function clearSettingsCache(): void {
   cacheTimestamp = 0;
 }
 
+export interface BankAccount {
+  bankName: string;
+  bankAccountName: string;
+  bankAccountNo: string;
+}
+
+/**
+ * Read the per-company bank-account list from Settings (key
+ * `soa.<code>.bankAccounts`). Returns null when unset/invalid so callers can
+ * fall back to the legacy single account on the Company record.
+ */
+function parseBankAccounts(value: unknown): BankAccount[] | null {
+  if (!Array.isArray(value)) return null;
+  const accounts = value
+    .filter((a): a is Record<string, unknown> => !!a && typeof a === 'object')
+    .map((a) => ({
+      bankName: String(a.bankName ?? '').trim(),
+      bankAccountName: String(a.bankAccountName ?? '').trim(),
+      bankAccountNo: String(a.bankAccountNo ?? '').trim(),
+    }))
+    .filter((a) => a.bankName || a.bankAccountNo);
+  return accounts.length > 0 ? accounts : null;
+}
+
 /**
  * Get SOA/PDF template settings for a company
- * Now fetches from Company model (bank details) and Signatory model (signatories)
+ * Bank accounts come from the Settings list (soa.<code>.bankAccounts) when
+ * configured, else the legacy single account on the Company model. The legacy
+ * single fields always mirror the first account.
  */
 export async function getSOASettings(companyCode: 'YOWI' | 'ABBA'): Promise<{
   bankName: string;
   bankAccountName: string;
   bankAccountNo: string;
+  bankAccounts: BankAccount[];
   footer: string;
   preparedBy: string;
   reviewedBy: string;
@@ -143,13 +170,23 @@ export async function getSOASettings(companyCode: 'YOWI' | 'ABBA'): Promise<{
     const preparedBySignatory = company.signatories.find(s => s.role === 'prepared_by');
     const reviewedBySignatory = company.signatories.find(s => s.role === 'reviewed_by');
 
-    // Get footer from Settings (shared setting)
+    // Get footer + the configured bank-account list from Settings
     const footerSetting = await getSetting('soa.footer');
+    const accountsSetting = await getSetting(`soa.${companyCode.toLowerCase()}.bankAccounts`);
 
-    return {
+    const legacyAccount: BankAccount = {
       bankName: company.bankName || 'BDO',
       bankAccountName: company.bankAccountName || company.name,
       bankAccountNo: company.bankAccountNo || '',
+    };
+    const bankAccounts = parseBankAccounts(accountsSetting) ?? [legacyAccount];
+
+    return {
+      // Legacy single fields mirror the first account so old readers keep working.
+      bankName: bankAccounts[0].bankName,
+      bankAccountName: bankAccounts[0].bankAccountName,
+      bankAccountNo: bankAccounts[0].bankAccountNo,
+      bankAccounts,
       footer: footerSetting || 'Thank you for your business. Please include the invoice number in your payment reference.',
       preparedBy: preparedBySignatory?.name || 'VANESSA L. DONOSO',
       reviewedBy: reviewedBySignatory?.name || 'RUTH MICHELLE C. BAYRON',
@@ -167,15 +204,20 @@ function getSOASettingsDefaults(companyCode: 'YOWI' | 'ABBA'): {
   bankName: string;
   bankAccountName: string;
   bankAccountNo: string;
+  bankAccounts: BankAccount[];
   footer: string;
   preparedBy: string;
   reviewedBy: string;
 } {
   const isYowi = companyCode === 'YOWI';
-  return {
+  const account: BankAccount = {
     bankName: 'BDO',
     bankAccountName: isYowi ? 'YAHSHUA OUTSOURCING WORLDWIDE INC.' : 'THE ABBA INITIATIVE OPC',
     bankAccountNo: '',
+  };
+  return {
+    ...account,
+    bankAccounts: [account],
     footer: 'Thank you for your business. Please include the invoice number in your payment reference.',
     preparedBy: 'VANESSA L. DONOSO',
     reviewedBy: 'RUTH MICHELLE C. BAYRON',
