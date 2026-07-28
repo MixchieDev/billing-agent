@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { clearTemplateCache } from '@/lib/settings';
+import { clearTemplateCache, clearSettingsCache, getSetting } from '@/lib/settings';
 
 // GET template for a company (includes bank details and signatories)
 export async function GET(
@@ -47,16 +47,29 @@ export async function GET(
       notes: '',
     };
 
+    // Bank accounts: the Settings list when configured, else the legacy single
+    // account from the Company model.
+    const accountsSetting = await getSetting(`soa.${company.code.toLowerCase()}.bankAccounts`);
+    const bankAccounts =
+      Array.isArray(accountsSetting) && accountsSetting.length > 0
+        ? accountsSetting
+        : [{
+            bankName: company.bankName || 'BDO',
+            bankAccountName: company.bankAccountName || company.name,
+            bankAccountNo: company.bankAccountNo || '',
+          }];
+
     return NextResponse.json({
       companyId: company.id,
       companyCode: company.code,
       companyName: company.name,
       // Template settings
       ...template,
-      // Bank details (from Company model)
-      bankName: company.bankName || 'BDO',
-      bankAccountName: company.bankAccountName || company.name,
-      bankAccountNo: company.bankAccountNo || '',
+      // Bank details (legacy single fields mirror the first account)
+      bankName: bankAccounts[0].bankName,
+      bankAccountName: bankAccounts[0].bankAccountName,
+      bankAccountNo: bankAccounts[0].bankAccountNo,
+      bankAccounts,
       // Invoice numbering (from Company model)
       invoicePrefix: company.invoicePrefix || 'INV',
       nextInvoiceNo: company.nextInvoiceNo || 1,
@@ -114,6 +127,7 @@ export async function PUT(
       bankName,
       bankAccountName,
       bankAccountNo,
+      bankAccounts,
       // Invoice numbering
       invoicePrefix,
       nextInvoiceNo,
@@ -122,14 +136,54 @@ export async function PUT(
       reviewedBy,
     } = body;
 
+    // Multiple bank accounts: sanitize, store the list in Settings, and mirror
+    // the FIRST account into the legacy Company fields (kept for old readers).
+    let firstAccount: { bankName?: string; bankAccountName?: string; bankAccountNo?: string } = {
+      bankName,
+      bankAccountName,
+      bankAccountNo,
+    };
+    if (bankAccounts !== undefined) {
+      if (!Array.isArray(bankAccounts)) {
+        return NextResponse.json({ error: 'bankAccounts must be an array' }, { status: 400 });
+      }
+      const cleaned = bankAccounts
+        .filter((a: unknown): a is Record<string, unknown> => !!a && typeof a === 'object')
+        .map((a: Record<string, unknown>) => ({
+          bankName: String(a.bankName ?? '').trim(),
+          bankAccountName: String(a.bankAccountName ?? '').trim(),
+          bankAccountNo: String(a.bankAccountNo ?? '').trim(),
+        }))
+        .filter((a) => a.bankName || a.bankAccountNo);
+      if (cleaned.length === 0) {
+        return NextResponse.json(
+          { error: 'At least one bank account with a bank name or account number is required' },
+          { status: 400 }
+        );
+      }
+      const key = `soa.${company.code.toLowerCase()}.bankAccounts`;
+      await prisma.settings.upsert({
+        where: { key },
+        update: { value: cleaned },
+        create: {
+          key,
+          value: cleaned,
+          category: 'soa',
+          description: `Payment bank accounts shown on ${company.code} invoices`,
+        },
+      });
+      clearSettingsCache();
+      firstAccount = cleaned[0];
+    }
+
     // Update company bank details, invoice prefix, and next invoice number if provided
-    if (bankName !== undefined || bankAccountName !== undefined || bankAccountNo !== undefined || invoicePrefix !== undefined || nextInvoiceNo !== undefined) {
+    if (firstAccount.bankName !== undefined || firstAccount.bankAccountName !== undefined || firstAccount.bankAccountNo !== undefined || invoicePrefix !== undefined || nextInvoiceNo !== undefined) {
       await prisma.company.update({
         where: { id: company.id },
         data: {
-          ...(bankName !== undefined && { bankName }),
-          ...(bankAccountName !== undefined && { bankAccountName }),
-          ...(bankAccountNo !== undefined && { bankAccountNo }),
+          ...(firstAccount.bankName !== undefined && { bankName: firstAccount.bankName }),
+          ...(firstAccount.bankAccountName !== undefined && { bankAccountName: firstAccount.bankAccountName }),
+          ...(firstAccount.bankAccountNo !== undefined && { bankAccountNo: firstAccount.bankAccountNo }),
           ...(invoicePrefix !== undefined && { invoicePrefix }),
           ...(nextInvoiceNo !== undefined && { nextInvoiceNo: parseInt(nextInvoiceNo) }),
         },
