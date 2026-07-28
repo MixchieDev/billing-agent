@@ -92,6 +92,49 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true, alreadyPaid: true });
     }
 
+    // Voided invoice: the client paid through a stale checkout link. Record the
+    // payment on the request and alert staff for a manual refund — but never
+    // resurrect a VOID invoice to PAID.
+    if (paymentRequest.invoice.status === 'VOID') {
+      await prisma.$transaction([
+        prisma.hitpayPaymentRequest.update({
+          where: { id: paymentRequest.id },
+          data: {
+            status: 'COMPLETED',
+            paidAt: new Date(),
+            paymentMethod: paymentDetails.paymentMethod,
+            paymentReference: paymentDetails.paymentReference,
+          },
+        }),
+        prisma.auditLog.create({
+          data: {
+            userId: null,
+            action: 'HITPAY_PAYMENT_ON_VOID_INVOICE',
+            entityType: 'Invoice',
+            entityId: paymentRequest.invoice.id,
+            details: {
+              billingNo: paymentRequest.invoice.billingNo,
+              paidAmount: paymentDetails.amount,
+              paymentReference: paymentDetails.paymentReference,
+              note: 'Payment received via HitPay for a VOIDED invoice — needs manual refund',
+            },
+          },
+        }),
+        prisma.notification.create({
+          data: {
+            type: 'SYSTEM',
+            title: 'Payment received on a VOIDED invoice',
+            message: `HitPay payment of ${paymentDetails.amount} received for voided invoice ${paymentRequest.invoice.billingNo} (${paymentRequest.invoice.customerName}). A manual refund is needed.`,
+            link: '/dashboard/invoices',
+            entityType: 'Invoice',
+            entityId: paymentRequest.invoice.id,
+          },
+        }),
+      ]);
+      console.warn('HitPay payment received for VOIDED invoice:', paymentRequest.invoice.id);
+      return NextResponse.json({ received: true, voidedInvoice: true });
+    }
+
     // Update payment request and invoice in a transaction
     await prisma.$transaction(async (tx) => {
       // Update payment request
