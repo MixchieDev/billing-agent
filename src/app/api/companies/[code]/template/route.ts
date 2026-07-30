@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { clearTemplateCache, clearSettingsCache, getSetting } from '@/lib/settings';
+import { clearTemplateCache, clearSettingsCache, parseBankAccounts } from '@/lib/settings';
 
 // GET template for a company (includes bank details and signatories)
 export async function GET(
@@ -48,16 +48,17 @@ export async function GET(
     };
 
     // Bank accounts: the Settings list when configured, else the legacy single
-    // account from the Company model.
-    const accountsSetting = await getSetting(`soa.${company.code.toLowerCase()}.bankAccounts`);
-    const bankAccounts =
-      Array.isArray(accountsSetting) && accountsSetting.length > 0
-        ? accountsSetting
-        : [{
-            bankName: company.bankName || 'BDO',
-            bankAccountName: company.bankAccountName || company.name,
-            bankAccountNo: company.bankAccountNo || '',
-          }];
+    // account from the Company model. Read the row DIRECTLY (not via the cached
+    // settings helper): on serverless, another instance's 5-minute cache would
+    // serve a stale list right after a save and the new account would "vanish".
+    const accountsRow = await prisma.settings.findUnique({
+      where: { key: `soa.${company.code.toLowerCase()}.bankAccounts` },
+    });
+    const bankAccounts = parseBankAccounts(accountsRow?.value) ?? [{
+      bankName: company.bankName || 'BDO',
+      bankAccountName: company.bankAccountName || company.name,
+      bankAccountNo: company.bankAccountNo || '',
+    }];
 
     return NextResponse.json({
       companyId: company.id,
