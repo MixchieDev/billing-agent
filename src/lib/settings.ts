@@ -122,7 +122,7 @@ export interface BankAccount {
  * `soa.<code>.bankAccounts`). Returns null when unset/invalid so callers can
  * fall back to the legacy single account on the Company record.
  */
-function parseBankAccounts(value: unknown): BankAccount[] | null {
+export function parseBankAccounts(value: unknown): BankAccount[] | null {
   if (!Array.isArray(value)) return null;
   const accounts = value
     .filter((a): a is Record<string, unknown> => !!a && typeof a === 'object')
@@ -170,9 +170,14 @@ export async function getSOASettings(companyCode: 'YOWI' | 'ABBA'): Promise<{
     const preparedBySignatory = company.signatories.find(s => s.role === 'prepared_by');
     const reviewedBySignatory = company.signatories.find(s => s.role === 'reviewed_by');
 
-    // Get footer + the configured bank-account list from Settings
+    // Get footer + the configured bank-account list from Settings. The bank
+    // accounts are read DIRECTLY (not via the cached helper): on serverless a
+    // stale per-instance cache could omit a just-saved account from the PDF.
     const footerSetting = await getSetting('soa.footer');
-    const accountsSetting = await getSetting(`soa.${companyCode.toLowerCase()}.bankAccounts`);
+    const accountsRow = await prisma.settings.findUnique({
+      where: { key: `soa.${companyCode.toLowerCase()}.bankAccounts` },
+    });
+    const accountsSetting = accountsRow?.value;
 
     const legacyAccount: BankAccount = {
       bankName: company.bankName || 'BDO',
