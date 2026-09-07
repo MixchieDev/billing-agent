@@ -172,7 +172,10 @@ export async function generateRcbcInvoice(monthStr: string, userId: string): Pro
       customerName: rcbcPartner.invoiceTo || 'RIZAL COMMERCIAL BANKING CORPORATION',
       attention: rcbcPartner.attention,
       customerAddress: rcbcPartner.address,
-      customerEmail: rcbcPartner.email,
+      // Full recipient list (sending prefers customerEmails); legacy field
+      // mirrors the first address.
+      customerEmail: (rcbcPartner.emails || rcbcPartner.email)?.split(',')[0]?.trim() || null,
+      customerEmails: rcbcPartner.emails || rcbcPartner.email,
       statementDate: new Date(),
       dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
       periodStart,
