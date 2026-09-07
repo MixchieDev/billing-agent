@@ -23,6 +23,7 @@ import {
   ChevronDown,
   Receipt,
 } from 'lucide-react';
+import { DataState } from '@/components/dashboard/data-state';
 import { format, parseISO, isToday } from 'date-fns';
 
 interface AgingInvoice {
@@ -431,9 +432,13 @@ export function CollectionsDashboard() {
                   )}
                 </>
               ) : (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  {isLoading ? 'Loading…' : 'Nothing outstanding — all caught up.'}
-                </p>
+                <DataState
+                  isLoading={isLoading}
+                  error={error}
+                  subject="outstanding invoices"
+                  onRetry={() => mutate()}
+                  emptyMessage="Nothing outstanding — all caught up."
+                />
               )}
             </CardContent>
           </Card>
@@ -475,9 +480,13 @@ export function CollectionsDashboard() {
                   })}
                 </div>
               ) : (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  {isLoading ? 'Loading…' : 'No dues, promises, or checks in the next 14 days.'}
-                </p>
+                <DataState
+                  isLoading={isLoading}
+                  error={error}
+                  subject="the 14-day outlook"
+                  onRetry={() => mutate()}
+                  emptyMessage="No dues, promises, or checks in the next 14 days."
+                />
               )}
             </CardContent>
           </Card>

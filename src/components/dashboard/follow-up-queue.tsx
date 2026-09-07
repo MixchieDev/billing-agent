@@ -14,6 +14,7 @@ import { formatCurrency, formatDateShort } from '@/lib/utils';
 import {
   RefreshCw, Loader2, MailWarning, CalendarClock, Moon, CheckCircle2, AlertTriangle,
 } from 'lucide-react';
+import { DataState } from '@/components/dashboard/data-state';
 import { format } from 'date-fns';
 
 type QueueCategory = 'BROKEN_PROMISE' | 'NO_EMAIL' | 'MAXED' | 'REVIEW';
@@ -151,7 +152,7 @@ export function FollowUpQueue() {
                     <TableHead>Entity</TableHead>
                     <TableHead className="text-right">Days overdue</TableHead>
                     <TableHead className="text-right">Balance</TableHead>
-                    <TableHead>Why it's here</TableHead>
+                    <TableHead>Why it&apos;s here</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -215,9 +216,13 @@ export function FollowUpQueue() {
                 </TableBody>
               </Table>
             ) : (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                {isLoading ? 'Loading…' : 'Nothing needs a human right now. 🎉'}
-              </p>
+              <DataState
+                isLoading={isLoading}
+                error={error}
+                subject="the follow-up queue"
+                onRetry={() => mutate()}
+                emptyMessage="Nothing needs a human right now. 🎉"
+              />
             )}
           </CardContent>
         </Card>
@@ -227,7 +232,7 @@ export function FollowUpQueue() {
           <CardHeader className="flex flex-row items-center gap-2">
             <Moon className="h-4 w-4 text-muted-foreground" />
             <CardTitle className="text-base">
-              Queued for tonight's auto-send {data && <span className="font-normal text-muted-foreground">({autoTonight.length})</span>}
+              Queued for tonight&apos;s auto-send {data && <span className="font-normal text-muted-foreground">({autoTonight.length})</span>}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -258,9 +263,13 @@ export function FollowUpQueue() {
                 </TableBody>
               </Table>
             ) : (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                {isLoading ? 'Loading…' : 'Nothing due for the nightly sweep.'}
-              </p>
+              <DataState
+                isLoading={isLoading}
+                error={error}
+                subject="the nightly sweep"
+                onRetry={() => mutate()}
+                emptyMessage="Nothing due for the nightly sweep."
+              />
             )}
           </CardContent>
         </Card>
@@ -292,9 +301,13 @@ export function FollowUpQueue() {
                   ))}
               </ul>
             ) : (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                {isLoading ? 'Loading…' : 'No follow-ups sent in the last 7 days.'}
-              </p>
+              <DataState
+                isLoading={isLoading}
+                error={error}
+                subject="recent follow-ups"
+                onRetry={() => mutate()}
+                emptyMessage="No follow-ups sent in the last 7 days."
+              />
             )}
           </CardContent>
         </Card>

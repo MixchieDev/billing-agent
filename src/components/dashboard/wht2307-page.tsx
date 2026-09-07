@@ -11,6 +11,7 @@ import {
 import { useApi } from '@/lib/hooks/use-api';
 import { formatCurrency, formatDateShort } from '@/lib/utils';
 import { RefreshCw, Loader2, FileCheck2, Receipt, Undo2, Send } from 'lucide-react';
+import { DataState, statValue } from '@/components/dashboard/data-state';
 
 type CertStatus = 'PENDING' | 'RECEIVED';
 
@@ -128,10 +129,14 @@ export function Wht2307Page() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {summary ? formatCurrency(summary.pendingAmount) : '—'}
+                {statValue(summary?.pendingAmount, formatCurrency, error)}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                {summary?.pendingCount ?? 0} certificate{summary?.pendingCount === 1 ? '' : 's'} not yet received
+                {error
+                  ? 'Figure unavailable — the list below failed to load.'
+                  : `${summary?.pendingCount ?? 0} certificate${
+                      summary?.pendingCount === 1 ? '' : 's'
+                    } not yet received`}
               </p>
             </CardContent>
           </Card>
@@ -153,9 +158,11 @@ export function Wht2307Page() {
                         <span className="text-xs font-medium text-muted-foreground">{b.label}</span>
                       </div>
                       <div className="mt-1 text-sm font-semibold">
-                        {formatCurrency(stat?.amount ?? 0)}
+                        {statValue(stat?.amount, formatCurrency, error)}
                       </div>
-                      <div className="text-xs text-muted-foreground">{stat?.count ?? 0} cert.</div>
+                      <div className="text-xs text-muted-foreground">
+                        {error ? '—' : `${stat?.count ?? 0} cert.`}
+                      </div>
                     </div>
                   );
                 })}
@@ -299,14 +306,18 @@ export function Wht2307Page() {
                 </TableBody>
               </Table>
             ) : (
-              <div className="py-12 text-center text-sm text-muted-foreground">
-                <Receipt className="mx-auto mb-2 h-8 w-8 opacity-40" />
-                {isLoading
-                  ? 'Loading…'
-                  : filter === 'PENDING'
+              <DataState
+                isLoading={isLoading}
+                error={error}
+                subject="2307 certificates"
+                icon={Receipt}
+                onRetry={() => mutate()}
+                emptyMessage={
+                  filter === 'PENDING'
                     ? 'No certificates outstanding — every 2307 is accounted for.'
-                    : 'Nothing to show for this filter.'}
-              </div>
+                    : 'Nothing to show for this filter.'
+                }
+              />
             )}
           </CardContent>
         </Card>

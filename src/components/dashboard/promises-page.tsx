@@ -11,6 +11,7 @@ import {
 import { useApi } from '@/lib/hooks/use-api';
 import { formatCurrency, formatDateShort } from '@/lib/utils';
 import { RefreshCw, Loader2, CalendarClock, Trash2 } from 'lucide-react';
+import { DataState } from '@/components/dashboard/data-state';
 
 type PromiseStatus = 'OPEN' | 'KEPT' | 'BROKEN';
 
@@ -196,10 +197,14 @@ export function PromisesPage() {
                 </TableBody>
               </Table>
             ) : (
-              <div className="py-12 text-center text-sm text-muted-foreground">
-                <CalendarClock className="mx-auto mb-2 h-8 w-8 opacity-40" />
-                {isLoading ? 'Loading…' : 'No promises logged yet. Use the Promise action on an overdue invoice.'}
-              </div>
+              <DataState
+                isLoading={isLoading}
+                error={error}
+                subject="promises to pay"
+                icon={CalendarClock}
+                onRetry={() => mutate()}
+                emptyMessage="No promises logged yet. Use the Promise action on an overdue invoice."
+              />
             )}
           </CardContent>
         </Card>
