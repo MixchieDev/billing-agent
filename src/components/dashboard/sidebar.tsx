@@ -27,6 +27,7 @@ import {
   MailWarning,
   CalendarClock,
   Receipt,
+  BrushCleaning,
 } from 'lucide-react';
 
 const navigation = [
@@ -35,6 +36,7 @@ const navigation = [
   { name: 'Follow-up Queue', href: '/dashboard/follow-ups', icon: MailWarning },
   { name: 'Promises to Pay', href: '/dashboard/promises', icon: CalendarClock },
   { name: '2307 Certificates', href: '/dashboard/wht2307', icon: Receipt },
+  { name: 'Invoice Cleanup', href: '/dashboard/cleanup', icon: BrushCleaning },
   { name: 'Pending Approval', href: '/dashboard/pending', icon: Clock },
   { name: 'Approved', href: '/dashboard/approved', icon: CheckCircle },
   { name: 'Rejected', href: '/dashboard/rejected', icon: XCircle },
