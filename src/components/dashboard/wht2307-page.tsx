@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { useApi } from '@/lib/hooks/use-api';
 import { formatCurrency, formatDateShort } from '@/lib/utils';
-import { RefreshCw, Loader2, FileCheck2, Receipt, Undo2 } from 'lucide-react';
+import { RefreshCw, Loader2, FileCheck2, Receipt, Undo2, Send } from 'lucide-react';
 
 type CertStatus = 'PENDING' | 'RECEIVED';
 
@@ -28,6 +28,9 @@ interface Certificate {
   receivedAt: string | null;
   daysPending: number | null;
   bucket: string | null;
+  requestedAt: string | null;
+  requestCount: number;
+  hasEmail: boolean;
 }
 
 interface Wht2307Data {
@@ -55,6 +58,7 @@ const FILTERS: Array<{ key: 'PENDING' | 'RECEIVED' | 'ALL'; label: string }> = [
 export function Wht2307Page() {
   const [filter, setFilter] = useState<'PENDING' | 'RECEIVED' | 'ALL'>('PENDING');
   const [updating, setUpdating] = useState<string | null>(null);
+  const [requesting, setRequesting] = useState<string | null>(null);
   const { data, error, isLoading, mutate } = useApi<Wht2307Data>(
     `/api/collections/wht2307?status=${filter}`
   );
@@ -78,6 +82,27 @@ export function Wht2307Page() {
       alert(`Error: ${e instanceof Error ? e.message : e}`);
     } finally {
       setUpdating(null);
+    }
+  };
+
+  const requestCertificate = async (cert: Certificate) => {
+    const again = cert.requestCount > 0;
+    if (!window.confirm(
+      `${again ? 'Send another' : 'Send a'} 2307 request to ${cert.customerName}?\n\n` +
+      `The email includes our reconciliation (invoiced vs received ⇒ ${formatCurrency(cert.amount)} withheld) ` +
+      `and asks them to issue the certificate from their own records.`
+    )) return;
+    setRequesting(cert.id);
+    try {
+      const res = await fetch(`/api/invoices/${cert.id}/wht2307/request`, { method: 'POST' });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to send request');
+      mutate();
+      alert(body.message);
+    } catch (e) {
+      alert(`Error: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      setRequesting(null);
     }
   };
 
@@ -178,6 +203,7 @@ export function Wht2307Page() {
                     <TableHead className="text-right">Certificate value</TableHead>
                     <TableHead>Invoice settled</TableHead>
                     <TableHead className="text-right">Pending</TableHead>
+                    <TableHead>Requested</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -212,17 +238,49 @@ export function Wht2307Page() {
                           </Badge>
                         )}
                       </TableCell>
+                      <TableCell>
+                        {cert.requestCount > 0 ? (
+                          <div className="text-xs">
+                            <div>{cert.requestedAt ? formatDateShort(new Date(cert.requestedAt)) : '—'}</div>
+                            <div className="text-muted-foreground">
+                              {cert.requestCount}× requested
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">never</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         {cert.status === 'PENDING' ? (
-                          <Button
-                            size="sm"
-                            disabled={updating === cert.id}
-                            onClick={() => setStatus(cert, 'RECEIVED')}
-                            className="bg-green-600 text-white hover:bg-green-700"
-                          >
-                            <FileCheck2 className="mr-1 h-4 w-4" />
-                            {updating === cert.id ? 'Saving…' : 'Mark received'}
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={requesting === cert.id || !cert.hasEmail}
+                              onClick={() => requestCertificate(cert)}
+                              title={
+                                cert.hasEmail
+                                  ? 'Email the client asking for this 2307'
+                                  : 'No email address on this invoice'
+                              }
+                            >
+                              <Send className="mr-1 h-4 w-4" />
+                              {requesting === cert.id
+                                ? 'Sending…'
+                                : cert.requestCount > 0
+                                  ? 'Request again'
+                                  : 'Request 2307'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              disabled={updating === cert.id}
+                              onClick={() => setStatus(cert, 'RECEIVED')}
+                              className="bg-green-600 text-white hover:bg-green-700"
+                            >
+                              <FileCheck2 className="mr-1 h-4 w-4" />
+                              {updating === cert.id ? 'Saving…' : 'Mark received'}
+                            </Button>
+                          </div>
                         ) : (
                           <Button
                             size="sm"

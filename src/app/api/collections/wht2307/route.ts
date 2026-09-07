@@ -39,6 +39,10 @@ export async function GET(request: NextRequest) {
           paidAt: true,
           wht2307Status: true,
           wht2307ReceivedAt: true,
+          wht2307RequestedAt: true,
+          wht2307RequestCount: true,
+          customerEmail: true,
+          customerEmails: true,
           company: { select: { code: true } },
         },
       }),
@@ -67,6 +71,9 @@ export async function GET(request: NextRequest) {
         receivedAt: inv.wht2307ReceivedAt,
         daysPending: inv.wht2307Status === 'PENDING' ? days : null,
         bucket: inv.wht2307Status === 'PENDING' ? ageBucket(days) : null,
+        requestedAt: inv.wht2307RequestedAt,
+        requestCount: inv.wht2307RequestCount,
+        hasEmail: !!(inv.customerEmails || inv.customerEmail),
       };
     });
 

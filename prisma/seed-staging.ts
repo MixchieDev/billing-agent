@@ -151,13 +151,15 @@ async function main() {
     where: { id: { in: ['demo-2307-a', 'demo-2307-b'] } },
     data: { wht2307Status: 'PENDING', balanceDue: D(0) },
   });
+  // Cash received = gross − withheld, so the reconciliation in the 2307 request
+  // email ties out exactly (67,200 − 1,200 and 100,800 − 1,800).
   await prisma.invoice.update({
     where: { id: 'demo-2307-a' },
-    data: { amountPaidTotal: D(65000), paidAt: days(-20), paidAmount: D(65000), paymentMethod: 'BANK_TRANSFER' },
+    data: { amountPaidTotal: D(66000), paidAt: days(-20), paidAmount: D(66000), paymentMethod: 'BANK_TRANSFER' },
   });
   await prisma.invoice.update({
     where: { id: 'demo-2307-b' },
-    data: { amountPaidTotal: D(98000), paidAt: days(-135), paidAmount: D(98000), paymentMethod: 'BANK_TRANSFER' },
+    data: { amountPaidTotal: D(99000), paidAt: days(-135), paidAmount: D(99000), paymentMethod: 'BANK_TRANSFER' },
   });
   // Unbilled withholding: client deducted 672 that wasn't billed — the residual
   // balance IS the certificate value.
@@ -170,8 +172,8 @@ async function main() {
   });
   await prisma.invoicePayment.createMany({
     data: [
-      { invoiceId: 'demo-2307-a', amount: D(65000), method: 'BANK_TRANSFER', paidDate: days(-20), reference: 'DEMO-2307-A' },
-      { invoiceId: 'demo-2307-b', amount: D(98000), method: 'BANK_TRANSFER', paidDate: days(-135), reference: 'DEMO-2307-B' },
+      { invoiceId: 'demo-2307-a', amount: D(66000), method: 'BANK_TRANSFER', paidDate: days(-20), reference: 'DEMO-2307-A' },
+      { invoiceId: 'demo-2307-b', amount: D(99000), method: 'BANK_TRANSFER', paidDate: days(-135), reference: 'DEMO-2307-B' },
       { invoiceId: 'demo-2307-c', amount: D(32928), method: 'BANK_TRANSFER', paidDate: days(-65), reference: 'DEMO-2307-C', isEwtShort: true },
     ],
   });

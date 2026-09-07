@@ -284,6 +284,8 @@ model Invoice {
   balanceDue            Decimal?               @db.Decimal(15, 2) // netAmount − amountPaidTotal
   wht2307Status         Wht2307Status          @default(NOT_APPLICABLE)
   wht2307ReceivedAt     DateTime?
+  wht2307RequestedAt    DateTime? // last time we asked the client for the certificate
+  wht2307RequestCount   Int                    @default(0)
   followUpPausedUntil   DateTime? // set by an open promise-to-pay
   suspensionNoticeAt    DateTime?
   suspendedAt           DateTime?
