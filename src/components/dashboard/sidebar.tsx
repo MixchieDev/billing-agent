@@ -25,12 +25,14 @@ import {
   History,
   Wallet,
   MailWarning,
+  CalendarClock,
 } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Collections', href: '/dashboard/collections', icon: Wallet },
   { name: 'Follow-up Queue', href: '/dashboard/follow-ups', icon: MailWarning },
+  { name: 'Promises to Pay', href: '/dashboard/promises', icon: CalendarClock },
   { name: 'Pending Approval', href: '/dashboard/pending', icon: Clock },
   { name: 'Approved', href: '/dashboard/approved', icon: CheckCircle },
   { name: 'Rejected', href: '/dashboard/rejected', icon: XCircle },

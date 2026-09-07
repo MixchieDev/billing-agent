@@ -51,10 +51,19 @@ export async function GET() {
         prisma.promiseToPay.count({
           where: { status: 'BROKEN', updatedAt: { gte: subDays(today, 30) } },
         }),
-        prisma.invoicePayment.aggregate({
+        prisma.invoicePayment.findMany({
           where: { paidDate: { gte: weekStart } },
-          _sum: { amount: true },
-          _count: true,
+          orderBy: { paidDate: 'desc' },
+          select: {
+            id: true,
+            amount: true,
+            method: true,
+            reference: true,
+            paidDate: true,
+            invoice: {
+              select: { id: true, billingNo: true, customerName: true, company: { select: { code: true } } },
+            },
+          },
         }),
         prisma.followUpLog.count({
           where: { sentAt: { gte: weekStart }, status: 'SENT' },
@@ -69,7 +78,19 @@ export async function GET() {
       ]);
 
     // ---- Aging on the money still owed (balanceDue falls back to netAmount) ----
-    const bucket = () => ({ count: 0, amount: 0 });
+    // Each bucket carries its invoices so the dashboard can drill in without a
+    // second round-trip.
+    type AgingInvoice = {
+      id: string;
+      billingNo: string | null;
+      customerName: string;
+      entity: string;
+      balance: number;
+      daysOverdue: number;
+      status: string;
+      paused: boolean;
+    };
+    const bucket = () => ({ count: 0, amount: 0, invoices: [] as AgingInvoice[] });
     const aging = {
       current: bucket(), // not yet due
       d1_30: bucket(),
@@ -95,7 +116,19 @@ export async function GET() {
         : aging.d90plus;
       b.count++;
       b.amount += owed;
+      b.invoices.push({
+        id: inv.id,
+        billingNo: inv.billingNo,
+        customerName: inv.customerName,
+        entity: inv.company?.code ?? '',
+        balance: owed,
+        daysOverdue,
+        status: inv.status,
+        paused: !!(inv.followUpPausedUntil && inv.followUpPausedUntil > today),
+      });
     }
+    // Biggest exposure first within each bucket.
+    for (const b of Object.values(aging)) b.invoices.sort((x, y) => y.balance - x.balance);
 
     // ---- 14-day cash calendar: dues + promises + PDC dates, grouped by day ----
     type CalItem = { type: 'DUE' | 'PROMISE' | 'PDC'; label: string; amount: number };
@@ -146,8 +179,18 @@ export async function GET() {
       outstandingCount: outstanding.length,
       pausedCount,
       collectedThisWeek: {
-        amount: Number(paymentsWeek._sum.amount ?? 0),
-        count: paymentsWeek._count,
+        amount: paymentsWeek.reduce((sum, p) => sum + Number(p.amount), 0),
+        count: paymentsWeek.length,
+        payments: paymentsWeek.map((p) => ({
+          id: p.id,
+          amount: Number(p.amount),
+          method: p.method,
+          reference: p.reference,
+          paidDate: p.paidDate,
+          billingNo: p.invoice.billingNo,
+          customerName: p.invoice.customerName,
+          entity: p.invoice.company?.code ?? '',
+        })),
       },
       followUpsThisWeek: followUpsWeek,
       promises: {
