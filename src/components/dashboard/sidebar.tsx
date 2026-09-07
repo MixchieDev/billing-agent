@@ -26,6 +26,7 @@ import {
   Wallet,
   MailWarning,
   CalendarClock,
+  Receipt,
 } from 'lucide-react';
 
 const navigation = [
@@ -33,6 +34,7 @@ const navigation = [
   { name: 'Collections', href: '/dashboard/collections', icon: Wallet },
   { name: 'Follow-up Queue', href: '/dashboard/follow-ups', icon: MailWarning },
   { name: 'Promises to Pay', href: '/dashboard/promises', icon: CalendarClock },
+  { name: '2307 Certificates', href: '/dashboard/wht2307', icon: Receipt },
   { name: 'Pending Approval', href: '/dashboard/pending', icon: Clock },
   { name: 'Approved', href: '/dashboard/approved', icon: CheckCircle },
   { name: 'Rejected', href: '/dashboard/rejected', icon: XCircle },

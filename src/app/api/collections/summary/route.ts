@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { addDays, startOfDay, startOfWeek, subDays, format } from 'date-fns';
+import { certificateAmount } from '@/lib/wht2307';
 
 /**
  * GET /api/collections/summary
@@ -23,7 +24,7 @@ export async function GET() {
     const horizon = addDays(today, 14);
 
     // Batched via prisma.$transaction([...]): one pooled round-trip.
-    const [outstanding, openPromises, brokenLast30, paymentsWeek, followUpsWeek, pdcUpcoming] =
+    const [outstanding, openPromises, brokenLast30, paymentsWeek, followUpsWeek, pdcUpcoming, wht2307Pending] =
       await prisma.$transaction([
         prisma.invoice.findMany({
           where: { status: { in: ['SENT', 'PARTIALLY_PAID'] } },
@@ -74,6 +75,10 @@ export async function GET() {
             checkDate: { lte: horizon },
           },
           select: { id: true, checkNo: true, bankName: true, amount: true, checkDate: true, status: true },
+        }),
+        prisma.invoice.findMany({
+          where: { wht2307Status: 'PENDING' },
+          select: { withholdingTax: true, balanceDue: true },
         }),
       ]);
 
@@ -196,6 +201,10 @@ export async function GET() {
       promises: {
         open: { count: openPromises.length, amount: openPromiseAmount },
         brokenLast30,
+      },
+      wht2307: {
+        count: wht2307Pending.length,
+        amount: wht2307Pending.reduce((sum, inv) => sum + certificateAmount(inv), 0),
       },
       calendar,
     });

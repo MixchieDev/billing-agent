@@ -136,6 +136,46 @@ async function main() {
     ],
   });
 
+  // ---- 2307 certificates owed to us (paid invoices where the client withheld) ----
+  // One recent, one long-overdue, plus an "unbilled withholding" case where the
+  // certificate value sits in the residual balance rather than withholdingTax.
+  await prisma.invoice.createMany({
+    data: [
+      { ...mk('DEMO-0010', abba.id, 'Kappa Freight', 'PAID', 60000, 1200, -25), id: 'demo-2307-a' },
+      { ...mk('DEMO-0011', yowi.id, 'Lambda Metals', 'PAID', 90000, 1800, -140), id: 'demo-2307-b' },
+      { ...mk('DEMO-0012', abba.id, 'Mu Textiles', 'PAID', 30000, 0, -70), id: 'demo-2307-c' },
+    ],
+  });
+  // Billed-withholding cases: settled in cash, certificate still owed.
+  await prisma.invoice.updateMany({
+    where: { id: { in: ['demo-2307-a', 'demo-2307-b'] } },
+    data: { wht2307Status: 'PENDING', balanceDue: D(0) },
+  });
+  await prisma.invoice.update({
+    where: { id: 'demo-2307-a' },
+    data: { amountPaidTotal: D(65000), paidAt: days(-20), paidAmount: D(65000), paymentMethod: 'BANK_TRANSFER' },
+  });
+  await prisma.invoice.update({
+    where: { id: 'demo-2307-b' },
+    data: { amountPaidTotal: D(98000), paidAt: days(-135), paidAmount: D(98000), paymentMethod: 'BANK_TRANSFER' },
+  });
+  // Unbilled withholding: client deducted 672 that wasn't billed — the residual
+  // balance IS the certificate value.
+  await prisma.invoice.update({
+    where: { id: 'demo-2307-c' },
+    data: {
+      wht2307Status: 'PENDING', paidAt: days(-65), paymentMethod: 'BANK_TRANSFER',
+      amountPaidTotal: D(32928), paidAmount: D(32928), balanceDue: D(672),
+    },
+  });
+  await prisma.invoicePayment.createMany({
+    data: [
+      { invoiceId: 'demo-2307-a', amount: D(65000), method: 'BANK_TRANSFER', paidDate: days(-20), reference: 'DEMO-2307-A' },
+      { invoiceId: 'demo-2307-b', amount: D(98000), method: 'BANK_TRANSFER', paidDate: days(-135), reference: 'DEMO-2307-B' },
+      { invoiceId: 'demo-2307-c', amount: D(32928), method: 'BANK_TRANSFER', paidDate: days(-65), reference: 'DEMO-2307-C', isEwtShort: true },
+    ],
+  });
+
   // ---- Ladder config: L1 auto-sends, L2/L3 draft-for-review (the brief's
   // recommended first-month setup) so the queue shows both modes ----
   await prisma.settings.upsert({

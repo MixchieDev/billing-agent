@@ -21,6 +21,7 @@ import {
   CalendarDays,
   Banknote,
   ChevronDown,
+  Receipt,
 } from 'lucide-react';
 import { format, parseISO, isToday } from 'date-fns';
 
@@ -62,6 +63,7 @@ interface CollectionsSummary {
   collectedThisWeek: { count: number; amount: number; payments: WeekPayment[] };
   followUpsThisWeek: number;
   promises: { open: BucketStat; brokenLast30: number };
+  wht2307: { count: number; amount: number };
   calendar: Array<{ date: string; items: Array<{ type: 'DUE' | 'PROMISE' | 'PDC'; label: string; amount: number }> }>;
 }
 
@@ -126,6 +128,14 @@ export function CollectionsDashboard() {
           href: '/dashboard/promises',
           hint: 'See who promised what',
         },
+        {
+          title: '2307 Certificates',
+          value: formatCurrency(data.wht2307?.amount ?? 0),
+          sub: `${data.wht2307?.count ?? 0} certificate${data.wht2307?.count === 1 ? '' : 's'} owed to us`,
+          icon: Receipt,
+          href: '/dashboard/wht2307',
+          hint: 'Chase outstanding certificates',
+        },
       ]
     : [];
 
@@ -152,7 +162,7 @@ export function CollectionsDashboard() {
         )}
 
         {/* KPI row — tiles link or expand to the detail behind the number */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {kpis.map((kpi) => {
             const body = (
               <>
