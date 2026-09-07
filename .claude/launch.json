@@ -1,0 +1,9 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "reconciler", "runtimeExecutable": "bash", "runtimeArgs": ["-c", "cd /Users/yahshua/reconciler && npm run dev"], "port": 5173 },
+    { "name": "billing-agent", "runtimeExecutable": "bash", "runtimeArgs": ["-c", "cd /Users/yahshua/billing-agent && set -a && . ./.env.staging && set +a && DATABASE_URL=\"$STAGING_DATABASE_URL\" npm run dev"], "port": 3000, "autoPort": true },
+    { "name": "finance-dashboard", "runtimeExecutable": "bash", "runtimeArgs": ["-c", "cd /Users/yahshua/yowi-tai-finance-dashboard && npm run dev -- --port 5199 --strictPort"], "port": 5199 },
+    { "name": "compliance-tracker", "runtimeExecutable": "bash", "runtimeArgs": ["-c", "cd /Users/yahshua/compliance-tracker && npm run dev"], "port": 3000 }
+  ]
+}

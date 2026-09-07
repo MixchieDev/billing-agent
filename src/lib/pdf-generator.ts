@@ -350,6 +350,8 @@ export interface SOASettings {
   bankName: string;
   bankAccountName: string;
   bankAccountNo: string;
+  /** All payment accounts; when absent the single legacy fields are used. */
+  bankAccounts?: Array<{ bankName: string; bankAccountName: string; bankAccountNo: string }>;
   footer: string;
   preparedBy: string;
   reviewedBy: string;
@@ -1065,12 +1067,27 @@ export async function generateInvoicePdfLib(
       const paymentBoxPadding = 10;
       const paymentTextMaxWidth = paymentBoxWidth - paymentBoxPadding * 2;
 
+      // One or more payment accounts (legacy single fields as the fallback).
+      const bankAccounts =
+        soaSettings.bankAccounts && soaSettings.bankAccounts.length > 0
+          ? soaSettings.bankAccounts
+          : [{
+              bankName: soaSettings.bankName,
+              bankAccountName: soaSettings.bankAccountName,
+              bankAccountNo: soaSettings.bankAccountNo,
+            }];
+
       // Calculate box height based on content
       let paymentBoxHeight = 20; // Title
-      paymentBoxHeight += 14; // Bank
-      const accountNameLines = wrapTextForPdf(soaSettings.bankAccountName, font, 8, paymentTextMaxWidth - 70);
-      paymentBoxHeight += accountNameLines.length * 11 + 3; // Account name lines
-      if (soaSettings.bankAccountNo) paymentBoxHeight += 14; // Account number
+      const accountNameLinesPer = bankAccounts.map((acct) =>
+        wrapTextForPdf(acct.bankAccountName, font, 8, paymentTextMaxWidth - 70)
+      );
+      bankAccounts.forEach((acct, i) => {
+        if (i > 0) paymentBoxHeight += 8; // gap between accounts
+        paymentBoxHeight += 14; // Bank
+        paymentBoxHeight += accountNameLinesPer[i].length * 11 + 3; // Account name lines
+        if (acct.bankAccountNo) paymentBoxHeight += 14; // Account number
+      });
 
       // Calculate notes height if provided
       let notesLines: string[] = [];
@@ -1110,36 +1127,31 @@ export async function generateInvoicePdfLib(
       });
 
       let payY = paymentY - 18;
-      page.drawText(`Bank: ${sanitizeForPdf(soaSettings.bankName)}`, {
-        x: MARGIN_LEFT + paymentBoxPadding,
-        y: payY,
-        size: 9,
-        font,
-        color: rgb(0.35, 0.35, 0.35),
-      });
+      for (let a = 0; a < bankAccounts.length; a++) {
+        const acct = bankAccounts[a];
+        const accountNameLines = accountNameLinesPer[a];
+        if (a > 0) payY -= 22; // step below previous account + gap
 
-      // Account name with wrapping support
-      payY -= 13;
-      page.drawText('Account Name:', {
-        x: MARGIN_LEFT + paymentBoxPadding,
-        y: payY,
-        size: 9,
-        font,
-        color: rgb(0.35, 0.35, 0.35),
-      });
-      // Draw account name, wrapping if needed
-      for (let i = 0; i < accountNameLines.length; i++) {
-        if (i === 0) {
-          // First line after "Account Name:"
-          page.drawText(accountNameLines[i], {
-            x: MARGIN_LEFT + paymentBoxPadding + 75,
-            y: payY,
-            size: 8,
-            font,
-            color: rgb(0.35, 0.35, 0.35),
-          });
-        } else {
-          payY -= 11;
+        page.drawText(`Bank: ${sanitizeForPdf(acct.bankName)}`, {
+          x: MARGIN_LEFT + paymentBoxPadding,
+          y: payY,
+          size: 9,
+          font,
+          color: rgb(0.35, 0.35, 0.35),
+        });
+
+        // Account name with wrapping support
+        payY -= 13;
+        page.drawText('Account Name:', {
+          x: MARGIN_LEFT + paymentBoxPadding,
+          y: payY,
+          size: 9,
+          font,
+          color: rgb(0.35, 0.35, 0.35),
+        });
+        // Draw account name, wrapping if needed
+        for (let i = 0; i < accountNameLines.length; i++) {
+          if (i > 0) payY -= 11;
           page.drawText(accountNameLines[i], {
             x: MARGIN_LEFT + paymentBoxPadding + 75,
             y: payY,
@@ -1148,17 +1160,17 @@ export async function generateInvoicePdfLib(
             color: rgb(0.35, 0.35, 0.35),
           });
         }
-      }
 
-      if (soaSettings.bankAccountNo) {
-        payY -= 14;
-        page.drawText(`Account Number: ${sanitizeForPdf(soaSettings.bankAccountNo)}`, {
-          x: MARGIN_LEFT + paymentBoxPadding,
-          y: payY,
-          size: 9,
-          font,
-          color: rgb(0.35, 0.35, 0.35),
-        });
+        if (acct.bankAccountNo) {
+          payY -= 14;
+          page.drawText(`Account Number: ${sanitizeForPdf(acct.bankAccountNo)}`, {
+            x: MARGIN_LEFT + paymentBoxPadding,
+            y: payY,
+            size: 9,
+            font,
+            color: rgb(0.35, 0.35, 0.35),
+          });
+        }
       }
 
       // Show notes if provided in template (using pre-wrapped lines)

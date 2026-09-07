@@ -22,6 +22,7 @@ jest.mock('@/lib/prisma', () => ({
   default: {
     settings: {
       findMany: jest.fn(),
+      findUnique: jest.fn(), // bank-accounts list is read directly (fresh, uncached)
     },
     company: {
       findUnique: jest.fn(),

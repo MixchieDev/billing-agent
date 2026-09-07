@@ -45,9 +45,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ==================== COLLAPSE IN-FILE DUPLICATES ====================
+    // A client can only appear once per month (RcbcEndClient @@unique([name, month])).
+    // Spreadsheets often repeat a client, which would put two conflicting writes
+    // in one transaction and fail the whole import. Collapse them here —
+    // last row wins — and report what was merged.
+    const dedupedByKey = new Map<string, (typeof parseResult.data)[number]>();
+    const duplicateNames = new Set<string>();
+    for (const row of parseResult.data) {
+      const key = `${row.name}::${row.month.toISOString()}`;
+      if (dedupedByKey.has(key)) duplicateNames.add(row.name);
+      dedupedByKey.set(key, row); // later row wins
+    }
+    const rowsToImport = [...dedupedByKey.values()];
+
     // ==================== BATCH-FETCH EXISTING CLIENTS ====================
     // Collect unique months from the CSV to scope the query
-    const uniqueMonths = [...new Set(parseResult.data.map(r => r.month.toISOString()))];
+    const uniqueMonths = [...new Set(rowsToImport.map(r => r.month.toISOString()))];
 
     const existingClients = await prisma.rcbcEndClient.findMany({
       where: { month: { in: uniqueMonths.map(m => new Date(m)) } },
@@ -71,9 +85,7 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const transactionOps: any[] = [];
 
-    for (let i = 0; i < parseResult.data.length; i++) {
-      const row = parseResult.data[i];
-
+    for (const row of rowsToImport) {
       const clientData = {
         name: row.name,
         employeeCount: row.employeeCount,
@@ -83,19 +95,18 @@ export async function POST(request: NextRequest) {
       };
 
       const key = `${row.name}::${row.month.toISOString()}`;
-      const existing = existingMap.get(key);
+      if (existingMap.has(key)) results.updated++;
+      else results.created++;
 
-      if (existing) {
-        transactionOps.push(
-          prisma.rcbcEndClient.update({ where: { id: existing.id }, data: clientData })
-        );
-        results.updated++;
-      } else {
-        transactionOps.push(
-          prisma.rcbcEndClient.create({ data: clientData })
-        );
-        results.created++;
-      }
+      // Upsert on the unique key so a row created between the pre-fetch and
+      // this write can't blow up the transaction.
+      transactionOps.push(
+        prisma.rcbcEndClient.upsert({
+          where: { name_month: { name: row.name, month: row.month } },
+          update: clientData,
+          create: clientData,
+        })
+      );
     }
 
     // Execute all writes in a single transaction
@@ -104,10 +115,16 @@ export async function POST(request: NextRequest) {
         await prisma.$transaction(transactionOps);
       } catch (error: any) {
         console.error('Transaction failed:', error);
+        // Surface a usable reason. `error` is the field the import modal reads.
+        const detail =
+          error?.code === 'P2002'
+            ? 'Two rows target the same client and month. Remove the duplicate row and try again.'
+            : error?.message || 'Unknown database error';
         return NextResponse.json({
           success: false,
-          message: `Import failed: ${error.message}`,
-          results: { created: 0, updated: 0, skipped: results.skipped, errors: [{ row: 0, message: error.message }] },
+          error: `Import failed: ${detail}`,
+          message: `Import failed: ${detail}`,
+          results: { created: 0, updated: 0, skipped: results.skipped, errors: [{ row: 0, message: detail }] },
           parseErrors: parseResult.errors,
         }, { status: 500 });
       }
@@ -126,14 +143,21 @@ export async function POST(request: NextRequest) {
           created: results.created,
           updated: results.updated,
           skipped: results.skipped,
+          duplicatesMerged: duplicateNames.size,
         },
       },
     });
 
+    const duplicateNote =
+      duplicateNames.size > 0
+        ? ` (merged ${duplicateNames.size} duplicate ${duplicateNames.size === 1 ? 'client' : 'clients'}: ${[...duplicateNames].join(', ')} — kept the last row)`
+        : '';
+
     return NextResponse.json({
       success: true,
-      message: `Import completed: ${results.created} created, ${results.updated} updated, ${results.skipped} skipped`,
+      message: `Import completed: ${results.created} created, ${results.updated} updated, ${results.skipped} skipped${duplicateNote}`,
       results,
+      duplicatesMerged: [...duplicateNames],
       parseErrors: parseResult.errors,
     });
   } catch (error) {
