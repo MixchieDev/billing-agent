@@ -187,25 +187,31 @@ export async function createInvoiceFromContract(params: CreateInvoiceParams) {
     params.hasWithholding ?? false
   );
 
-  // Determine invoice recipient based on billing model
+  // Determine invoice recipient based on billing model.
+  // Always carry the FULL comma-separated recipient list (customerEmails) —
+  // sending prefers it over the single legacy customerEmail, so stamping only
+  // the first address here would silently drop the other recipients.
   let customerName = contract.companyName;
   let attention = contract.contactPerson;
   let customerAddress = '';
-  let customerEmail = contract.email;
+  let customerEmails = contract.emails || contract.email;
 
   if (contract.partner) {
     if (contract.partner.billingModel === BillingModel.GLOBE_INNOVE) {
       customerName = contract.partner.invoiceTo || 'INNOVE COMMUNICATIONS INC.';
       attention = contract.partner.attention;
       customerAddress = contract.partner.address || '';
-      customerEmail = contract.partner.email;
+      customerEmails = contract.partner.emails || contract.partner.email;
     } else if (contract.partner.billingModel === BillingModel.RCBC_CONSOLIDATED) {
       customerName = contract.partner.invoiceTo || 'RIZAL COMMERCIAL BANKING CORPORATION';
       attention = contract.partner.attention;
       customerAddress = contract.partner.address || '';
-      customerEmail = contract.partner.email;
+      customerEmails = contract.partner.emails || contract.partner.email;
     }
   }
+
+  // Legacy single field mirrors the first address in the list.
+  const customerEmail = customerEmails?.split(',')[0]?.trim() || null;
 
   // Generate billing number
   const billingNo = generateBillingNo(
@@ -231,6 +237,7 @@ export async function createInvoiceFromContract(params: CreateInvoiceParams) {
       attention,
       customerAddress,
       customerEmail,
+      customerEmails,
       customerTin: contract.tin,
       productType: contract.productType,
       statementDate: new Date(),

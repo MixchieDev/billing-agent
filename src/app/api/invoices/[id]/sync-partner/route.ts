@@ -49,6 +49,12 @@ export async function POST(
 
     const partner = invoice.partner;
 
+    // Sync the FULL recipient list. Sending prefers customerEmails over the
+    // single customerEmail, so syncing only the latter would leave a stale
+    // multi-address list in place and the sync would appear to do nothing.
+    const partnerEmails = partner.emails || partner.email;
+    const partnerFirstEmail = partnerEmails?.split(',')[0]?.trim() || null;
+
     // Update invoice with partner details
     const updatedInvoice = await prisma.invoice.update({
       where: { id },
@@ -56,7 +62,8 @@ export async function POST(
         customerName: partner.invoiceTo || invoice.customerName,
         attention: partner.attention,
         customerAddress: partner.address,
-        customerEmail: partner.email,
+        customerEmail: partnerFirstEmail,
+        customerEmails: partnerEmails,
       },
       include: {
         partner: true,
@@ -78,7 +85,8 @@ export async function POST(
             customerName: partner.invoiceTo,
             attention: partner.attention,
             customerAddress: partner.address,
-            customerEmail: partner.email,
+            customerEmail: partnerFirstEmail,
+            customerEmails: partnerEmails,
           },
         },
       },
