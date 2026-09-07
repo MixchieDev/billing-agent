@@ -82,6 +82,15 @@ export function CollectionsDashboard() {
   const { data, error, isLoading, mutate } = useApi<CollectionsSummary>('/api/collections/summary');
   const [openBucket, setOpenBucket] = useState<string | null>(null);
   const [showPayments, setShowPayments] = useState(false);
+  const [showAllOutstanding, setShowAllOutstanding] = useState(false);
+
+  // Every outstanding invoice across all buckets, biggest exposure first,
+  // each tagged with the bucket it falls in.
+  const allOutstanding = data
+    ? AGING_BUCKETS.flatMap((b) =>
+        (data.aging[b.key].invoices ?? []).map((inv) => ({ ...inv, bucketLabel: b.label, swatch: b.swatch }))
+      ).sort((a, b) => b.balance - a.balance)
+    : [];
 
   const kpis = data
     ? [
@@ -90,7 +99,8 @@ export function CollectionsDashboard() {
           value: formatCurrency(data.totalOutstanding),
           sub: `${data.outstandingCount} open invoice${data.outstandingCount === 1 ? '' : 's'} · ${data.pausedCount} paused by promises`,
           icon: Wallet,
-          hint: 'See the aging breakdown below',
+          onClick: () => setShowAllOutstanding((v) => !v),
+          hint: showAllOutstanding ? 'Hide invoices' : 'Show all invoices',
         },
         {
           title: 'Collected This Week',
@@ -180,6 +190,76 @@ export function CollectionsDashboard() {
             return <Card key={kpi.title} className="group">{body}</Card>;
           })}
         </div>
+
+        {/* Everything behind "Total Outstanding" */}
+        {showAllOutstanding && data && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">
+                All outstanding invoices{' '}
+                <span className="font-normal text-muted-foreground">
+                  ({data.outstandingCount} · {formatCurrency(data.totalOutstanding)})
+                </span>
+              </CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setShowAllOutstanding(false)}>Close</Button>
+            </CardHeader>
+            <CardContent>
+              {allOutstanding.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Client / Invoice</TableHead>
+                      <TableHead>Entity</TableHead>
+                      <TableHead>Aging</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Days overdue</TableHead>
+                      <TableHead className="text-right">Balance</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {allOutstanding.map((inv) => (
+                      <TableRow key={inv.id}>
+                        <TableCell>
+                          <div className="font-medium">{inv.customerName}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {inv.billingNo ?? inv.id.slice(0, 8)}
+                          </div>
+                        </TableCell>
+                        <TableCell><Badge variant="outline">{inv.entity}</Badge></TableCell>
+                        <TableCell>
+                          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <span className={`h-2.5 w-2.5 rounded-sm ${inv.swatch}`} aria-hidden />
+                            {inv.bucketLabel}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap items-center gap-1">
+                            <Badge variant={inv.status === 'PARTIALLY_PAID' ? 'warning' : 'default'}>
+                              {inv.status === 'PARTIALLY_PAID' ? 'PARTIAL' : inv.status}
+                            </Badge>
+                            {inv.paused && (
+                              <Badge variant="secondary" title="Follow-ups paused by a promise to pay">
+                                paused
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {inv.daysOverdue > 0 ? `${inv.daysOverdue}d` : '—'}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatCurrency(inv.balance)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="py-6 text-center text-sm text-muted-foreground">Nothing outstanding.</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Payments behind "Collected This Week" */}
         {showPayments && data && (
