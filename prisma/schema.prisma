@@ -625,6 +625,9 @@ model CollectionRun {
   invoicesScanned Int       @default(0)
   followUpsSent   Int       @default(0)
   promisesBroken  Int       @default(0)
+  /// What the ladder WOULD have sent had those levels been armed, by level.
+  /// Lets a dormant sweep produce a reviewable report before auto-send is on.
+  suppressed      Json?
   errors          Json?
   createdAt       DateTime  @default(now())
 

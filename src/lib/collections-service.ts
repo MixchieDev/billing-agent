@@ -21,6 +21,12 @@ const MAX_LEVEL = 3;
 
 export interface FollowUpDecision {
   due: boolean;
+  /**
+   * The invoice is old enough for this level — independent of whether the level
+   * is armed. `due` is this AND armed; the gap between the two is the dry-run
+   * report an operator reviews before switching auto-send on.
+   */
+  ripe: boolean;
   level: number | null; // the level under consideration (null if maxed out)
   reason: string;
 }
@@ -37,16 +43,26 @@ export function decideFollowUp(
 ): FollowUpDecision {
   const nextLevel = lastFollowUpLevel + 1;
   if (nextLevel > MAX_LEVEL) {
-    return { due: false, level: null, reason: 'max level reached' };
+    return { due: false, ripe: false, level: null, reason: 'max level reached' };
   }
   const offset = offsets[nextLevel];
   if (daysOverdue < offset) {
-    return { due: false, level: nextLevel, reason: `not yet (needs ${offset}d overdue, is ${daysOverdue}d)` };
+    return {
+      due: false,
+      ripe: false,
+      level: nextLevel,
+      reason: `not yet (needs ${offset}d overdue, is ${daysOverdue}d)`,
+    };
   }
   if (!autoSendLevels.includes(nextLevel)) {
-    return { due: false, level: nextLevel, reason: `level ${nextLevel} is draft-for-review, not auto-sent` };
+    return {
+      due: false,
+      ripe: true,
+      level: nextLevel,
+      reason: `would send L${nextLevel} — level not armed for auto-send`,
+    };
   }
-  return { due: true, level: nextLevel, reason: 'due' };
+  return { due: true, ripe: true, level: nextLevel, reason: 'due' };
 }
 
 export interface SweepDecision {
@@ -57,11 +73,18 @@ export interface SweepDecision {
   reason: string;
 }
 
+/** What the ladder would have sent, per level, had every level been armed. */
+export type SuppressedByLevel = Record<number, number>;
+
 export interface CollectionsSweepResult {
   runId: string;
   invoicesScanned: number;
   followUpsSent: number;
   promisesBroken: number;
+  /** Levels currently armed. Empty means the sweep is in report-only mode. */
+  armedLevels: number[];
+  suppressed: SuppressedByLevel;
+  suppressedTotal: number;
   decisions: SweepDecision[];
   errors: { invoiceId?: string; error: string }[];
 }
@@ -76,6 +99,7 @@ export async function runCollectionsSweep(): Promise<CollectionsSweepResult> {
   const run = await prisma.collectionRun.create({ data: { status: 'RUNNING' } });
   const errors: { invoiceId?: string; error: string }[] = [];
   const decisions: SweepDecision[] = [];
+  const suppressed: SuppressedByLevel = {};
   let followUpsSent = 0;
   let promisesBroken = 0;
 
@@ -108,9 +132,11 @@ export async function runCollectionsSweep(): Promise<CollectionsSweepResult> {
       2: Number(s['collections.l2Days']),
       3: Number(s['collections.l3Days']),
     };
+    // Absent/malformed setting means dormant, never "chase everything". A
+    // missing row must not be the difference between silence and 200 emails.
     const autoSendLevels: number[] = Array.isArray(s['collections.autoSendLevels'])
       ? s['collections.autoSendLevels']
-      : [1, 2, 3];
+      : [];
 
     // 3. Chaseable, overdue, un-paused invoices with room to escalate.
     const candidates = await prisma.invoice.findMany({
@@ -141,6 +167,12 @@ export async function runCollectionsSweep(): Promise<CollectionsSweepResult> {
         reason: decision.reason,
       };
 
+      // Ripe but not armed → the report-only path. Count it so the run tells
+      // the operator exactly what arming that level would have cost.
+      if (decision.ripe && !decision.due && decision.level !== null) {
+        suppressed[decision.level] = (suppressed[decision.level] ?? 0) + 1;
+      }
+
       if (decision.due) {
         try {
           const res = await sendFollowUpEmail(inv.id); // system action (userId null)
@@ -156,6 +188,8 @@ export async function runCollectionsSweep(): Promise<CollectionsSweepResult> {
       decisions.push(entry);
     }
 
+    const suppressedTotal = Object.values(suppressed).reduce((a, b) => a + b, 0);
+
     await prisma.collectionRun.update({
       where: { id: run.id },
       data: {
@@ -163,11 +197,30 @@ export async function runCollectionsSweep(): Promise<CollectionsSweepResult> {
         invoicesScanned: candidates.length,
         followUpsSent,
         promisesBroken,
+        suppressed: { armedLevels: autoSendLevels, byLevel: suppressed, total: suppressedTotal },
         errors: errors.length ? (errors as unknown as Prisma.InputJsonValue) : undefined,
       },
     });
 
-    return { runId: run.id, invoicesScanned: candidates.length, followUpsSent, promisesBroken, decisions, errors };
+    if (suppressedTotal > 0) {
+      console.log(
+        `[Collections] Report-only: ${suppressedTotal} follow-up(s) withheld ` +
+          `(armed levels: ${autoSendLevels.length ? autoSendLevels.join(', ') : 'none'}). ` +
+          `By level: ${JSON.stringify(suppressed)}`
+      );
+    }
+
+    return {
+      runId: run.id,
+      invoicesScanned: candidates.length,
+      followUpsSent,
+      promisesBroken,
+      armedLevels: autoSendLevels,
+      suppressed,
+      suppressedTotal,
+      decisions,
+      errors,
+    };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await prisma.collectionRun.update({

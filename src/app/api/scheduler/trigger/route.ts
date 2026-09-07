@@ -49,6 +49,10 @@ export async function GET(request: NextRequest) {
         invoicesScanned: sweep.invoicesScanned,
         followUpsSent: sweep.followUpsSent,
         promisesBroken: sweep.promisesBroken,
+        armedLevels: sweep.armedLevels,
+        // Report-only mode: what arming those levels would have sent.
+        wouldHaveSent: sweep.suppressedTotal,
+        wouldHaveSentByLevel: sweep.suppressed,
       };
       console.log('[Cron Trigger] Collections sweep:', collections);
     } catch (sweepError) {
@@ -98,6 +102,10 @@ export async function POST(request: NextRequest) {
         invoicesScanned: sweep.invoicesScanned,
         followUpsSent: sweep.followUpsSent,
         promisesBroken: sweep.promisesBroken,
+        armedLevels: sweep.armedLevels,
+        // Report-only mode: what arming those levels would have sent.
+        wouldHaveSent: sweep.suppressedTotal,
+        wouldHaveSentByLevel: sweep.suppressed,
       };
     } catch (sweepError) {
       collections = { error: sweepError instanceof Error ? sweepError.message : 'sweep failed' };

@@ -47,7 +47,53 @@ describe('decideFollowUp', () => {
   it('respects autoSendLevels (draft-for-review levels are not auto-sent)', () => {
     const d = decideFollowUp(10, 1, offsets, [1]); // only L1 auto-sends
     expect(d.due).toBe(false);
+    expect(d.ripe).toBe(true); // old enough, just not armed
     expect(d.level).toBe(2);
-    expect(d.reason).toMatch(/not auto-sent/);
+    expect(d.reason).toMatch(/not armed for auto-send/);
+  });
+});
+
+describe('dormant-by-default safety', () => {
+  const offsets = { 1: 1, 2: 7, 3: 15 };
+
+  it('sends nothing when no level is armed', () => {
+    for (const [days, last] of [[1, 0], [7, 1], [15, 2], [90, 0]] as const) {
+      expect(decideFollowUp(days, last, offsets, []).due).toBe(false);
+    }
+  });
+
+  it('still reports what it would have sent', () => {
+    const d = decideFollowUp(30, 0, offsets, []);
+    expect(d.due).toBe(false);
+    expect(d.ripe).toBe(true); // old enough — only the arming is missing
+    expect(d.level).toBe(1);
+    expect(d.reason).toMatch(/would send L1/);
+  });
+
+  it('does not report an unripe invoice as withheld', () => {
+    const d = decideFollowUp(0, 0, offsets, []);
+    expect(d.ripe).toBe(false); // not overdue enough; arming would change nothing
+    expect(d.due).toBe(false);
+  });
+
+  it('arms only the levels explicitly listed', () => {
+    expect(decideFollowUp(30, 0, offsets, [1]).due).toBe(true);
+    expect(decideFollowUp(30, 1, offsets, [1]).due).toBe(false);
+    expect(decideFollowUp(30, 1, offsets, [1]).ripe).toBe(true);
+  });
+
+  it('never treats a maxed-out invoice as withheld', () => {
+    const d = decideFollowUp(100, 3, offsets, []);
+    expect(d.ripe).toBe(false);
+    expect(d.level).toBeNull();
+  });
+});
+
+describe('the shipped default is dormant', () => {
+  it('DEFAULT_SETTINGS arms no levels', () => {
+    // Guards the merge hazard: an armed default would chase the entire
+    // pre-existing book on the first production sweep.
+    const { DEFAULTS } = jest.requireActual('@/lib/settings');
+    expect(DEFAULTS['collections.autoSendLevels']).toEqual([]);
   });
 });
