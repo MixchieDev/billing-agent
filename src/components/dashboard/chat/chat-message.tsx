@@ -22,7 +22,7 @@ export function ChatMessage({ role, content }: ChatMessageProps) {
       if (numberedMatch) {
         return (
           <div key={i} className="flex gap-2 ml-2">
-            <span className="text-gray-500 min-w-[20px]">{numberedMatch[1]}.</span>
+            <span className="text-muted-foreground min-w-[20px]">{numberedMatch[1]}.</span>
             <span>{formatInlineStyles(numberedMatch[2])}</span>
           </div>
         );
@@ -33,7 +33,7 @@ export function ChatMessage({ role, content }: ChatMessageProps) {
       if (bulletMatch) {
         return (
           <div key={i} className="flex gap-2 ml-2">
-            <span className="text-gray-500">•</span>
+            <span className="text-muted-foreground">•</span>
             <span>{formatInlineStyles(bulletMatch[1])}</span>
           </div>
         );
@@ -74,7 +74,7 @@ export function ChatMessage({ role, content }: ChatMessageProps) {
     <div
       className={cn(
         'flex gap-3 p-3 rounded-lg',
-        isUser ? 'bg-blue-50 ml-8' : 'bg-gray-50 mr-8'
+        isUser ? 'bg-blue-50 ml-8' : 'bg-muted mr-8'
       )}
     >
       <div
@@ -98,7 +98,7 @@ export function ChatMessage({ role, content }: ChatMessageProps) {
 
 export function ChatMessageLoading() {
   return (
-    <div className="flex gap-3 p-3 rounded-lg bg-gray-50 mr-8">
+    <div className="flex gap-3 p-3 rounded-lg bg-muted mr-8">
       <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gray-700">
         <Bot className="w-4 h-4 text-white" />
       </div>

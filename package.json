@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:staging": "sh -c '. ./.env.staging && DATABASE_URL=\"$STAGING_DATABASE_URL\" next dev'",
+    "seed:staging": "sh -c '. ./.env.staging && DATABASE_URL=\"$STAGING_DATABASE_URL\" tsx prisma/seed-staging.ts'",
+    "push:staging": "sh -c '. ./.env.staging && DATABASE_URL=\"$STAGING_DATABASE_URL\" prisma db push'",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",

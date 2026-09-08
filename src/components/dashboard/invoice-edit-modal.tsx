@@ -191,14 +191,14 @@ export function InvoiceEditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-        <h3 className="text-lg font-semibold text-gray-900">
+      <div className="w-full max-w-lg rounded-lg bg-card p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+        <h3 className="text-lg font-semibold text-foreground">
           Edit Invoice: {invoice?.billingNo || invoiceId}
         </h3>
 
         {loading ? (
           <div className="flex h-40 items-center justify-center">
-            <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+            <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : error ? (
           <div className="my-4 rounded-md bg-red-50 p-4 text-red-700">
@@ -212,7 +212,7 @@ export function InvoiceEditModal({
           <div className="mt-4 space-y-4">
             {/* Partner Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-foreground">
                 <Link2 className="inline h-4 w-4 mr-1" />
                 Linked Partner
               </label>
@@ -220,7 +220,7 @@ export function InvoiceEditModal({
                 <select
                   value={partnerId}
                   onChange={(e) => handlePartnerChange(e.target.value)}
-                  className="flex-1 rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="flex-1 rounded-md border border-border px-3 py-2 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 >
                   <option value="">No partner (Direct billing)</option>
                   {partners.map((partner) => (
@@ -245,7 +245,7 @@ export function InvoiceEditModal({
                 )}
               </div>
               {selectedPartner && (
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Partner email: {selectedPartner.email || 'Not set'}
                 </p>
               )}
@@ -253,13 +253,13 @@ export function InvoiceEditModal({
 
             {/* Recipient Details */}
             <div className="border-t pt-4">
-              <h4 className="text-sm font-medium text-gray-700 mb-3">
+              <h4 className="text-sm font-medium text-foreground mb-3">
                 Invoice Recipient Details
               </h4>
 
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-foreground">
                     <Building2 className="inline h-4 w-4 mr-1" />
                     Customer Name (Invoice To)
                   </label>
@@ -267,12 +267,12 @@ export function InvoiceEditModal({
                     type="text"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-md border border-border px-3 py-2 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-foreground">
                     <User className="inline h-4 w-4 mr-1" />
                     Attention (Contact Person)
                   </label>
@@ -280,12 +280,12 @@ export function InvoiceEditModal({
                     type="text"
                     value={attention}
                     onChange={(e) => setAttention(e.target.value)}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-md border border-border px-3 py-2 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-foreground">
                     <Mail className="inline h-4 w-4 mr-1" />
                     Email Recipients
                   </label>
@@ -294,13 +294,13 @@ export function InvoiceEditModal({
                     onChange={(emails) => setCustomerEmails(joinEmails(emails))}
                     placeholder="Enter email address"
                   />
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     All emails will receive the invoice when sent
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-foreground">
                     <MapPin className="inline h-4 w-4 mr-1" />
                     Address
                   </label>
@@ -308,7 +308,7 @@ export function InvoiceEditModal({
                     value={customerAddress}
                     onChange={(e) => setCustomerAddress(e.target.value)}
                     rows={2}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-md border border-border px-3 py-2 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                 </div>
               </div>

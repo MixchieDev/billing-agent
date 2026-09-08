@@ -267,7 +267,7 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -295,39 +295,39 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column - Contract Details */}
           <div className="space-y-6">
-            <div className="rounded-lg border bg-white p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Contract Selection</h3>
+            <div className="rounded-lg border bg-card p-6">
+              <h3 className="text-lg font-medium text-foreground mb-4">Contract Selection</h3>
 
               {/* Contract Search */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Select Contract <span className="text-red-500">*</span>
                 </label>
                 <div className="relative mb-2">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <input
                     type="text"
                     placeholder="Search contracts..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-4 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-border py-2 pl-10 pr-4 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                 </div>
                 <div className="max-h-48 overflow-y-auto rounded-lg border">
                   {filteredContracts.length === 0 ? (
-                    <div className="p-4 text-center text-sm text-gray-500">No contracts found</div>
+                    <div className="p-4 text-center text-sm text-muted-foreground">No contracts found</div>
                   ) : (
                     filteredContracts.slice(0, 20).map((contract) => (
                       <button
                         key={contract.id}
                         type="button"
                         onClick={() => setContractId(contract.id)}
-                        className={`w-full px-4 py-3 text-left hover:bg-gray-50 border-b last:border-b-0 ${
+                        className={`w-full px-4 py-3 text-left hover:bg-muted border-b last:border-b-0 ${
                           contractId === contract.id ? 'bg-blue-50' : ''
                         }`}
                       >
-                        <div className="font-medium text-gray-900">{contract.companyName}</div>
-                        <div className="flex gap-2 text-xs text-gray-500">
+                        <div className="font-medium text-foreground">{contract.companyName}</div>
+                        <div className="flex gap-2 text-xs text-muted-foreground">
                           <span>{contract.productType}</span>
                           <span>•</span>
                           <span>{contract.billingEntity.code}</span>
@@ -346,7 +346,7 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
 
               {/* Billing Entity */}
               <div className="mt-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Billing Entity <span className="text-red-500">*</span>
                 </label>
                 <div className="flex gap-2">
@@ -358,11 +358,11 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
                       className={`flex-1 rounded-lg border-2 px-4 py-3 text-center transition-colors ${
                         billingEntityId === entity.id
                           ? 'border-blue-500 bg-blue-50 text-blue-700'
-                          : 'border-gray-200 hover:border-gray-300'
+                          : 'border-border hover:border-border'
                       }`}
                     >
                       <div className="font-medium">{entity.code}</div>
-                      <div className="text-xs text-gray-500">{entity.name}</div>
+                      <div className="text-xs text-muted-foreground">{entity.name}</div>
                     </button>
                   ))}
                 </div>
@@ -372,12 +372,12 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
 
           {/* Right Column - Schedule Config */}
           <div className="space-y-6">
-            <div className="rounded-lg border bg-white p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Schedule Configuration</h3>
+            <div className="rounded-lg border bg-card p-6">
+              <h3 className="text-lg font-medium text-foreground mb-4">Schedule Configuration</h3>
 
               {/* Billing Amount */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Billing Amount (PHP) <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -387,14 +387,14 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
                   placeholder="0.00"
                   step="0.01"
                   min="0"
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                   required
                 />
               </div>
 
               {/* Description */}
               <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Description (Line Item)
                 </label>
                 <input
@@ -402,21 +402,21 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="e.g., Monthly Payroll Services"
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />
-                <p className="mt-1 text-xs text-gray-500">This will appear on the invoice line item</p>
+                <p className="mt-1 text-xs text-muted-foreground">This will appear on the invoice line item</p>
               </div>
 
               {/* Schedule Settings */}
               <div className="grid grid-cols-3 gap-4 mt-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Billing Day <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={billingDayOfMonth}
                     onChange={(e) => setBillingDayOfMonth(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                   >
                     {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
                       <option key={day} value={day}>
@@ -424,16 +424,16 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
                       </option>
                     ))}
                   </select>
-                  <p className="mt-1 text-xs text-gray-500">Invoice generated</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Invoice generated</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Due Day <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={dueDayOfMonth}
                     onChange={(e) => setDueDayOfMonth(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                   >
                     {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
                       <option key={day} value={day}>
@@ -441,16 +441,16 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
                       </option>
                     ))}
                   </select>
-                  <p className="mt-1 text-xs text-gray-500">Payment due</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Payment due</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Frequency
                   </label>
                   <select
                     value={frequency}
                     onChange={(e) => setFrequency(e.target.value as typeof frequency)}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                   >
                     <option value="MONTHLY">Monthly</option>
                     <option value="QUARTERLY">Quarterly</option>
@@ -462,29 +462,29 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
 
               {/* Custom Interval Settings */}
               {frequency === 'CUSTOM' && (
-                <div className="mt-4 p-4 rounded-lg bg-gray-50 border">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="mt-4 p-4 rounded-lg bg-muted border">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Custom Interval
                   </label>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600">Every</span>
+                    <span className="text-sm text-muted-foreground">Every</span>
                     <input
                       type="number"
                       value={customIntervalValue}
                       onChange={(e) => setCustomIntervalValue(e.target.value)}
                       min="1"
-                      className="w-20 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-20 rounded-lg border border-border px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                     />
                     <select
                       value={customIntervalUnit}
                       onChange={(e) => setCustomIntervalUnit(e.target.value as 'DAYS' | 'MONTHS')}
-                      className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="rounded-lg border border-border px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                     >
                       <option value="DAYS">Days</option>
                       <option value="MONTHS">Months</option>
                     </select>
                   </div>
-                  <p className="mt-2 text-xs text-gray-500">
+                  <p className="mt-2 text-xs text-muted-foreground">
                     e.g., "Every 45 days" or "Every 2 months"
                   </p>
                 </div>
@@ -493,25 +493,25 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
               {/* Date Range */}
               <div className="grid grid-cols-2 gap-4 mt-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Start Date
                   </label>
                   <input
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     End Date (Optional)
                   </label>
                   <input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                 </div>
               </div>
@@ -519,20 +519,20 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
               {/* VAT and Withholding */}
               <div className="grid grid-cols-2 gap-4 mt-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     VAT Type
                   </label>
                   <select
                     value={vatType}
                     onChange={(e) => setVatType(e.target.value as typeof vatType)}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                   >
                     <option value="VAT">VAT (12%)</option>
                     <option value="NON_VAT">Non-VAT</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Withholding Tax
                   </label>
                   <select
@@ -547,7 +547,7 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
                         setSelectedWithholdingCode(code);
                       }
                     }}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                   >
                     <option value="none">No Withholding</option>
                     {withholdingPresets.map((preset) => (
@@ -561,17 +561,17 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
             </div>
 
             {/* Automation Settings */}
-            <div className="rounded-lg border bg-white p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Automation Settings</h3>
+            <div className="rounded-lg border bg-card p-6">
+              <h3 className="text-lg font-medium text-foreground mb-4">Automation Settings</h3>
               <div className="space-y-3">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={autoApprove}
                     onChange={(e) => setAutoApprove(e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="rounded border-border text-blue-600 focus:ring-ring"
                   />
-                  <span className="text-sm text-gray-700">Auto-approve invoices</span>
+                  <span className="text-sm text-foreground">Auto-approve invoices</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -579,13 +579,13 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
                     checked={autoSendEnabled}
                     onChange={(e) => setAutoSendEnabled(e.target.checked)}
                     disabled={!autoApprove}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                    className="rounded border-border text-blue-600 focus:ring-ring disabled:opacity-50"
                   />
-                  <span className={`text-sm ${autoApprove ? 'text-gray-700' : 'text-gray-400'}`}>
+                  <span className={`text-sm ${autoApprove ? 'text-foreground' : 'text-muted-foreground'}`}>
                     Auto-send invoices via email
                   </span>
                 </label>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   {autoApprove && autoSendEnabled
                     ? 'Invoices will be automatically approved and sent to the client.'
                     : autoApprove
@@ -596,14 +596,14 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
             </div>
 
             {/* Remarks */}
-            <div className="rounded-lg border bg-white p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Notes</h3>
+            <div className="rounded-lg border bg-card p-6">
+              <h3 className="text-lg font-medium text-foreground mb-4">Notes</h3>
               <textarea
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
                 placeholder="Internal notes about this schedule..."
                 rows={3}
-                className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
           </div>
@@ -618,30 +618,30 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
               <div className="space-y-4">
                 <div>
                   <div className="text-xs font-medium text-blue-600 uppercase tracking-wide">Client</div>
-                  <div className="text-lg font-semibold text-gray-900">{selectedContract.companyName}</div>
-                  <div className="text-sm text-gray-600">{selectedContract.productType}</div>
+                  <div className="text-lg font-semibold text-foreground">{selectedContract.companyName}</div>
+                  <div className="text-sm text-muted-foreground">{selectedContract.productType}</div>
                 </div>
 
                 <div>
                   <div className="text-xs font-medium text-blue-600 uppercase tracking-wide">Billing Entity</div>
-                  <div className="text-base font-medium text-gray-900">
+                  <div className="text-base font-medium text-foreground">
                     {billingEntities.find(e => e.id === billingEntityId)?.code || billingEntityId}
                   </div>
                 </div>
 
                 <div>
                   <div className="text-xs font-medium text-blue-600 uppercase tracking-wide">Schedule</div>
-                  <div className="text-base text-gray-900">
+                  <div className="text-base text-foreground">
                     {frequency === 'CUSTOM'
                       ? `Every ${customIntervalValue} ${customIntervalUnit.toLowerCase()}`
                       : frequency.charAt(0) + frequency.slice(1).toLowerCase()
                     }
                   </div>
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-muted-foreground">
                     Invoice on the {billingDayOfMonth}{billingDayOfMonth === '1' ? 'st' : billingDayOfMonth === '2' ? 'nd' : billingDayOfMonth === '3' ? 'rd' : 'th'},
                     Due on the {dueDayOfMonth}{dueDayOfMonth === '1' ? 'st' : dueDayOfMonth === '2' ? 'nd' : dueDayOfMonth === '3' ? 'rd' : 'th'}
                   </div>
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-muted-foreground">
                     Starting {new Date(startDate).toLocaleDateString()}
                     {endDate && ` until ${new Date(endDate).toLocaleDateString()}`}
                   </div>
@@ -651,27 +651,27 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
               {/* Right Column - Amount Breakdown */}
               <div className="space-y-3">
                 <div className="text-xs font-medium text-blue-600 uppercase tracking-wide">Amount Breakdown</div>
-                <div className="rounded-lg bg-white p-4 space-y-2">
+                <div className="rounded-lg bg-card p-4 space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Base Amount</span>
+                    <span className="text-muted-foreground">Base Amount</span>
                     <span className="font-medium">₱{parseFloat(billingAmount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                   </div>
                   {vatType === 'VAT' && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">VAT (12%)</span>
+                      <span className="text-muted-foreground">VAT (12%)</span>
                       <span className="font-medium">₱{(parseFloat(billingAmount) * 0.12).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                     </div>
                   )}
                   {hasWithholding && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">
+                      <span className="text-muted-foreground">
                         Withholding ({(selectedWithholdingRate * 100).toFixed(0)}% - {selectedWithholdingCode})
                       </span>
                       <span className="font-medium text-red-600">-₱{(parseFloat(billingAmount) * selectedWithholdingRate).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                     </div>
                   )}
                   <div className="border-t pt-2 flex justify-between">
-                    <span className="font-medium text-gray-900">Net Receivable</span>
+                    <span className="font-medium text-foreground">Net Receivable</span>
                     <span className="font-bold text-lg text-blue-700">
                       ₱{(
                         parseFloat(billingAmount) +
@@ -698,7 +698,7 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
                       Auto-Send Email
                     </span>
                   ) : (
-                    <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+                    <span className="inline-flex items-center rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
                       Manual Send
                     </span>
                   )}
@@ -707,7 +707,7 @@ export function CreateScheduleTab({ onSuccess }: CreateScheduleTabProps) {
                 {description && (
                   <div className="mt-3">
                     <div className="text-xs font-medium text-blue-600 uppercase tracking-wide">Invoice Line Item</div>
-                    <div className="text-sm text-gray-700 italic">"{description}"</div>
+                    <div className="text-sm text-foreground italic">"{description}"</div>
                   </div>
                 )}
               </div>

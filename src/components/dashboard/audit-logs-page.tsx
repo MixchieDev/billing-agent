@@ -212,11 +212,11 @@ export function AuditLogsPage() {
 
       <div className="flex-1 space-y-6 p-6">
         {/* Filters */}
-        <div className="rounded-lg border bg-white p-4">
+        <div className="rounded-lg border bg-card p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
             {/* Date From */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">From Date</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">From Date</label>
               <Input
                 type="date"
                 value={dateFrom}
@@ -229,7 +229,7 @@ export function AuditLogsPage() {
 
             {/* Date To */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">To Date</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">To Date</label>
               <Input
                 type="date"
                 value={dateTo}
@@ -242,7 +242,7 @@ export function AuditLogsPage() {
 
             {/* Action Filter */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Action</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Action</label>
               <Select
                 value={actionFilter}
                 onChange={(e) => {
@@ -261,7 +261,7 @@ export function AuditLogsPage() {
 
             {/* Entity Type Filter */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Entity Type</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Entity Type</label>
               <Select
                 value={entityTypeFilter}
                 onChange={(e) => {
@@ -280,7 +280,7 @@ export function AuditLogsPage() {
 
             {/* User Filter */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">User</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">User</label>
               <Select
                 value={userFilter}
                 onChange={(e) => {
@@ -299,9 +299,9 @@ export function AuditLogsPage() {
 
             {/* Search */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Search Entity ID</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Search Entity ID</label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="text"
                   placeholder="Search..."
@@ -332,7 +332,7 @@ export function AuditLogsPage() {
           <h2 className="text-lg font-semibold">
             Activity Log
             {loading && <Loader2 className="ml-2 inline h-4 w-4 animate-spin" />}
-            <span className="ml-2 text-sm font-normal text-gray-500">
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
               ({total} entr{total !== 1 ? 'ies' : 'y'})
             </span>
           </h2>
@@ -350,7 +350,7 @@ export function AuditLogsPage() {
         )}
 
         {/* Table */}
-        <div className="rounded-lg border bg-white">
+        <div className="rounded-lg border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -365,7 +365,7 @@ export function AuditLogsPage() {
             <TableBody>
               {logs.length === 0 && !loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-gray-500">
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                     No audit logs found
                   </TableCell>
                 </TableRow>
@@ -377,7 +377,7 @@ export function AuditLogsPage() {
                     </TableCell>
                     <TableCell>
                       {log.user ? (log.user.name || log.user.email) : (
-                        <span className="text-gray-400">System</span>
+                        <span className="text-muted-foreground">System</span>
                       )}
                     </TableCell>
                     <TableCell>{getActionBadge(log.action)}</TableCell>
@@ -409,7 +409,7 @@ export function AuditLogsPage() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, total)} of {total} entries
             </p>
             <div className="flex items-center gap-2">
@@ -422,7 +422,7 @@ export function AuditLogsPage() {
                 <ChevronLeft className="h-4 w-4" />
                 Previous
               </Button>
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-muted-foreground">
                 Page {page} of {totalPages}
               </span>
               <Button

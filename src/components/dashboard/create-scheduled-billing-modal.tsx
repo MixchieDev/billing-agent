@@ -178,18 +178,18 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-xl">
+      <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-card shadow-xl">
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-6 py-4">
-          <h2 className="text-lg font-semibold text-gray-900">Create Scheduled Billing</h2>
-          <button onClick={onClose} className="rounded-full p-1 hover:bg-gray-100">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-card px-6 py-4">
+          <h2 className="text-lg font-semibold text-foreground">Create Scheduled Billing</h2>
+          <button onClick={onClose} className="rounded-full p-1 hover:bg-muted">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {loading ? (
           <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -201,34 +201,34 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
 
             {/* Contract Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 Select Contract <span className="text-red-500">*</span>
               </label>
               <div className="relative mb-2">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="text"
                   placeholder="Search contracts..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-4 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-border py-2 pl-10 pr-4 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
               <div className="max-h-40 overflow-y-auto rounded-lg border">
                 {filteredContracts.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-gray-500">No contracts found</div>
+                  <div className="p-4 text-center text-sm text-muted-foreground">No contracts found</div>
                 ) : (
                   filteredContracts.map((contract) => (
                     <button
                       key={contract.id}
                       type="button"
                       onClick={() => setContractId(contract.id)}
-                      className={`w-full px-4 py-3 text-left hover:bg-gray-50 border-b last:border-b-0 ${
+                      className={`w-full px-4 py-3 text-left hover:bg-muted border-b last:border-b-0 ${
                         contractId === contract.id ? 'bg-blue-50' : ''
                       }`}
                     >
-                      <div className="font-medium text-gray-900">{contract.companyName}</div>
-                      <div className="flex gap-2 text-xs text-gray-500">
+                      <div className="font-medium text-foreground">{contract.companyName}</div>
+                      <div className="flex gap-2 text-xs text-muted-foreground">
                         <span>{contract.productType}</span>
                         <span>•</span>
                         <span>{contract.billingEntity.code}</span>
@@ -247,7 +247,7 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
 
             {/* Billing Entity */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 Billing Entity <span className="text-red-500">*</span>
               </label>
               <div className="flex gap-2">
@@ -259,11 +259,11 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
                     className={`flex-1 rounded-lg border-2 px-4 py-3 text-center transition-colors ${
                       billingEntityId === entity.id
                         ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 hover:border-gray-300'
+                        : 'border-border hover:border-border'
                     }`}
                   >
                     <div className="font-medium">{entity.code}</div>
-                    <div className="text-xs text-gray-500">{entity.name}</div>
+                    <div className="text-xs text-muted-foreground">{entity.name}</div>
                   </button>
                 ))}
               </div>
@@ -271,7 +271,7 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
 
             {/* Billing Amount */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 Billing Amount (PHP) <span className="text-red-500">*</span>
               </label>
               <input
@@ -281,14 +281,14 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
                 placeholder="0.00"
                 step="0.01"
                 min="0"
-                className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 required
               />
             </div>
 
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 Description (Line Item)
               </label>
               <input
@@ -296,21 +296,21 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="e.g., Monthly Payroll Services"
-                className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
               />
-              <p className="mt-1 text-xs text-gray-500">This will appear on the invoice line item</p>
+              <p className="mt-1 text-xs text-muted-foreground">This will appear on the invoice line item</p>
             </div>
 
             {/* Schedule Settings */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Billing Day of Month <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={billingDayOfMonth}
                   onChange={(e) => setBillingDayOfMonth(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 >
                   {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
                     <option key={day} value={day}>
@@ -320,13 +320,13 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Frequency
                 </label>
                 <select
                   value={frequency}
                   onChange={(e) => setFrequency(e.target.value as typeof frequency)}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 >
                   <option value="MONTHLY">Monthly</option>
                   <option value="QUARTERLY">Quarterly</option>
@@ -338,25 +338,25 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
             {/* Date Range */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Start Date
                 </label>
                 <input
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   End Date (Optional)
                 </label>
                 <input
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
             </div>
@@ -364,20 +364,20 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
             {/* VAT and Withholding */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   VAT Type
                 </label>
                 <select
                   value={vatType}
                   onChange={(e) => setVatType(e.target.value as typeof vatType)}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 >
                   <option value="VAT">VAT (12%)</option>
                   <option value="NON_VAT">Non-VAT</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Withholding Tax
                 </label>
                 <select
@@ -392,7 +392,7 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
                       setSelectedWithholdingCode(code);
                     }
                   }}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 >
                   <option value="none">No Withholding</option>
                   {withholdingPresets.map((preset) => (
@@ -405,16 +405,16 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
             </div>
 
             {/* Automation Settings */}
-            <div className="rounded-lg border bg-gray-50 p-4 space-y-3">
-              <h3 className="font-medium text-gray-900">Automation Settings</h3>
+            <div className="rounded-lg border bg-muted p-4 space-y-3">
+              <h3 className="font-medium text-foreground">Automation Settings</h3>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={autoApprove}
                   onChange={(e) => setAutoApprove(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded border-border text-blue-600 focus:ring-ring"
                 />
-                <span className="text-sm text-gray-700">Auto-approve invoices</span>
+                <span className="text-sm text-foreground">Auto-approve invoices</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -422,13 +422,13 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
                   checked={autoSendEnabled}
                   onChange={(e) => setAutoSendEnabled(e.target.checked)}
                   disabled={!autoApprove}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                  className="rounded border-border text-blue-600 focus:ring-ring disabled:opacity-50"
                 />
-                <span className={`text-sm ${autoApprove ? 'text-gray-700' : 'text-gray-400'}`}>
+                <span className={`text-sm ${autoApprove ? 'text-foreground' : 'text-muted-foreground'}`}>
                   Auto-send invoices via email
                 </span>
               </label>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 {autoApprove && autoSendEnabled
                   ? 'Invoices will be automatically approved and sent to the client.'
                   : autoApprove
@@ -439,7 +439,7 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
 
             {/* Remarks */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 Remarks (Optional)
               </label>
               <textarea
@@ -447,7 +447,7 @@ export function CreateScheduledBillingModal({ onClose, onSuccess }: CreateSchedu
                 onChange={(e) => setRemarks(e.target.value)}
                 placeholder="Internal notes about this schedule..."
                 rows={2}
-                className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-lg border border-border px-4 py-2 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
 

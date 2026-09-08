@@ -123,13 +123,13 @@ export function RcbcClientFormModal({
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div className="relative bg-card rounded-lg shadow-xl max-w-md w-full mx-4">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
-          <h3 className="text-lg font-semibold text-gray-900">
+          <h3 className="text-lg font-semibold text-foreground">
             {isEditing ? 'Edit RCBC Client' : 'New RCBC Client'}
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="text-muted-foreground hover:text-muted-foreground">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -143,7 +143,7 @@ export function RcbcClientFormModal({
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Company Name <span className="text-red-500">*</span>
             </label>
             <input
@@ -152,14 +152,14 @@ export function RcbcClientFormModal({
               value={formData.name}
               onChange={handleChange}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
               placeholder="ABC Corporation"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Employee Count <span className="text-red-500">*</span>
               </label>
               <input
@@ -169,12 +169,12 @@ export function RcbcClientFormModal({
                 onChange={handleChange}
                 required
                 min="1"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
                 placeholder="150"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Rate per Employee <span className="text-red-500">*</span>
               </label>
               <input
@@ -185,14 +185,14 @@ export function RcbcClientFormModal({
                 required
                 min="0"
                 step="0.01"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
                 placeholder="75.00"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Billing Month <span className="text-red-500">*</span>
             </label>
             <input
@@ -201,19 +201,19 @@ export function RcbcClientFormModal({
               value={formData.month}
               onChange={handleChange}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
             />
           </div>
 
           {/* Amount Preview */}
-          <div className="p-3 bg-gray-50 rounded-lg">
+          <div className="p-3 bg-muted rounded-lg">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Calculated Amount:</span>
-              <span className="font-semibold text-gray-900">
+              <span className="text-muted-foreground">Calculated Amount:</span>
+              <span className="font-semibold text-foreground">
                 {previewAmount.toLocaleString('en-PH', { style: 'currency', currency: 'PHP' })}
               </span>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               {employeeCount} employees x {rate.toLocaleString('en-PH', { style: 'currency', currency: 'PHP' })} per employee
             </p>
           </div>
@@ -226,9 +226,9 @@ export function RcbcClientFormModal({
               name="isActive"
               checked={formData.isActive}
               onChange={handleChange}
-              className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              className="h-4 w-4 text-blue-600 border-border rounded focus:ring-ring"
             />
-            <label htmlFor="isActive" className="text-sm text-gray-700">
+            <label htmlFor="isActive" className="text-sm text-foreground">
               Active (included in billing)
             </label>
           </div>
@@ -239,7 +239,7 @@ export function RcbcClientFormModal({
               type="button"
               onClick={onClose}
               disabled={isSaving}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+              className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-md hover:bg-muted disabled:opacity-50"
             >
               Cancel
             </button>

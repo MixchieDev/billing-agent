@@ -10,6 +10,8 @@ export interface InvoiceForPayment {
   billingNo: string | null;
   customerName: string;
   netAmount: number;
+  amountPaidTotal?: number;
+  balanceDue?: number | null;
 }
 
 interface MarkPaidModalProps {
@@ -23,6 +25,7 @@ interface MarkPaidModalProps {
       paymentMethod: 'CASH' | 'BANK_TRANSFER' | 'CHECK';
       paymentReference?: string;
       paidAt?: string;
+      settleWithholding?: boolean;
     }
   ) => Promise<void>;
 }
@@ -32,16 +35,28 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK_TRANSFER' | 'CHECK'>('BANK_TRANSFER');
   const [paymentReference, setPaymentReference] = useState('');
   const [paidAt, setPaidAt] = useState('');
+  const [settleWithholding, setSettleWithholding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Remaining balance to collect (falls back to the full net for a first payment).
+  const remaining =
+    invoice && invoice.balanceDue != null ? invoice.balanceDue : invoice?.netAmount ?? 0;
+  const partiallyPaid = !!invoice && (invoice.amountPaidTotal ?? 0) > 0;
+  const enteredAmount = parseFloat(paidAmount);
+  const shortfall = !isNaN(enteredAmount) ? remaining - enteredAmount : 0;
+  // Offer the withholding override only when the payment is short of the balance.
+  const showWithholdingOption = shortfall > 1;
 
   // Update form when invoice changes
   useEffect(() => {
     if (invoice) {
-      setPaidAmount(invoice.netAmount.toFixed(2));
+      const bal = invoice.balanceDue != null ? invoice.balanceDue : invoice.netAmount;
+      setPaidAmount(bal.toFixed(2));
       setPaymentMethod('BANK_TRANSFER');
       setPaymentReference('');
       setPaidAt(new Date().toISOString().split('T')[0]);
+      setSettleWithholding(false);
       setError(null);
     }
   }, [invoice]);
@@ -64,6 +79,7 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
         paymentMethod,
         paymentReference: paymentReference || undefined,
         paidAt: paidAt || undefined,
+        settleWithholding,
       });
       onClose();
     } catch (err) {
@@ -75,7 +91,7 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
 
   if (!isOpen || !invoice) return null;
 
-  const selectClassName = "h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+  const selectClassName = "h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -86,13 +102,13 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
       />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+      <div className="relative bg-card rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Mark Invoice as Paid</h2>
+          <h2 className="text-lg font-semibold text-foreground">Record Payment</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-muted-foreground hover:text-muted-foreground transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -100,10 +116,10 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
 
         {/* Invoice Info */}
         <div className="mb-6 pb-4 border-b">
-          <p className="text-sm font-medium text-gray-900">
+          <p className="text-sm font-medium text-foreground">
             {invoice.billingNo || invoice.id.slice(0, 8)}
           </p>
-          <p className="text-sm text-gray-600">{invoice.customerName}</p>
+          <p className="text-sm text-muted-foreground">{invoice.customerName}</p>
         </div>
 
         {/* Error Message */}
@@ -117,7 +133,7 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
         <div className="space-y-4">
           {/* Amount Paid */}
           <div>
-            <label className="block text-sm font-medium text-gray-900 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Amount Paid
             </label>
             <Input
@@ -129,14 +145,20 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
               className="w-full"
               placeholder="0.00"
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               Invoice amount: PHP {invoice.netAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+              {partiallyPaid && (
+                <>
+                  {' · '}Paid: PHP {(invoice.amountPaidTotal ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  {' · '}<span className="font-medium text-foreground">Balance: PHP {remaining.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                </>
+              )}
             </p>
           </div>
 
           {/* Payment Method */}
           <div>
-            <label className="block text-sm font-medium text-gray-900 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Payment Method
             </label>
             <select
@@ -152,7 +174,7 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
 
           {/* Payment Reference */}
           <div>
-            <label className="block text-sm font-medium text-gray-900 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Reference Number (Optional)
             </label>
             <Input
@@ -166,7 +188,7 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
 
           {/* Payment Date */}
           <div>
-            <label className="block text-sm font-medium text-gray-900 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Payment Date
             </label>
             <Input
@@ -176,6 +198,26 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
               className="w-full"
             />
           </div>
+
+          {/* Withholding override — only when the payment is short of the balance */}
+          {showWithholdingOption && (
+            <label className="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-200 p-3 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settleWithholding}
+                onChange={(e) => setSettleWithholding(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span className="text-foreground">
+                Client deducted withholding tax (2307 to follow)
+                <span className="block text-xs text-muted-foreground mt-0.5">
+                  Marks the invoice <span className="font-medium">Paid</span> and books the remaining{' '}
+                  PHP {shortfall.toLocaleString('en-PH', { minimumFractionDigits: 2 })} as a pending 2307,
+                  instead of a partial payment.
+                </span>
+              </span>
+            </label>
+          )}
         </div>
 
         {/* Footer Actions */}

@@ -582,9 +582,9 @@ export default function SettingsPage() {
             type="checkbox"
             checked={setting.value}
             onChange={(e) => updateSetting(setting.key, e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300"
+            className="h-4 w-4 rounded border-border"
           />
-          <span className="text-sm text-gray-600">Enabled</span>
+          <span className="text-sm text-muted-foreground">Enabled</span>
         </label>
       );
     }
@@ -595,7 +595,7 @@ export default function SettingsPage() {
           type="number"
           value={setting.value}
           onChange={(e) => updateSetting(setting.key, parseFloat(e.target.value) || 0)}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-ring focus:outline-none"
           step={setting.key.includes('Rate') ? '0.01' : '1'}
         />
       );
@@ -607,7 +607,7 @@ export default function SettingsPage() {
         type="text"
         value={setting.value || ''}
         onChange={(e) => updateSetting(setting.key, e.target.value)}
-        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+        className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-ring focus:outline-none"
         placeholder={setting.isDefault ? '(using default)' : ''}
       />
     );
@@ -619,8 +619,8 @@ export default function SettingsPage() {
     return (
       <div key={setting.key} className="grid grid-cols-3 gap-4 items-start py-3 border-b last:border-0">
         <div>
-          <label className="text-sm font-medium text-gray-700 capitalize">{label}</label>
-          <p className="text-xs text-gray-500 mt-0.5">{setting.description}</p>
+          <label className="text-sm font-medium text-foreground capitalize">{label}</label>
+          <p className="text-xs text-muted-foreground mt-0.5">{setting.description}</p>
         </div>
         <div className="col-span-2">{renderInput(setting)}</div>
       </div>
@@ -641,7 +641,7 @@ export default function SettingsPage() {
   const renderTemplateEditor = (template: InvoiceTemplate | null, companyCode: 'YOWI' | 'ABBA') => {
     if (!template) {
       return (
-        <div className="flex items-center justify-center py-8 text-gray-500">
+        <div className="flex items-center justify-center py-8 text-muted-foreground">
           No template data available
         </div>
       );
@@ -655,10 +655,10 @@ export default function SettingsPage() {
           style={{ minHeight: '280px' }}
         >
           {/* Header preview */}
-          <div className="p-4 bg-white border-b">
+          <div className="p-4 bg-card border-b">
             <div className="flex justify-between items-start">
               <div>
-                <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-500 mb-2">
+                <div className="w-12 h-12 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground mb-2">
                   Logo
                 </div>
                 <h3
@@ -668,10 +668,10 @@ export default function SettingsPage() {
                   {template.invoiceTitle.toUpperCase()}
                 </h3>
               </div>
-              <div className="text-right text-sm text-gray-600">
+              <div className="text-right text-sm text-muted-foreground">
                 <div className="font-semibold">{template.companyName}</div>
-                <div className="text-xs text-gray-400 mt-1">Company Address</div>
-                <div className="text-xs text-gray-400">TIN: xxx-xxx-xxx</div>
+                <div className="text-xs text-muted-foreground mt-1">Company Address</div>
+                <div className="text-xs text-muted-foreground">TIN: xxx-xxx-xxx</div>
               </div>
             </div>
           </div>
@@ -690,8 +690,8 @@ export default function SettingsPage() {
           </div>
 
           {/* Sample row */}
-          <div className="px-4 py-2 text-xs flex gap-4 border-b bg-gray-50">
-            <span className="w-8 text-gray-400">1</span>
+          <div className="px-4 py-2 text-xs flex gap-4 border-b bg-muted">
+            <span className="w-8 text-muted-foreground">1</span>
             <span className="flex-1">Professional Services</span>
             <span className="w-12">1</span>
             <span className="w-20">PHP 10,000</span>
@@ -701,8 +701,8 @@ export default function SettingsPage() {
 
           {/* Totals preview */}
           <div className="p-4 flex justify-between items-end">
-            <div className="text-xs text-gray-500">
-              <div className="font-medium text-gray-700 mb-1">Payment Details</div>
+            <div className="text-xs text-muted-foreground">
+              <div className="font-medium text-foreground mb-1">Payment Details</div>
               {bankAccountsOf(template).map((acct, i) => (
                 <div key={i} className={i > 0 ? 'mt-1' : undefined}>
                   <div>Bank: {acct.bankName || 'BDO'}</div>
@@ -710,14 +710,14 @@ export default function SettingsPage() {
                 </div>
               ))}
               {template.notes && (
-                <div className="mt-2 text-gray-400 italic whitespace-pre-line">
+                <div className="mt-2 text-muted-foreground italic whitespace-pre-line">
                   {template.notes}
                 </div>
               )}
             </div>
             <div className="text-right">
-              <div className="text-xs text-gray-500 mb-1">Subtotal: PHP 10,000.00</div>
-              <div className="text-xs text-gray-500 mb-1">VAT (12%): PHP 1,200.00</div>
+              <div className="text-xs text-muted-foreground mb-1">Subtotal: PHP 10,000.00</div>
+              <div className="text-xs text-muted-foreground mb-1">VAT (12%): PHP 1,200.00</div>
               <div
                 className="text-lg font-bold"
                 style={{ color: template.primaryColor }}
@@ -739,7 +739,7 @@ export default function SettingsPage() {
               {template.footerText}
             </div>
             {template.showDisclaimer && (
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs text-muted-foreground mt-1">
                 **This is a system-generated document**
               </div>
             )}
@@ -749,7 +749,7 @@ export default function SettingsPage() {
         {/* Color Pickers */}
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Primary Color
             </label>
             <div className="flex gap-2">
@@ -763,12 +763,12 @@ export default function SettingsPage() {
                 type="text"
                 value={template.primaryColor}
                 onChange={(e) => updateTemplate(companyCode, 'primaryColor', e.target.value)}
-                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="flex-1 rounded-md border border-border px-3 py-2 text-sm"
               />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Secondary Color
             </label>
             <div className="flex gap-2">
@@ -782,12 +782,12 @@ export default function SettingsPage() {
                 type="text"
                 value={template.secondaryColor}
                 onChange={(e) => updateTemplate(companyCode, 'secondaryColor', e.target.value)}
-                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="flex-1 rounded-md border border-border px-3 py-2 text-sm"
               />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Footer Background
             </label>
             <div className="flex gap-2">
@@ -801,7 +801,7 @@ export default function SettingsPage() {
                 type="text"
                 value={template.footerBgColor}
                 onChange={(e) => updateTemplate(companyCode, 'footerBgColor', e.target.value)}
-                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="flex-1 rounded-md border border-border px-3 py-2 text-sm"
               />
             </div>
           </div>
@@ -810,26 +810,26 @@ export default function SettingsPage() {
         {/* Text Fields */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Invoice Title
             </label>
             <input
               type="text"
               value={template.invoiceTitle}
               onChange={(e) => updateTemplate(companyCode, 'invoiceTitle', e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm"
               placeholder="Invoice"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Footer Text
             </label>
             <input
               type="text"
               value={template.footerText}
               onChange={(e) => updateTemplate(companyCode, 'footerText', e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm"
               placeholder="Powered by: YAHSHUA"
             />
           </div>
@@ -842,26 +842,26 @@ export default function SettingsPage() {
             id={`disclaimer-${companyCode}`}
             checked={template.showDisclaimer}
             onChange={(e) => updateTemplate(companyCode, 'showDisclaimer', e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300"
+            className="h-4 w-4 rounded border-border"
           />
-          <label htmlFor={`disclaimer-${companyCode}`} className="text-sm text-gray-700">
+          <label htmlFor={`disclaimer-${companyCode}`} className="text-sm text-foreground">
             Show system-generated document disclaimer
           </label>
         </div>
 
         {/* Notes Field */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Invoice Notes
           </label>
           <textarea
             value={template.notes || ''}
             onChange={(e) => updateTemplate(companyCode, 'notes', e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="w-full rounded-md border border-border px-3 py-2 text-sm"
             rows={3}
             placeholder="Optional notes to display on the invoice (e.g., payment instructions, terms)"
           />
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             This text will appear in the payment details section of the invoice
           </p>
         </div>
@@ -869,7 +869,7 @@ export default function SettingsPage() {
         {/* Bank Details Section — one or more accounts shown on the invoice */}
         <div className="pt-4 border-t">
           <div className="flex items-center justify-between mb-3">
-            <h4 className="text-sm font-semibold text-gray-900">Payment Details</h4>
+            <h4 className="text-sm font-semibold text-foreground">Payment Details</h4>
             <button
               type="button"
               onClick={() =>
@@ -878,7 +878,7 @@ export default function SettingsPage() {
                   { bankName: '', bankAccountName: template.bankAccountName || '', bankAccountNo: '' },
                 ])
               }
-              className="text-sm font-medium text-blue-600 hover:text-blue-700"
+              className="text-sm font-medium text-primary hover:text-primary/80"
             >
               + Add Bank Account
             </button>
@@ -947,35 +947,35 @@ export default function SettingsPage() {
 
         {/* Invoice Numbering Section */}
         <div className="pt-4 border-t">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3">Invoice Numbering</h4>
+          <h4 className="text-sm font-semibold text-foreground mb-3">Invoice Numbering</h4>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Invoice Prefix
               </label>
               <input
                 type="text"
                 value={template.invoicePrefix}
                 onChange={(e) => updateTemplate(companyCode, 'invoicePrefix', e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded-md border border-border px-3 py-2 text-sm"
                 placeholder="S"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Prefix for invoice numbers (e.g., "S" → S-00001)
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Next Invoice #
               </label>
               <input
                 type="number"
                 value={template.nextInvoiceNo}
                 onChange={(e) => updateTemplate(companyCode, 'nextInvoiceNo', parseInt(e.target.value) || 1)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded-md border border-border px-3 py-2 text-sm"
                 min="1"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Next number to be used for new invoices
               </p>
             </div>
@@ -984,29 +984,29 @@ export default function SettingsPage() {
 
         {/* Signatories Section */}
         <div className="pt-4 border-t">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3">Signatories</h4>
+          <h4 className="text-sm font-semibold text-foreground mb-3">Signatories</h4>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Prepared By
               </label>
               <input
                 type="text"
                 value={template.preparedBy}
                 onChange={(e) => updateTemplate(companyCode, 'preparedBy', e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded-md border border-border px-3 py-2 text-sm"
                 placeholder="Name"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Reviewed By
               </label>
               <input
                 type="text"
                 value={template.reviewedBy}
                 onChange={(e) => updateTemplate(companyCode, 'reviewedBy', e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded-md border border-border px-3 py-2 text-sm"
                 placeholder="Name"
               />
             </div>
@@ -1054,7 +1054,7 @@ export default function SettingsPage() {
                 className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.id
                     ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {tab.label}
@@ -1065,16 +1065,16 @@ export default function SettingsPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="bg-white rounded-lg border p-6">
+          <div className="bg-card rounded-lg border p-6">
             {/* Templates Tab */}
             {activeTab === 'templates' && (
               <div className="space-y-8">
                 {templatesLoading ? (
                   <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                   </div>
                 ) : templatesError ? (
                   <div className="rounded-md bg-red-50 p-4 text-red-700">
@@ -1096,7 +1096,7 @@ export default function SettingsPage() {
                     <div>
                       <div className="flex items-center gap-2 mb-4 pb-2 border-b">
                         <Palette className="h-5 w-5 text-blue-600" />
-                        <h3 className="text-lg font-semibold text-gray-900">
+                        <h3 className="text-lg font-semibold text-foreground">
                           YOWI Invoice Template
                         </h3>
                       </div>
@@ -1107,7 +1107,7 @@ export default function SettingsPage() {
                     <div>
                       <div className="flex items-center gap-2 mb-4 pb-2 border-b">
                         <Palette className="h-5 w-5 text-green-600" />
-                        <h3 className="text-lg font-semibold text-gray-900">
+                        <h3 className="text-lg font-semibold text-foreground">
                           ABBA Invoice Template
                         </h3>
                       </div>
@@ -1123,7 +1123,7 @@ export default function SettingsPage() {
               <div className="space-y-8">
                 {companiesLoading ? (
                   <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                   </div>
                 ) : companiesError ? (
                   <div className="rounded-md bg-red-50 p-4 text-red-700">
@@ -1145,68 +1145,68 @@ export default function SettingsPage() {
                       <div key={company.code}>
                         <div className="flex items-center gap-2 mb-4 pb-2 border-b">
                           <Building2 className={`h-5 w-5 ${company.code === 'YOWI' ? 'text-blue-600' : 'text-green-600'}`} />
-                          <h3 className="text-lg font-semibold text-gray-900">
+                          <h3 className="text-lg font-semibold text-foreground">
                             {company.code} Company Details
                           </h3>
                         </div>
                         <div className="space-y-4">
                           <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                              <label className="block text-sm font-medium text-foreground mb-1">
                                 Company Name
                               </label>
                               <input
                                 type="text"
                                 value={company.name}
                                 onChange={(e) => updateCompany(company.code, 'name', e.target.value)}
-                                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                                className="w-full rounded-md border border-border px-3 py-2 text-sm"
                               />
                             </div>
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                              <label className="block text-sm font-medium text-foreground mb-1">
                                 TIN
                               </label>
                               <input
                                 type="text"
                                 value={company.tin || ''}
                                 onChange={(e) => updateCompany(company.code, 'tin', e.target.value)}
-                                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                                className="w-full rounded-md border border-border px-3 py-2 text-sm"
                                 placeholder="xxx-xxx-xxx-xxx"
                               />
                             </div>
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-foreground mb-1">
                               Address
                             </label>
                             <textarea
                               value={company.address || ''}
                               onChange={(e) => updateCompany(company.code, 'address', e.target.value)}
-                              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                              className="w-full rounded-md border border-border px-3 py-2 text-sm"
                               rows={2}
                             />
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                              <label className="block text-sm font-medium text-foreground mb-1">
                                 Contact Number
                               </label>
                               <input
                                 type="text"
                                 value={company.contactNumber || ''}
                                 onChange={(e) => updateCompany(company.code, 'contactNumber', e.target.value)}
-                                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                                className="w-full rounded-md border border-border px-3 py-2 text-sm"
                               />
                             </div>
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                              <label className="block text-sm font-medium text-foreground mb-1">
                                 Logo Path
                               </label>
                               <input
                                 type="text"
                                 value={company.logoPath || ''}
                                 onChange={(e) => updateCompany(company.code, 'logoPath', e.target.value)}
-                                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                                className="w-full rounded-md border border-border px-3 py-2 text-sm"
                                 placeholder="/assets/logo.png"
                               />
                             </div>
@@ -1239,13 +1239,13 @@ export default function SettingsPage() {
                 <div>
                   <div className="flex items-center gap-2 mb-4 pb-2 border-b">
                     <Percent className="h-5 w-5 text-blue-600" />
-                    <h3 className="text-lg font-semibold text-gray-900">
+                    <h3 className="text-lg font-semibold text-foreground">
                       VAT Rate
                     </h3>
                   </div>
-                  <div className="flex items-center gap-4 p-4 rounded-lg border border-gray-200 bg-gray-50">
+                  <div className="flex items-center gap-4 p-4 rounded-lg border border-border bg-muted">
                     <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-foreground mb-1">
                         Value Added Tax Rate
                       </label>
                       <div className="flex items-center gap-2">
@@ -1253,14 +1253,14 @@ export default function SettingsPage() {
                           type="number"
                           value={(vatRate * 100).toFixed(0)}
                           onChange={(e) => setVatRate(parseFloat(e.target.value) / 100 || 0)}
-                          className="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm"
+                          className="w-24 rounded-md border border-border px-3 py-2 text-sm"
                           step="1"
                           min="0"
                           max="100"
                         />
-                        <span className="text-gray-500">%</span>
+                        <span className="text-muted-foreground">%</span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         Applied to VAT-registered clients (default: 12%)
                       </p>
                     </div>
@@ -1271,7 +1271,7 @@ export default function SettingsPage() {
                 <div>
                   <div className="flex items-center gap-2 mb-4 pb-2 border-b">
                     <Percent className="h-5 w-5 text-orange-600" />
-                    <h3 className="text-lg font-semibold text-gray-900">
+                    <h3 className="text-lg font-semibold text-foreground">
                       Withholding Tax Presets
                     </h3>
                   </div>
@@ -1279,7 +1279,7 @@ export default function SettingsPage() {
                   {/* Existing Presets */}
                   <div className="space-y-3">
                     {withholdingPresets.length === 0 ? (
-                      <div className="text-center py-8 text-gray-500">
+                      <div className="text-center py-8 text-muted-foreground">
                         No withholding tax presets configured. Add one below.
                       </div>
                     ) : (
@@ -1289,16 +1289,16 @@ export default function SettingsPage() {
                           className={`flex items-center justify-between p-4 rounded-lg border ${
                             defaultWithholdingRate === preset.rate && defaultWithholdingCode === preset.code
                               ? 'border-orange-300 bg-orange-50'
-                              : 'border-gray-200 bg-gray-50'
+                              : 'border-border bg-muted'
                           }`}
                         >
                           <div className="flex items-center gap-4">
-                            <div className="text-2xl font-bold text-gray-900">
+                            <div className="text-2xl font-bold text-foreground">
                               {(preset.rate * 100).toFixed(0)}%
                             </div>
                             <div>
-                              <div className="font-medium text-gray-900">{preset.label}</div>
-                              <div className="text-sm text-gray-500">ATC Code: {preset.code}</div>
+                              <div className="font-medium text-foreground">{preset.label}</div>
+                              <div className="text-sm text-muted-foreground">ATC Code: {preset.code}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -1331,17 +1331,17 @@ export default function SettingsPage() {
 
                   {/* Add New Preset */}
                   <div className="pt-4 border-t mt-4">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-3">Add New Preset</h4>
+                    <h4 className="text-sm font-semibold text-foreground mb-3">Add New Preset</h4>
                     <div className="grid grid-cols-4 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-foreground mb-1">
                           Rate (%)
                         </label>
                         <input
                           type="number"
                           value={newPreset.rate ? (newPreset.rate * 100).toString() : ''}
                           onChange={(e) => setNewPreset({ ...newPreset, rate: parseFloat(e.target.value) / 100 || 0 })}
-                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                          className="w-full rounded-md border border-border px-3 py-2 text-sm"
                           placeholder="e.g., 2"
                           step="0.5"
                           min="0"
@@ -1349,26 +1349,26 @@ export default function SettingsPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-foreground mb-1">
                           ATC Code
                         </label>
                         <input
                           type="text"
                           value={newPreset.code}
                           onChange={(e) => setNewPreset({ ...newPreset, code: e.target.value.toUpperCase() })}
-                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                          className="w-full rounded-md border border-border px-3 py-2 text-sm"
                           placeholder="e.g., WC160"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-foreground mb-1">
                           Label
                         </label>
                         <input
                           type="text"
                           value={newPreset.label}
                           onChange={(e) => setNewPreset({ ...newPreset, label: e.target.value })}
-                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                          className="w-full rounded-md border border-border px-3 py-2 text-sm"
                           placeholder="e.g., 2% - Professional Services"
                         />
                       </div>
@@ -1402,37 +1402,37 @@ export default function SettingsPage() {
                 <div>
                   <div className="flex items-center gap-2 mb-4 pb-2 border-b">
                     <Package className="h-5 w-5 text-purple-600" />
-                    <h3 className="text-lg font-semibold text-gray-900">
+                    <h3 className="text-lg font-semibold text-foreground">
                       Product Types
                     </h3>
                   </div>
-                  <p className="text-sm text-gray-500 mb-4">
+                  <p className="text-sm text-muted-foreground mb-4">
                     Configure the product types available when creating contracts. Changes will apply to new contracts and forms.
                   </p>
 
                   {productTypesLoading ? (
                     <div className="flex items-center justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                     </div>
                   ) : (
                     <>
                       {/* Existing Product Types */}
                       <div className="space-y-3">
                         {productTypes.length === 0 ? (
-                          <div className="text-center py-8 text-gray-500">
+                          <div className="text-center py-8 text-muted-foreground">
                             No product types configured. Add one below.
                           </div>
                         ) : (
                           productTypes.map((pt, index) => (
                             <div
                               key={pt.value}
-                              className="flex items-center justify-between p-4 rounded-lg border border-gray-200 bg-gray-50"
+                              className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted"
                             >
                               <div className="flex items-center gap-4">
-                                <div className="text-sm font-mono font-bold text-gray-900 bg-gray-200 px-2 py-1 rounded">
+                                <div className="text-sm font-mono font-bold text-foreground bg-muted px-2 py-1 rounded">
                                   {pt.value}
                                 </div>
-                                <div className="font-medium text-gray-900">{pt.label}</div>
+                                <div className="font-medium text-foreground">{pt.label}</div>
                               </div>
                               <Button
                                 variant="outline"
@@ -1450,29 +1450,29 @@ export default function SettingsPage() {
 
                       {/* Add New Product Type */}
                       <div className="pt-4 border-t mt-4">
-                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Add New Product Type</h4>
+                        <h4 className="text-sm font-semibold text-foreground mb-3">Add New Product Type</h4>
                         <div className="grid grid-cols-3 gap-4">
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-foreground mb-1">
                               Value (stored in DB)
                             </label>
                             <input
                               type="text"
                               value={newProductType.value}
                               onChange={(e) => setNewProductType({ ...newProductType, value: e.target.value.toUpperCase().replace(/\s+/g, '_') })}
-                              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                              className="w-full rounded-md border border-border px-3 py-2 text-sm"
                               placeholder="e.g., BOOKKEEPING"
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-foreground mb-1">
                               Label (display name)
                             </label>
                             <input
                               type="text"
                               value={newProductType.label}
                               onChange={(e) => setNewProductType({ ...newProductType, label: e.target.value })}
-                              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                              className="w-full rounded-md border border-border px-3 py-2 text-sm"
                               placeholder="e.g., Bookkeeping"
                             />
                           </div>
@@ -1538,15 +1538,15 @@ export default function SettingsPage() {
             {activeTab === 'follow-up' && (
               <div className="space-y-8">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Follow-up Email Templates</h3>
-                  <p className="text-sm text-gray-600 mb-6">
+                  <h3 className="text-lg font-semibold text-foreground mb-2">Follow-up Email Templates</h3>
+                  <p className="text-sm text-muted-foreground mb-6">
                     Configure email templates for follow-up reminders. Each level represents an escalation stage for unpaid invoices.
                   </p>
                 </div>
 
                 {followUpLoading ? (
                   <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
                   <>
@@ -1555,7 +1555,7 @@ export default function SettingsPage() {
                       <h4 className="font-medium text-blue-900 mb-2">Available Placeholders</h4>
                       <div className="flex flex-wrap gap-2">
                         {['{{customerName}}', '{{billingNo}}', '{{dueDate}}', '{{totalAmount}}', '{{daysOverdue}}', '{{companyName}}'].map((placeholder) => (
-                          <code key={placeholder} className="bg-white px-2 py-1 rounded text-sm text-blue-800 border border-blue-200">
+                          <code key={placeholder} className="bg-card px-2 py-1 rounded text-sm text-blue-800 border border-blue-200">
                             {placeholder}
                           </code>
                         ))}
@@ -1574,12 +1574,12 @@ export default function SettingsPage() {
                             {template.level}
                           </span>
                           <div>
-                            <h4 className="font-semibold text-gray-900">
+                            <h4 className="font-semibold text-foreground">
                               {template.level === 1 ? 'Gentle Reminder' :
                                template.level === 2 ? 'Firm Reminder' :
                                'Final Notice'}
                             </h4>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-muted-foreground">
                               {template.level === 1 ? 'First follow-up for overdue invoices' :
                                template.level === 2 ? 'Second reminder with firmer tone' :
                                'Final notice before escalation'}
@@ -1589,7 +1589,7 @@ export default function SettingsPage() {
 
                         {/* Subject */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                          <label className="block text-sm font-medium text-foreground mb-1">Subject</label>
                           <input
                             type="text"
                             value={template.subject}
@@ -1598,13 +1598,13 @@ export default function SettingsPage() {
                               updated[index].subject = e.target.value;
                               setFollowUpTemplates(updated);
                             }}
-                            className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-ring focus:border-ring"
                           />
                         </div>
 
                         {/* Greeting */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Greeting</label>
+                          <label className="block text-sm font-medium text-foreground mb-1">Greeting</label>
                           <input
                             type="text"
                             value={template.greeting}
@@ -1613,13 +1613,13 @@ export default function SettingsPage() {
                               updated[index].greeting = e.target.value;
                               setFollowUpTemplates(updated);
                             }}
-                            className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-ring focus:border-ring"
                           />
                         </div>
 
                         {/* Body */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Body</label>
+                          <label className="block text-sm font-medium text-foreground mb-1">Body</label>
                           <textarea
                             rows={4}
                             value={template.body}
@@ -1628,13 +1628,13 @@ export default function SettingsPage() {
                               updated[index].body = e.target.value;
                               setFollowUpTemplates(updated);
                             }}
-                            className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-ring focus:border-ring"
                           />
                         </div>
 
                         {/* Closing */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Closing</label>
+                          <label className="block text-sm font-medium text-foreground mb-1">Closing</label>
                           <textarea
                             rows={2}
                             value={template.closing}
@@ -1643,7 +1643,7 @@ export default function SettingsPage() {
                               updated[index].closing = e.target.value;
                               setFollowUpTemplates(updated);
                             }}
-                            className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-ring focus:border-ring"
                           />
                         </div>
                       </div>

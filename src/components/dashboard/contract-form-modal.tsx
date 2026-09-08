@@ -29,6 +29,7 @@ interface Contract {
   monthlyFee: number;
   paymentPlan: string | null;
   contractStart: string | null;
+  contractEndDate: string | null;
   nextDueDate: string | null;
   status: string;
   vatType: string;
@@ -82,6 +83,7 @@ export function ContractFormModal({
     monthlyFee: '',
     paymentPlan: 'Monthly',
     contractStart: '',
+    contractEndDate: '',
     nextDueDate: '',
     status: 'ACTIVE',
     vatType: 'VAT',
@@ -106,6 +108,7 @@ export function ContractFormModal({
         monthlyFee: contract.monthlyFee?.toString() || '',
         paymentPlan: contract.paymentPlan || 'Monthly',
         contractStart: contract.contractStart ? contract.contractStart.split('T')[0] : '',
+        contractEndDate: contract.contractEndDate ? contract.contractEndDate.split('T')[0] : '',
         nextDueDate: contract.nextDueDate ? contract.nextDueDate.split('T')[0] : '',
         status: contract.status || 'ACTIVE',
         vatType: contract.vatType || 'VAT',
@@ -128,6 +131,7 @@ export function ContractFormModal({
         monthlyFee: '',
         paymentPlan: 'Monthly',
         contractStart: '',
+        contractEndDate: '',
         nextDueDate: '',
         status: 'ACTIVE',
         vatType: 'VAT',
@@ -170,6 +174,7 @@ export function ContractFormModal({
           ...formData,
           monthlyFee: parseFloat(formData.monthlyFee) || 0,
           contractStart: formData.contractStart || null,
+          contractEndDate: formData.contractEndDate || null,
           nextDueDate: formData.nextDueDate || null,
         }),
       });
@@ -203,13 +208,13 @@ export function ContractFormModal({
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 my-8 max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-card rounded-lg shadow-xl max-w-2xl w-full mx-4 my-8 max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white flex items-center justify-between p-4 border-b z-10">
-          <h3 className="text-lg font-semibold text-gray-900">
+        <div className="sticky top-0 bg-card flex items-center justify-between p-4 border-b z-10">
+          <h3 className="text-lg font-semibold text-foreground">
             {isEditing ? 'Edit Contract' : 'New Contract'}
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="text-muted-foreground hover:text-muted-foreground">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -225,21 +230,21 @@ export function ContractFormModal({
           {/* Basic Info */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                External ID <span className="text-gray-400 text-xs font-normal">(optional)</span>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                External ID <span className="text-muted-foreground text-xs font-normal">(optional)</span>
               </label>
               <input
                 type="text"
                 name="customerId"
                 value={formData.customerId}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
                 placeholder="Your reference (optional)"
               />
-              <p className="text-xs text-gray-500 mt-1">Customer # will be auto-generated</p>
+              <p className="text-xs text-muted-foreground mt-1">Customer # will be auto-generated</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Company Name <span className="text-red-500">*</span>
               </label>
               <input
@@ -248,7 +253,7 @@ export function ContractFormModal({
                 value={formData.companyName}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
                 placeholder="Company Inc."
               />
             </div>
@@ -257,14 +262,14 @@ export function ContractFormModal({
           {/* Product & Partner */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Product Type <span className="text-red-500">*</span>
               </label>
               <select
                 name="productType"
                 value={formData.productType}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
               >
                 {(productTypes || []).map(pt => (
                   <option key={pt.value} value={pt.value}>{pt.label}</option>
@@ -272,7 +277,7 @@ export function ContractFormModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Billing Entity <span className="text-red-500">*</span>
               </label>
               <select
@@ -284,7 +289,7 @@ export function ContractFormModal({
                   const defaultPartner = e.target.value === 'YOWI' ? 'Direct-YOWI' : 'Direct-ABBA';
                   setFormData(prev => ({ ...prev, partner: defaultPartner }));
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
               >
                 {companies.map(c => (
                   <option key={c.code} value={c.code}>{c.code} - {c.name}</option>
@@ -295,7 +300,7 @@ export function ContractFormModal({
 
           {/* Partner */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Partner <span className="text-red-500">*</span>
             </label>
             <select
@@ -303,7 +308,7 @@ export function ContractFormModal({
               value={formData.partner}
               onChange={handleChange}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
             >
               <option value="">Select Partner...</option>
               {filteredPartners.map(p => (
@@ -315,7 +320,7 @@ export function ContractFormModal({
           {/* Billing Info */}
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Monthly Fee <span className="text-red-500">*</span>
               </label>
               <input
@@ -326,19 +331,19 @@ export function ContractFormModal({
                 required
                 min="0"
                 step="0.01"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
                 placeholder="15000"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Payment Plan
               </label>
               <select
                 name="paymentPlan"
                 value={formData.paymentPlan}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
               >
                 {paymentPlanOptions.map(p => (
                   <option key={p} value={p}>{p}</option>
@@ -346,14 +351,14 @@ export function ContractFormModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Status
               </label>
               <select
                 name="status"
                 value={formData.status}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
               >
                 {statusOptions.map(s => (
                   <option key={s} value={s}>{s.replace('_', ' ')}</option>
@@ -365,7 +370,7 @@ export function ContractFormModal({
           {/* Dates */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Contract Start
               </label>
               <input
@@ -373,11 +378,11 @@ export function ContractFormModal({
                 name="contractStart"
                 value={formData.contractStart}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Next Due Date
               </label>
               <input
@@ -385,22 +390,38 @@ export function ContractFormModal({
                 name="nextDueDate"
                 value={formData.nextDueDate}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Renewal Date
+              </label>
+              <input
+                type="date"
+                name="contractEndDate"
+                value={formData.contractEndDate}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                When this contract comes up for renewal. Leave blank only if it
+                genuinely has no end date &mdash; blanks are listed as untracked.
+              </p>
             </div>
           </div>
 
           {/* VAT & Billing Type */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 VAT Type
               </label>
               <select
                 name="vatType"
                 value={formData.vatType}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
               >
                 {vatTypes.map(v => (
                   <option key={v} value={v}>{v.replace('_', '-')}</option>
@@ -408,14 +429,14 @@ export function ContractFormModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Billing Type
               </label>
               <select
                 name="billingType"
                 value={formData.billingType}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
               >
                 {billingTypes.map(b => (
                   <option key={b} value={b}>{b.replace('_', ' ')}</option>
@@ -427,7 +448,7 @@ export function ContractFormModal({
           {/* Contact Info */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Contact Person
               </label>
               <input
@@ -435,12 +456,12 @@ export function ContractFormModal({
                 name="contactPerson"
                 value={formData.contactPerson}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
                 placeholder="John Doe"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Email Addresses
               </label>
               <MultiEmailInput
@@ -453,7 +474,7 @@ export function ContractFormModal({
 
           {/* Address */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Billing Address
             </label>
             <textarea
@@ -461,14 +482,14 @@ export function ContractFormModal({
               value={formData.address}
               onChange={handleChange}
               rows={2}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
               placeholder="Street, City, Province, Zip Code"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 TIN
               </label>
               <input
@@ -476,12 +497,12 @@ export function ContractFormModal({
                 name="tin"
                 value={formData.tin}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
                 placeholder="123-456-789-000"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Mobile
               </label>
               <input
@@ -489,7 +510,7 @@ export function ContractFormModal({
                 name="mobile"
                 value={formData.mobile}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
                 placeholder="09171234567"
               />
             </div>
@@ -497,7 +518,7 @@ export function ContractFormModal({
 
           {/* Remarks */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Remarks
             </label>
             <textarea
@@ -505,7 +526,7 @@ export function ContractFormModal({
               value={formData.remarks}
               onChange={handleChange}
               rows={2}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
               placeholder="Additional notes..."
             />
           </div>
@@ -516,7 +537,7 @@ export function ContractFormModal({
               type="button"
               onClick={onClose}
               disabled={isSaving}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+              className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-md hover:bg-muted disabled:opacity-50"
             >
               Cancel
             </button>

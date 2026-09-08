@@ -88,11 +88,11 @@ function PaymentSuccessContent() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-100">
+      <div className="flex min-h-screen items-center justify-center bg-muted">
         <Card className="w-full max-w-md">
           <CardContent className="flex flex-col items-center py-10">
             <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-            <p className="mt-4 text-gray-600">Verifying payment...</p>
+            <p className="mt-4 text-muted-foreground">Verifying payment...</p>
           </CardContent>
         </Card>
       </div>
@@ -101,7 +101,7 @@ function PaymentSuccessContent() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-100">
+      <div className="flex min-h-screen items-center justify-center bg-muted">
         <Card className="w-full max-w-md">
           <CardContent className="py-10 text-center">
             <p className="text-red-600">{error}</p>
@@ -112,7 +112,7 @@ function PaymentSuccessContent() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
+    <div className="flex min-h-screen items-center justify-center bg-muted">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mb-4 flex justify-center">
@@ -129,22 +129,22 @@ function PaymentSuccessContent() {
         </CardHeader>
         <CardContent className="space-y-4">
           {invoice && (
-            <div className="rounded-lg bg-gray-50 p-4">
+            <div className="rounded-lg bg-muted p-4">
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Invoice:</span>
+                  <span className="text-muted-foreground">Invoice:</span>
                   <span className="font-medium">{invoice.billingNo}</span>
                 </div>
                 {invoice.amount > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Amount:</span>
+                    <span className="text-muted-foreground">Amount:</span>
                     <span className="font-medium">
                       PHP {invoice.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Status:</span>
+                  <span className="text-muted-foreground">Status:</span>
                   <span className="font-medium text-green-600">
                     {invoice.status === 'PAID' ? 'Paid' : 'Processing'}
                   </span>
@@ -152,10 +152,10 @@ function PaymentSuccessContent() {
               </div>
             </div>
           )}
-          <p className="text-center text-sm text-gray-500">
+          <p className="text-center text-sm text-muted-foreground">
             A confirmation email will be sent to you shortly.
           </p>
-          <p className="text-center text-sm text-gray-500">
+          <p className="text-center text-sm text-muted-foreground">
             You may close this window.
           </p>
         </CardContent>
@@ -168,11 +168,11 @@ export default function PaymentSuccessPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-gray-100">
+        <div className="flex min-h-screen items-center justify-center bg-muted">
           <Card className="w-full max-w-md">
             <CardContent className="flex flex-col items-center py-10">
               <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-              <p className="mt-4 text-gray-600">Loading...</p>
+              <p className="mt-4 text-muted-foreground">Loading...</p>
             </CardContent>
           </Card>
         </div>

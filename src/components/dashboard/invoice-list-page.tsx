@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Header } from '@/components/dashboard/header';
 import { InvoiceTable, InvoiceRow } from '@/components/dashboard/invoice-table';
 import { MarkPaidModal, InvoiceForPayment } from '@/components/dashboard/mark-paid-modal';
+import { PromiseToPayModal, InvoiceForPromise } from '@/components/dashboard/promise-to-pay-modal';
 
 // Lazy-load heavy modals (only mounted when opened).
 const InvoiceEditModal = dynamic(
@@ -38,6 +39,7 @@ interface InvoiceListPageProps {
 
 export function InvoiceListPage({ title, subtitle, status, showAllStatuses, initialData }: InvoiceListPageProps) {
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<InvoiceForPayment | null>(null);
+  const [selectedInvoiceForPromise, setSelectedInvoiceForPromise] = useState<InvoiceForPromise | null>(null);
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
   const [selectedInvoiceForHistory, setSelectedInvoiceForHistory] = useState<{ id: string; billingNo: string | null; customerName: string } | null>(null);
 
@@ -106,6 +108,9 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
       serviceFee: Number(inv.serviceFee),
       vatAmount: Number(inv.vatAmount),
       netAmount: Number(inv.netAmount),
+      amountPaidTotal: inv.amountPaidTotal != null ? Number(inv.amountPaidTotal) : undefined,
+      balanceDue: inv.balanceDue != null ? Number(inv.balanceDue) : null,
+      followUpPausedUntil: inv.followUpPausedUntil ? new Date(inv.followUpPausedUntil) : null,
       dueDate: new Date(inv.dueDate),
       createdAt: new Date(inv.createdAt),
       billingEntity: inv.company?.code || 'YOWI',
@@ -199,7 +204,35 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
       billingNo: invoice.billingNo,
       customerName: invoice.customerName,
       netAmount: invoice.netAmount,
+      amountPaidTotal: invoice.amountPaidTotal,
+      balanceDue: invoice.balanceDue,
     });
+  };
+
+  const handlePromise = (invoice: InvoiceRow) => {
+    setSelectedInvoiceForPromise({
+      id: invoice.id,
+      billingNo: invoice.billingNo,
+      customerName: invoice.customerName,
+      netAmount: invoice.netAmount,
+      balanceDue: invoice.balanceDue,
+    });
+  };
+
+  const handleSavePromise = async (
+    invoiceId: string,
+    data: { promisedDate: string; promisedAmount?: number; channel?: string; notes?: string }
+  ) => {
+    const response = await fetch(`/api/invoices/${invoiceId}/promises`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Failed to log promise');
+    }
+    mutate();
   };
 
   const handleSavePayment = async (
@@ -209,6 +242,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
       paymentMethod: 'CASH' | 'BANK_TRANSFER' | 'CHECK';
       paymentReference?: string;
       paidAt?: string;
+      settleWithholding?: boolean;
     }
   ) => {
     const response = await fetch(`/api/invoices/${invoiceId}/mark-paid`, {
@@ -322,7 +356,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
           <h2 className="text-lg font-semibold">
             {title}
             {loading && <Loader2 className="ml-2 inline h-4 w-4 animate-spin" />}
-            <span className="ml-2 text-sm font-normal text-gray-500">
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
               ({invoices.length} of {totalInvoices} invoice{totalInvoices !== 1 ? 's' : ''})
             </span>
           </h2>
@@ -333,16 +367,16 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
         </div>
 
         {/* Filter bar */}
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-gray-50 p-3">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted p-3">
           {/* Search input */}
           <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
               placeholder="Search by client or invoice no..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-md border border-border bg-card py-2 pl-9 pr-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
 
@@ -350,7 +384,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
           <select
             value={entityFilter}
             onChange={(e) => setEntityFilter(e.target.value as 'ALL' | 'YOWI' | 'ABBA')}
-            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="rounded-md border border-border bg-card px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
           >
             <option value="ALL">All Entities</option>
             <option value="YOWI">YOWI</option>
@@ -362,12 +396,13 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="rounded-md border border-border bg-card px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
             >
               <option value="ALL">All Statuses</option>
               <option value="PENDING">Pending</option>
               <option value="APPROVED">Approved</option>
               <option value="SENT">Sent</option>
+              <option value="PARTIALLY_PAID">Partially Paid</option>
               <option value="PAID">Paid</option>
               <option value="REJECTED">Rejected</option>
               <option value="VOID">Void</option>
@@ -376,7 +411,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
 
           {/* Clear filters button */}
           {hasActiveFilters && (
-            <Button variant="ghost" size="sm" onClick={clearFilters} className="text-gray-500">
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
               <X className="mr-1 h-4 w-4" />
               Clear
             </Button>
@@ -404,6 +439,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
           onPayOnline={handlePayOnline}
           onViewHistory={handleViewHistory}
           onSendFollowUp={handleSendFollowUp}
+          onPromise={handlePromise}
         />
 
         {/* Empty state — distinguishes "no invoices at all" from "no match for
@@ -411,14 +447,14 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
             search returns an empty page). */}
         {!loading && invoices.length === 0 && (
           hasActiveFilters ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-muted-foreground">
               No invoices match your filters.{' '}
               <button onClick={clearFilters} className="text-blue-600 hover:underline">
                 Clear filters
               </button>
             </div>
           ) : (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-12 text-muted-foreground">
               No {status?.toLowerCase() || ''} invoices found.
             </div>
           )
@@ -427,7 +463,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t pt-4">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalInvoices)} of {totalInvoices}
             </p>
             <div className="flex items-center gap-2">
@@ -440,7 +476,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
                 <ChevronLeft className="h-4 w-4" />
                 Previous
               </Button>
-              <span className="text-sm text-gray-700">
+              <span className="text-sm text-foreground">
                 Page {currentPage} of {totalPages}
               </span>
               <Button
@@ -463,6 +499,13 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
         isOpen={!!selectedInvoiceForPayment}
         onClose={() => setSelectedInvoiceForPayment(null)}
         onSave={handleSavePayment}
+      />
+
+      <PromiseToPayModal
+        invoice={selectedInvoiceForPromise}
+        isOpen={!!selectedInvoiceForPromise}
+        onClose={() => setSelectedInvoiceForPromise(null)}
+        onSave={handleSavePromise}
       />
 
       {/* Invoice Edit Modal — only mount when open so dynamic chunk loads on demand */}

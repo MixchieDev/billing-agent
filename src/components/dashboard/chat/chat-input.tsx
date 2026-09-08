@@ -41,7 +41,7 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
   };
 
   return (
-    <div className="flex gap-2 p-3 border-t bg-white">
+    <div className="flex gap-2 p-3 border-t bg-card">
       <textarea
         ref={textareaRef}
         value={message}
@@ -50,7 +50,7 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
         placeholder="Type your question..."
         disabled={disabled}
         rows={1}
-        className="flex-1 resize-none border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+        className="flex-1 resize-none border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent disabled:bg-muted disabled:cursor-not-allowed"
       />
       <Button
         onClick={handleSubmit}

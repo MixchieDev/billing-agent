@@ -362,7 +362,7 @@ export function CSVImportModal({
       <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
 
       {/* Modal */}
-      <div className={`relative bg-white rounded-lg shadow-xl mx-4 ${step === 'preview' ? 'max-w-5xl' : 'max-w-lg'} w-full max-h-[90vh] flex flex-col`}>
+      <div className={`relative bg-card rounded-lg shadow-xl mx-4 ${step === 'preview' ? 'max-w-5xl' : 'max-w-lg'} w-full max-h-[90vh] flex flex-col`}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -375,11 +375,11 @@ export function CSVImportModal({
                 <Upload className="h-5 w-5 text-blue-600" />
               </div>
             )}
-            <h3 className="text-lg font-semibold text-gray-900">
+            <h3 className="text-lg font-semibold text-foreground">
               {step === 'preview' ? 'Review Findings' : title}
             </h3>
           </div>
-          <button onClick={handleClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={handleClose} className="text-muted-foreground hover:text-muted-foreground">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -391,10 +391,10 @@ export function CSVImportModal({
           {step === 'upload' && (
             <>
               {/* Template Download */}
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                 <div className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-gray-500" />
-                  <span className="text-sm text-gray-700">Download CSV template</span>
+                  <FileText className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-sm text-foreground">Download CSV template</span>
                 </div>
                 <button
                   onClick={handleDownloadTemplate}
@@ -410,7 +410,7 @@ export function CSVImportModal({
                 onClick={() => fileInputRef.current?.click()}
                 className={`
                   border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
-                  ${file ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'}
+                  ${file ? 'border-green-300 bg-green-50' : 'border-border hover:border-blue-400 hover:bg-blue-50'}
                 `}
               >
                 <input
@@ -426,10 +426,10 @@ export function CSVImportModal({
                     <span className="font-medium">{file.name}</span>
                   </div>
                 ) : (
-                  <div className="text-gray-500">
-                    <Upload className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                  <div className="text-muted-foreground">
+                    <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                     <p className="text-sm">Click to select a CSV file</p>
-                    <p className="text-xs text-gray-400 mt-1">or drag and drop</p>
+                    <p className="text-xs text-muted-foreground mt-1">or drag and drop</p>
                   </div>
                 )}
               </div>
@@ -441,9 +441,9 @@ export function CSVImportModal({
             <>
               {/* Summary Cards */}
               <div className="grid grid-cols-4 gap-3">
-                <div className="p-3 bg-gray-50 rounded-lg text-center">
-                  <p className="text-2xl font-bold text-gray-800">{preview.summary.totalRows}</p>
-                  <p className="text-xs text-gray-500">Total Rows</p>
+                <div className="p-3 bg-muted rounded-lg text-center">
+                  <p className="text-2xl font-bold text-foreground">{preview.summary.totalRows}</p>
+                  <p className="text-xs text-muted-foreground">Total Rows</p>
                 </div>
                 <div className="p-3 bg-green-50 rounded-lg text-center">
                   <p className="text-2xl font-bold text-green-600">{preview.summary.toCreate}</p>
@@ -479,17 +479,17 @@ export function CSVImportModal({
               <div className="border rounded-lg overflow-hidden">
                 <div className="max-h-[50vh] overflow-y-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50 sticky top-0 z-10">
+                    <thead className="bg-muted sticky top-0 z-10">
                       <tr>
-                        <th className="text-left px-3 py-2 text-gray-500 font-medium w-8"></th>
-                        <th className="text-left px-3 py-2 text-gray-500 font-medium">Row</th>
-                        <th className="text-left px-3 py-2 text-gray-500 font-medium">Company Name</th>
-                        <th className="text-left px-3 py-2 text-gray-500 font-medium">Product</th>
-                        <th className="text-left px-3 py-2 text-gray-500 font-medium">Partner</th>
-                        <th className="text-left px-3 py-2 text-gray-500 font-medium">Entity</th>
-                        <th className="text-right px-3 py-2 text-gray-500 font-medium">Monthly Fee</th>
-                        <th className="text-left px-3 py-2 text-gray-500 font-medium">Action</th>
-                        <th className="text-left px-3 py-2 text-gray-500 font-medium">Issues</th>
+                        <th className="text-left px-3 py-2 text-muted-foreground font-medium w-8"></th>
+                        <th className="text-left px-3 py-2 text-muted-foreground font-medium">Row</th>
+                        <th className="text-left px-3 py-2 text-muted-foreground font-medium">Company Name</th>
+                        <th className="text-left px-3 py-2 text-muted-foreground font-medium">Product</th>
+                        <th className="text-left px-3 py-2 text-muted-foreground font-medium">Partner</th>
+                        <th className="text-left px-3 py-2 text-muted-foreground font-medium">Entity</th>
+                        <th className="text-right px-3 py-2 text-muted-foreground font-medium">Monthly Fee</th>
+                        <th className="text-left px-3 py-2 text-muted-foreground font-medium">Action</th>
+                        <th className="text-left px-3 py-2 text-muted-foreground font-medium">Issues</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -550,7 +550,7 @@ export function CSVImportModal({
                   <p className="text-blue-600">~ {result.results.updated} updated</p>
                 )}
                 {result.results.skipped > 0 && (
-                  <p className="text-gray-600">- {result.results.skipped} skipped</p>
+                  <p className="text-muted-foreground">- {result.results.skipped} skipped</p>
                 )}
               </div>
 
@@ -596,12 +596,12 @@ export function CSVImportModal({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-between gap-3 p-4 border-t bg-gray-50 rounded-b-lg flex-shrink-0">
+        <div className="flex justify-between gap-3 p-4 border-t bg-muted rounded-b-lg flex-shrink-0">
           <div className="flex gap-2">
             {step === 'preview' && (
               <button
                 onClick={handleBack}
-                className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-md hover:bg-muted"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Back
@@ -625,7 +625,7 @@ export function CSVImportModal({
           <div className="flex gap-3">
             <button
               onClick={handleClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-md hover:bg-muted"
             >
               {step === 'result' ? 'Close' : 'Cancel'}
             </button>
@@ -734,25 +734,25 @@ function RowWithEditor({
     <>
       {/* Main row */}
       <tr
-        className={`${bgClass} ${isEditable ? 'cursor-pointer hover:bg-gray-50' : ''} ${isEdited ? 'ring-1 ring-inset ring-amber-300' : ''}`}
+        className={`${bgClass} ${isEditable ? 'cursor-pointer hover:bg-muted' : ''} ${isEdited ? 'ring-1 ring-inset ring-amber-300' : ''}`}
         onClick={onToggle}
       >
-        <td className="px-3 py-2 text-gray-400">
+        <td className="px-3 py-2 text-muted-foreground">
           {isEditable && (
             isExpanded
               ? <ChevronUp className="h-3.5 w-3.5" />
               : <ChevronDown className="h-3.5 w-3.5" />
           )}
         </td>
-        <td className="px-3 py-2 text-gray-400">{row.rowNumber}</td>
-        <td className="px-3 py-2 text-gray-900 font-medium truncate max-w-[180px]" title={String(getRowValue(row, 'companyName'))}>
+        <td className="px-3 py-2 text-muted-foreground">{row.rowNumber}</td>
+        <td className="px-3 py-2 text-foreground font-medium truncate max-w-[180px]" title={String(getRowValue(row, 'companyName'))}>
           {getRowValue(row, 'companyName')}
           {isEdited && <span className="ml-1 text-amber-500 text-xs">*</span>}
         </td>
-        <td className="px-3 py-2 text-gray-600">{getRowValue(row, 'productType')}</td>
-        <td className="px-3 py-2 text-gray-600">{getRowValue(row, 'partner')}</td>
-        <td className="px-3 py-2 text-gray-600">{getRowValue(row, 'billingEntity')}</td>
-        <td className="px-3 py-2 text-gray-600 text-right">{Number(getRowValue(row, 'monthlyFee')).toLocaleString()}</td>
+        <td className="px-3 py-2 text-muted-foreground">{getRowValue(row, 'productType')}</td>
+        <td className="px-3 py-2 text-muted-foreground">{getRowValue(row, 'partner')}</td>
+        <td className="px-3 py-2 text-muted-foreground">{getRowValue(row, 'billingEntity')}</td>
+        <td className="px-3 py-2 text-muted-foreground text-right">{Number(getRowValue(row, 'monthlyFee')).toLocaleString()}</td>
         <td className="px-3 py-2">
           {row.action === 'create' && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
@@ -787,28 +787,28 @@ function RowWithEditor({
       {/* Expanded edit form */}
       {isExpanded && (
         <tr>
-          <td colSpan={9} className="px-3 py-3 bg-gray-50 border-t border-b border-gray-200">
+          <td colSpan={9} className="px-3 py-3 bg-muted border-t border-b border-border">
             <div className="grid grid-cols-3 gap-3">
               {/* Company Name */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Company Name</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Company Name</label>
                 <input
                   type="text"
                   value={String(getRowValue(row, 'companyName') || '')}
                   onChange={e => updateRowField(row.rowNumber, 'companyName', e.target.value)}
                   onClick={e => e.stopPropagation()}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-2 py-1.5 text-sm border border-border rounded-md focus:ring-1 focus:ring-ring focus:border-ring"
                 />
               </div>
 
               {/* Product Type */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Product Type</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Product Type</label>
                 <select
                   value={String(getRowValue(row, 'productType') || '')}
                   onChange={e => updateRowField(row.rowNumber, 'productType', e.target.value)}
                   onClick={e => e.stopPropagation()}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="w-full px-2 py-1.5 text-sm border border-border rounded-md focus:ring-1 focus:ring-ring focus:border-ring bg-card"
                 >
                   <option value="">Select...</option>
                   {productTypes.map(pt => (
@@ -819,12 +819,12 @@ function RowWithEditor({
 
               {/* Partner */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Partner</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Partner</label>
                 <select
                   value={String(getRowValue(row, 'partner') || '')}
                   onChange={e => updateRowField(row.rowNumber, 'partner', e.target.value)}
                   onClick={e => e.stopPropagation()}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="w-full px-2 py-1.5 text-sm border border-border rounded-md focus:ring-1 focus:ring-ring focus:border-ring bg-card"
                 >
                   <option value="">Select...</option>
                   {partners.map((p: any) => (
@@ -835,12 +835,12 @@ function RowWithEditor({
 
               {/* Billing Entity */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Billing Entity</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Billing Entity</label>
                 <select
                   value={String(getRowValue(row, 'billingEntity') || '')}
                   onChange={e => updateRowField(row.rowNumber, 'billingEntity', e.target.value)}
                   onClick={e => e.stopPropagation()}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="w-full px-2 py-1.5 text-sm border border-border rounded-md focus:ring-1 focus:ring-ring focus:border-ring bg-card"
                 >
                   <option value="">Select...</option>
                   {companies.map((c: any) => (
@@ -851,24 +851,24 @@ function RowWithEditor({
 
               {/* Monthly Fee */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Monthly Fee</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Monthly Fee</label>
                 <input
                   type="number"
                   value={getRowValue(row, 'monthlyFee') || ''}
                   onChange={e => updateRowField(row.rowNumber, 'monthlyFee', parseFloat(e.target.value) || 0)}
                   onClick={e => e.stopPropagation()}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-2 py-1.5 text-sm border border-border rounded-md focus:ring-1 focus:ring-ring focus:border-ring"
                 />
               </div>
 
               {/* Status */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Status</label>
                 <select
                   value={String(getRowValue(row, 'status') || 'ACTIVE')}
                   onChange={e => updateRowField(row.rowNumber, 'status', e.target.value)}
                   onClick={e => e.stopPropagation()}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="w-full px-2 py-1.5 text-sm border border-border rounded-md focus:ring-1 focus:ring-ring focus:border-ring bg-card"
                 >
                   <option value="ACTIVE">Active</option>
                   <option value="INACTIVE">Inactive</option>
@@ -879,12 +879,12 @@ function RowWithEditor({
 
               {/* VAT Type */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">VAT Type</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">VAT Type</label>
                 <select
                   value={String(getRowValue(row, 'vatType') || 'VAT')}
                   onChange={e => updateRowField(row.rowNumber, 'vatType', e.target.value)}
                   onClick={e => e.stopPropagation()}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="w-full px-2 py-1.5 text-sm border border-border rounded-md focus:ring-1 focus:ring-ring focus:border-ring bg-card"
                 >
                   <option value="VAT">VAT</option>
                   <option value="NON_VAT">Non-VAT</option>
@@ -893,12 +893,12 @@ function RowWithEditor({
 
               {/* Billing Type */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Billing Type</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Billing Type</label>
                 <select
                   value={String(getRowValue(row, 'billingType') || 'RECURRING')}
                   onChange={e => updateRowField(row.rowNumber, 'billingType', e.target.value)}
                   onClick={e => e.stopPropagation()}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="w-full px-2 py-1.5 text-sm border border-border rounded-md focus:ring-1 focus:ring-ring focus:border-ring bg-card"
                 >
                   <option value="RECURRING">Recurring</option>
                   <option value="ONE_TIME">One-Time</option>
@@ -907,20 +907,20 @@ function RowWithEditor({
 
               {/* Contact Person */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Contact Person</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Contact Person</label>
                 <input
                   type="text"
                   value={String(getRowValue(row, 'contactPerson') || '')}
                   onChange={e => updateRowField(row.rowNumber, 'contactPerson', e.target.value)}
                   onClick={e => e.stopPropagation()}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-2 py-1.5 text-sm border border-border rounded-md focus:ring-1 focus:ring-ring focus:border-ring"
                 />
               </div>
             </div>
 
             {/* Errors/warnings detail */}
             {(row.errors.length > 0 || row.warnings.length > 0) && (
-              <div className="mt-2 pt-2 border-t border-gray-200">
+              <div className="mt-2 pt-2 border-t border-border">
                 {row.errors.map((err, i) => (
                   <p key={`e-${i}`} className="text-xs text-red-600">Error: {err}</p>
                 ))}

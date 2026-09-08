@@ -5,7 +5,7 @@ import {
   getPaymentDetailsFromWebhook,
   HitpayWebhookPayload,
 } from '@/lib/hitpay-service';
-import { notifyInvoicePaid } from '@/lib/notifications';
+import { recordPayment } from '@/lib/payment-service';
 
 /**
  * POST /api/webhooks/hitpay
@@ -80,121 +80,88 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if already processed (idempotency)
-    if (paymentRequest.status === 'COMPLETED') {
+    // Atomically claim this payment request so a redelivered webhook can't
+    // record the payment twice (idempotency).
+    const claim = await prisma.hitpayPaymentRequest.updateMany({
+      where: { id: paymentRequest.id, status: { not: 'COMPLETED' } },
+      data: {
+        status: 'COMPLETED',
+        paidAt: new Date(),
+        paymentMethod: paymentDetails.paymentMethod,
+        paymentReference: paymentDetails.paymentReference,
+      },
+    });
+    if (claim.count === 0) {
       console.log('Payment already processed:', paymentRequest.id);
       return NextResponse.json({ received: true, alreadyProcessed: true });
     }
 
-    // Check if invoice is already paid
-    if (paymentRequest.invoice.status === 'PAID') {
-      console.log('Invoice already paid:', paymentRequest.invoice.id);
-      return NextResponse.json({ received: true, alreadyPaid: true });
-    }
-
-    // Voided invoice: the client paid through a stale checkout link. Record the
-    // payment on the request and alert staff for a manual refund — but never
-    // resurrect a VOID invoice to PAID.
-    if (paymentRequest.invoice.status === 'VOID') {
-      await prisma.$transaction([
-        prisma.hitpayPaymentRequest.update({
-          where: { id: paymentRequest.id },
-          data: {
-            status: 'COMPLETED',
-            paidAt: new Date(),
-            paymentMethod: paymentDetails.paymentMethod,
-            paymentReference: paymentDetails.paymentReference,
-          },
-        }),
-        prisma.auditLog.create({
-          data: {
-            userId: null,
-            action: 'HITPAY_PAYMENT_ON_VOID_INVOICE',
-            entityType: 'Invoice',
-            entityId: paymentRequest.invoice.id,
-            details: {
-              billingNo: paymentRequest.invoice.billingNo,
-              paidAmount: paymentDetails.amount,
-              paymentReference: paymentDetails.paymentReference,
-              note: 'Payment received via HitPay for a VOIDED invoice — needs manual refund',
+    // Only SENT / PARTIALLY_PAID invoices accept a payment. If it's already
+    // settled (or in another state), the request is claimed above so we won't
+    // reprocess — just acknowledge.
+    if (
+      paymentRequest.invoice.status !== 'SENT' &&
+      paymentRequest.invoice.status !== 'PARTIALLY_PAID'
+    ) {
+      // A VOIDED invoice means the client paid through a stale checkout link.
+      // We never resurrect it to PAID, but money did change hands — audit it
+      // and alert staff so they can refund.
+      if (paymentRequest.invoice.status === 'VOID') {
+        await prisma.$transaction([
+          prisma.auditLog.create({
+            data: {
+              userId: null,
+              action: 'HITPAY_PAYMENT_ON_VOID_INVOICE',
+              entityType: 'Invoice',
+              entityId: paymentRequest.invoice.id,
+              details: {
+                billingNo: paymentRequest.invoice.billingNo,
+                paidAmount: paymentDetails.amount,
+                paymentReference: paymentDetails.paymentReference,
+                note: 'Payment received via HitPay for a VOIDED invoice — needs manual refund',
+              },
             },
-          },
-        }),
-        prisma.notification.create({
-          data: {
-            type: 'SYSTEM',
-            title: 'Payment received on a VOIDED invoice',
-            message: `HitPay payment of ${paymentDetails.amount} received for voided invoice ${paymentRequest.invoice.billingNo} (${paymentRequest.invoice.customerName}). A manual refund is needed.`,
-            link: '/dashboard/invoices',
-            entityType: 'Invoice',
-            entityId: paymentRequest.invoice.id,
-          },
-        }),
-      ]);
-      console.warn('HitPay payment received for VOIDED invoice:', paymentRequest.invoice.id);
-      return NextResponse.json({ received: true, voidedInvoice: true });
+          }),
+          prisma.notification.create({
+            data: {
+              type: 'SYSTEM',
+              title: 'Payment received on a VOIDED invoice',
+              message: `HitPay payment of ${paymentDetails.amount} received for voided invoice ${paymentRequest.invoice.billingNo} (${paymentRequest.invoice.customerName}). A manual refund is needed.`,
+              link: '/dashboard/invoices',
+              entityType: 'Invoice',
+              entityId: paymentRequest.invoice.id,
+            },
+          }),
+        ]);
+        console.warn('HitPay payment received for VOIDED invoice:', paymentRequest.invoice.id);
+        return NextResponse.json({ received: true, voidedInvoice: true });
+      }
+
+      console.log(
+        `Invoice ${paymentRequest.invoice.id} not in a payable state (${paymentRequest.invoice.status}); skipping record.`
+      );
+      return NextResponse.json({ received: true, skipped: true });
     }
 
-    // Update payment request and invoice in a transaction
-    await prisma.$transaction(async (tx) => {
-      // Update payment request
-      await tx.hitpayPaymentRequest.update({
-        where: { id: paymentRequest.id },
-        data: {
-          status: 'COMPLETED',
-          paidAt: new Date(),
-          paymentMethod: paymentDetails.paymentMethod,
-          paymentReference: paymentDetails.paymentReference,
-        },
-      });
-
-      // Update invoice to PAID
-      await tx.invoice.update({
-        where: { id: paymentRequest.invoice.id },
-        data: {
-          status: 'PAID',
-          paidAt: new Date(),
-          paidAmount: Number(paymentDetails.amount),
-          paymentMethod: 'HITPAY',
-          paymentReference: paymentDetails.paymentReference,
-        },
-      });
-
-      // Create audit log
-      await tx.auditLog.create({
-        data: {
-          userId: null, // System action
-          action: 'INVOICE_PAID',
-          entityType: 'Invoice',
-          entityId: paymentRequest.invoice.id,
-          details: {
-            billingNo: paymentRequest.invoice.billingNo,
-            paidAmount: paymentDetails.amount,
-            paymentMethod: 'HITPAY',
-            hitpayPaymentType: paymentDetails.paymentMethod,
-            paymentReference: paymentDetails.paymentReference,
-            source: 'hitpay_webhook',
-          },
-        },
-      });
-    });
-
-    // Send notification (outside transaction)
-    await notifyInvoicePaid({
-      id: paymentRequest.invoice.id,
-      billingNo: paymentRequest.invoice.billingNo,
-      customerName: paymentRequest.invoice.customerName,
-      paidAmount: Number(paymentDetails.amount),
-      paymentMethod: `HitPay (${paymentDetails.paymentMethod || 'Online'})`,
+    // Record the payment (handles partials/EWT, invoice update, audit, notify).
+    const result = await recordPayment({
+      invoiceId: paymentRequest.invoice.id,
+      amount: Number(paymentDetails.amount),
+      method: 'HITPAY',
+      reference: paymentDetails.paymentReference,
+      paidDate: new Date(),
+      source: 'HITPAY_WEBHOOK',
+      recordedBy: null,
     });
 
     console.log('Payment processed successfully:', {
       invoiceId: paymentRequest.invoice.id,
       billingNo: paymentRequest.invoice.billingNo,
       amount: paymentDetails.amount,
+      status: result.status,
     });
 
-    return NextResponse.json({ received: true, processed: true });
+    return NextResponse.json({ received: true, processed: true, status: result.status });
   } catch (error) {
     console.error('Error processing HitPay webhook:', error);
     return NextResponse.json(

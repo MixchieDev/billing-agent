@@ -143,7 +143,7 @@ export function UsersPage() {
           <h2 className="text-lg font-semibold">
             User List
             {loading && <Loader2 className="ml-2 inline h-4 w-4 animate-spin" />}
-            <span className="ml-2 text-sm font-normal text-gray-500">
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
               ({users.length} user{users.length !== 1 ? 's' : ''})
             </span>
           </h2>
@@ -167,7 +167,7 @@ export function UsersPage() {
         )}
 
         {/* Users Table */}
-        <div className="rounded-lg border bg-white">
+        <div className="rounded-lg border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -181,7 +181,7 @@ export function UsersPage() {
             <TableBody>
               {users.length === 0 && !loading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-gray-500">
+                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                     No users found
                   </TableCell>
                 </TableRow>
@@ -191,7 +191,7 @@ export function UsersPage() {
                     <TableCell className="font-medium">
                       {user.name || '-'}
                       {user.id === session?.user?.id && (
-                        <span className="ml-2 text-xs text-gray-400">(you)</span>
+                        <span className="ml-2 text-xs text-muted-foreground">(you)</span>
                       )}
                     </TableCell>
                     <TableCell>{user.email}</TableCell>

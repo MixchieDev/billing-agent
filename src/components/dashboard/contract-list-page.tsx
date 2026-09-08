@@ -238,7 +238,7 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
     setContractToDelete(null);
   };
 
-  const selectClassName = "h-9 rounded-md border border-gray-300 bg-white px-3 py-1 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+  const selectClassName = "h-9 rounded-md border border-border bg-card px-3 py-1 text-sm shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring";
 
   return (
     <div className="flex flex-col">
@@ -252,7 +252,7 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
               All Contracts
               {loading && <Loader2 className="ml-2 inline h-4 w-4 animate-spin" />}
             </h2>
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-muted-foreground">
               ({total} contract{total !== 1 ? 's' : ''})
             </span>
           </div>
@@ -260,18 +260,18 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
           <div className="flex flex-wrap items-center gap-3">
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="Search contracts..."
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                className="h-9 w-56 rounded-md border border-gray-300 bg-white pl-8 pr-8 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="h-9 w-56 rounded-md border border-border bg-card pl-8 pr-8 text-sm shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
               />
               {searchQuery && (
                 <button
                   onClick={() => handleSearchChange('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -347,7 +347,7 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between pb-16">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               Showing {(page - 1) * limit + 1}–{Math.min(page * limit, total)} of {total} contracts
             </p>
             <div className="flex items-center gap-2 mr-16">
@@ -359,7 +359,7 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
               >
                 Previous
               </Button>
-              <span className="text-sm text-gray-700">
+              <span className="text-sm text-foreground">
                 Page {page} of {totalPages}
               </span>
               <Button
@@ -376,7 +376,7 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
 
         {/* Empty state */}
         {!loading && contracts.length === 0 && !error && (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-muted-foreground">
             <p>No contracts found.</p>
             <p className="mt-2">
               <button

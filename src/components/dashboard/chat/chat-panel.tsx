@@ -117,12 +117,12 @@ export function ChatPanel() {
       {/* Chat panel */}
       <div
         className={cn(
-          'fixed right-0 top-0 h-full bg-white border-l shadow-xl z-40 flex flex-col transition-all duration-300 ease-in-out',
+          'fixed right-0 top-0 h-full bg-card border-l shadow-xl z-40 flex flex-col transition-all duration-300 ease-in-out',
           isOpen ? 'w-96' : 'w-0 overflow-hidden'
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b bg-gray-50">
+        <div className="flex items-center justify-between p-4 border-b bg-muted">
           <div className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-blue-600" />
             <h2 className="font-semibold">AI Assistant</h2>
@@ -132,7 +132,7 @@ export function ChatPanel() {
               variant="ghost"
               size="sm"
               onClick={clearChat}
-              className="text-gray-500 hover:text-gray-700"
+              className="text-muted-foreground hover:text-foreground"
               title="Clear chat"
             >
               Clear
@@ -141,7 +141,7 @@ export function ChatPanel() {
               variant="ghost"
               size="icon"
               onClick={() => setIsOpen(false)}
-              className="text-gray-500 hover:text-gray-700"
+              className="text-muted-foreground hover:text-foreground"
               title="Close"
             >
               <X className="w-5 h-5" />
@@ -151,13 +151,13 @@ export function ChatPanel() {
 
         {/* Quick actions */}
         {messages.length <= 1 && (
-          <div className="flex gap-2 p-3 border-b bg-gray-50">
+          <div className="flex gap-2 p-3 border-b bg-muted">
             {QUICK_ACTIONS.map((action) => (
               <button
                 key={action.label}
                 onClick={() => handleQuickAction(action.query)}
                 disabled={isLoading}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-white border rounded-full hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-card border rounded-full hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors disabled:opacity-50"
               >
                 <action.icon className="w-3 h-3" />
                 {action.label}

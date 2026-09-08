@@ -60,6 +60,9 @@ export function DashboardView({ initialData }: DashboardViewProps = {}) {
       serviceFee: Number(inv.serviceFee),
       vatAmount: Number(inv.vatAmount),
       netAmount: Number(inv.netAmount),
+      amountPaidTotal: inv.amountPaidTotal != null ? Number(inv.amountPaidTotal) : undefined,
+      balanceDue: inv.balanceDue != null ? Number(inv.balanceDue) : null,
+      followUpPausedUntil: inv.followUpPausedUntil ? new Date(inv.followUpPausedUntil) : null,
       dueDate: new Date(inv.dueDate),
       billingEntity: inv.company?.code || 'YOWI',
       billingModel: inv.billingModel,
@@ -278,7 +281,7 @@ export function DashboardView({ initialData }: DashboardViewProps = {}) {
 
         {/* Empty state */}
         {!loading && invoices.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-muted-foreground">
             No invoices found. Click "Run Billing" to generate invoices for due contracts.
           </div>
         )}

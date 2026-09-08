@@ -116,7 +116,7 @@ export function ScheduledBillingsPage() {
   if (loading && !data) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -144,8 +144,8 @@ export function ScheduledBillingsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Scheduled Billings</h2>
-          <p className="text-sm text-gray-500">Create and manage recurring billing schedules</p>
+          <h2 className="text-lg font-semibold text-foreground">Scheduled Billings</h2>
+          <p className="text-sm text-muted-foreground">Create and manage recurring billing schedules</p>
         </div>
       </div>
 
@@ -158,10 +158,10 @@ export function ScheduledBillingsPage() {
       )}
 
       {/* Scheduler Status Card */}
-      <div className="rounded-lg border bg-white p-6">
-        <h3 className="mb-4 text-sm font-medium text-gray-700">Scheduler Status</h3>
+      <div className="rounded-lg border bg-card p-6">
+        <h3 className="mb-4 text-sm font-medium text-foreground">Scheduler Status</h3>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="rounded-lg bg-gray-50 p-4">
+          <div className="rounded-lg bg-muted p-4">
             <div className="flex items-center gap-2">
               {scheduler.running ? (
                 <CheckCircle className="h-5 w-5 text-green-500" />
@@ -172,36 +172,36 @@ export function ScheduledBillingsPage() {
                 {scheduler.running ? 'Running' : 'Stopped'}
               </span>
             </div>
-            <p className="mt-1 text-xs text-gray-500">Status</p>
+            <p className="mt-1 text-xs text-muted-foreground">Status</p>
           </div>
-          <div className="rounded-lg bg-gray-50 p-4">
+          <div className="rounded-lg bg-muted p-4">
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-blue-500" />
               <span className="text-sm font-medium">{scheduler.config.cronExpression}</span>
             </div>
-            <p className="mt-1 text-xs text-gray-500">Schedule (Daily 8 AM)</p>
+            <p className="mt-1 text-xs text-muted-foreground">Schedule (Daily 8 AM)</p>
           </div>
-          <div className="rounded-lg bg-gray-50 p-4">
+          <div className="rounded-lg bg-muted p-4">
             <div className="text-sm font-medium">
               {scheduler.lastRun
                 ? formatDistanceToNow(new Date(scheduler.lastRun), { addSuffix: true })
                 : 'Never'}
             </div>
-            <p className="mt-1 text-xs text-gray-500">Last Run</p>
+            <p className="mt-1 text-xs text-muted-foreground">Last Run</p>
           </div>
-          <div className="rounded-lg bg-gray-50 p-4">
+          <div className="rounded-lg bg-muted p-4">
             <div className="text-sm font-medium">
               {scheduler.nextRun
                 ? format(new Date(scheduler.nextRun), 'MMM d, h:mm a')
                 : 'N/A'}
             </div>
-            <p className="mt-1 text-xs text-gray-500">Next Run</p>
+            <p className="mt-1 text-xs text-muted-foreground">Next Run</p>
           </div>
         </div>
       </div>
 
       {/* Tab Navigation */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-border">
         <nav className="-mb-px flex gap-6">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -212,7 +212,7 @@ export function ScheduledBillingsPage() {
                 className={`flex items-center gap-2 border-b-2 py-4 text-sm font-medium transition-colors ${
                   activeTab === tab.id
                     ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                    : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground'
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -248,20 +248,20 @@ export function ScheduledBillingsPage() {
 
       {/* Legend */}
       {activeTab === 'manage' && (
-        <div className="rounded-lg border bg-gray-50 p-4">
-          <h4 className="mb-2 text-sm font-medium text-gray-700">Billing Automation</h4>
+        <div className="rounded-lg border bg-muted p-4">
+          <h4 className="mb-2 text-sm font-medium text-foreground">Billing Automation</h4>
           <div className="flex flex-wrap gap-4 text-sm">
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-amber-500" />
-              <span className="text-gray-600">Pending Approval = New schedule awaiting review</span>
+              <span className="text-muted-foreground">Pending Approval = New schedule awaiting review</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle className="h-4 w-4 text-green-500" />
-              <span className="text-gray-600">Auto-approve = Invoice created as approved</span>
+              <span className="text-muted-foreground">Auto-approve = Invoice created as approved</span>
             </div>
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-blue-500" />
-              <span className="text-gray-600">Manual = Requires approval after generation</span>
+              <span className="text-muted-foreground">Manual = Requires approval after generation</span>
             </div>
           </div>
         </div>

@@ -29,6 +29,7 @@ import {
   CreditCard,
   History,
   MailWarning,
+  CalendarClock,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
@@ -55,7 +56,10 @@ export interface InvoiceRow {
   createdAt: Date;
   billingEntity: 'YOWI' | 'ABBA';
   billingModel: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SENT' | 'PAID' | 'VOID';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SENT' | 'PARTIALLY_PAID' | 'PAID' | 'VOID';
+  amountPaidTotal?: number;
+  balanceDue?: number | null;
+  followUpPausedUntil?: Date | null;
   emailStatus?: string;
   // Follow-up tracking fields
   followUpEnabled?: boolean;
@@ -76,6 +80,7 @@ interface InvoiceTableProps {
   onPayOnline?: (invoice: InvoiceRow) => void;
   onViewHistory?: (invoice: InvoiceRow) => void;
   onSendFollowUp?: (invoice: InvoiceRow) => void;
+  onPromise?: (invoice: InvoiceRow) => void;
   showBulkActions?: boolean;
 }
 
@@ -92,6 +97,7 @@ export function InvoiceTable({
   onPayOnline,
   onViewHistory,
   onSendFollowUp,
+  onPromise,
   showBulkActions = true,
 }: InvoiceTableProps) {
   const [sendingInvoice, setSendingInvoice] = useState<InvoiceRow | null>(null);
@@ -232,13 +238,25 @@ export function InvoiceTable({
       APPROVED: 'success',
       REJECTED: 'destructive',
       SENT: 'default',
+      PARTIALLY_PAID: 'warning',
       PAID: 'success',
       VOID: 'secondary',
     };
-    return <Badge variant={variants[status] || 'secondary'}>{status}</Badge>;
+    const labels: Record<string, string> = { PARTIALLY_PAID: 'PARTIAL' };
+    return <Badge variant={variants[status] || 'secondary'}>{labels[status] || status}</Badge>;
   };
 
-  const getDaysUntilBadge = (dueDate: Date) => {
+  /**
+   * A countdown only means something while money is still owed. On a settled or
+   * closed invoice "12 days overdue" keeps ticking against a debt that no
+   * longer exists, which reads as a collections problem that isn't there.
+   */
+  const SETTLED_STATUSES = ['PAID', 'VOID', 'REJECTED'];
+
+  const getDaysUntilBadge = (dueDate: Date, status: string) => {
+    if (SETTLED_STATUSES.includes(status)) {
+      return <span className="text-muted-foreground">—</span>;
+    }
     const days = daysUntil(dueDate);
     if (days < 0) {
       return <Badge variant="destructive">{Math.abs(days)} days overdue</Badge>;
@@ -250,7 +268,7 @@ export function InvoiceTable({
   };
 
   return (
-    <div className="rounded-lg border bg-white">
+    <div className="rounded-lg border bg-card">
       {/* Bulk actions */}
       {showBulkActions && selectedIds.size > 0 && (
         <div className="flex items-center gap-4 border-b bg-blue-50 px-4 py-3">
@@ -283,7 +301,7 @@ export function InvoiceTable({
                   type="checkbox"
                   checked={selectedIds.size === sortedInvoices.length && sortedInvoices.length > 0}
                   onChange={toggleSelectAll}
-                  className="h-4 w-4 rounded border-gray-300"
+                  className="h-4 w-4 rounded border-border"
                 />
               </TableHead>
             )}
@@ -306,7 +324,7 @@ export function InvoiceTable({
             <TableRow>
               <TableCell
                 colSpan={showBulkActions ? 13 : 12}
-                className="h-24 text-center text-gray-500"
+                className="h-24 text-center text-muted-foreground"
               >
                 No invoices found
               </TableCell>
@@ -320,11 +338,11 @@ export function InvoiceTable({
                       type="checkbox"
                       checked={selectedIds.has(invoice.id)}
                       onChange={() => toggleSelect(invoice.id)}
-                      className="h-4 w-4 rounded border-gray-300"
+                      className="h-4 w-4 rounded border-border"
                     />
                   </TableCell>
                 )}
-                <TableCell className="font-mono text-xs text-gray-600">
+                <TableCell className="font-mono text-xs text-muted-foreground">
                   {invoice.billingNo || '-'}
                 </TableCell>
                 <TableCell className="font-medium">
@@ -346,7 +364,7 @@ export function InvoiceTable({
                   {formatDateShort(invoice.createdAt)}
                 </TableCell>
                 <TableCell>{formatDateShort(invoice.dueDate)}</TableCell>
-                <TableCell>{getDaysUntilBadge(invoice.dueDate)}</TableCell>
+                <TableCell>{getDaysUntilBadge(invoice.dueDate, invoice.status)}</TableCell>
                 <TableCell>
                   <Badge
                     variant={invoice.billingEntity === 'YOWI' ? 'default' : 'secondary'}
@@ -428,7 +446,7 @@ export function InvoiceTable({
                             size="sm"
                             onClick={() => onVoid(invoice.id)}
                             title="Void Invoice"
-                            className="text-gray-600 hover:text-gray-800 hover:bg-gray-100"
+                            className="text-muted-foreground hover:text-foreground hover:bg-muted"
                           >
                             <Ban className="mr-1 h-4 w-4" />
                             Void
@@ -436,7 +454,7 @@ export function InvoiceTable({
                         )}
                       </>
                     )}
-                    {invoice.status === 'SENT' && (
+                    {(invoice.status === 'SENT' || invoice.status === 'PARTIALLY_PAID') && (
                       <>
                         <Button
                           variant="outline"
@@ -464,7 +482,7 @@ export function InvoiceTable({
                             disabled={(invoice.lastFollowUpLevel ?? 0) >= 3}
                             className={`${
                               (invoice.lastFollowUpLevel ?? 0) >= 3
-                                ? 'text-gray-400 cursor-not-allowed'
+                                ? 'text-muted-foreground cursor-not-allowed'
                                 : 'text-orange-600 hover:text-orange-700 hover:bg-orange-50'
                             }`}
                             title={
@@ -481,6 +499,28 @@ export function InvoiceTable({
                             >
                               {invoice.lastFollowUpLevel ?? 0}/3
                             </Badge>
+                          </Button>
+                        )}
+                        {invoice.followUpPausedUntil &&
+                          new Date(invoice.followUpPausedUntil) > new Date() && (
+                            <span
+                              className="inline-flex items-center rounded bg-purple-50 px-2 py-1 text-xs text-purple-700"
+                              title="Follow-ups paused by a promise to pay"
+                            >
+                              <CalendarClock className="mr-1 h-3 w-3" />
+                              Paused until {formatDateShort(new Date(invoice.followUpPausedUntil))}
+                            </span>
+                          )}
+                        {onPromise && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onPromise(invoice)}
+                            className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                            title="Log a promise to pay"
+                          >
+                            <CalendarClock className="mr-1 h-4 w-4" />
+                            Promise
                           </Button>
                         )}
                         {onPayOnline && (

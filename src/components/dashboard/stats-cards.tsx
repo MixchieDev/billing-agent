@@ -56,7 +56,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
       {cards.map((card) => (
         <Card key={card.title}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
               {card.title}
             </CardTitle>
             <div className={`rounded-full p-2 ${card.bgColor}`}>
@@ -65,7 +65,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{card.value}</div>
-            <p className="text-xs text-gray-500">{card.subvalue}</p>
+            <p className="text-xs text-muted-foreground">{card.subvalue}</p>
           </CardContent>
         </Card>
       ))}

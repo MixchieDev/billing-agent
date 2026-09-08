@@ -45,19 +45,19 @@ export function DeleteConfirmationModal({
       />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div className="relative bg-card rounded-lg shadow-xl max-w-md w-full mx-4">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-red-100 rounded-full">
               <AlertTriangle className="h-5 w-5 text-red-600" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+            <h3 className="text-lg font-semibold text-foreground">{title}</h3>
           </div>
           <button
             onClick={onClose}
             disabled={isDeleting}
-            className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+            className="text-muted-foreground hover:text-muted-foreground disabled:opacity-50"
           >
             <X className="h-5 w-5" />
           </button>
@@ -65,20 +65,20 @@ export function DeleteConfirmationModal({
 
         {/* Body */}
         <div className="p-4">
-          <p className="text-gray-600">{message}</p>
+          <p className="text-muted-foreground">{message}</p>
           {itemName && (
-            <p className="mt-2 font-medium text-gray-900 bg-gray-50 p-2 rounded">
+            <p className="mt-2 font-medium text-foreground bg-muted p-2 rounded">
               {itemName}
             </p>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 p-4 border-t bg-gray-50 rounded-b-lg">
+        <div className="flex justify-end gap-3 p-4 border-t bg-muted rounded-b-lg">
           <button
             onClick={onClose}
             disabled={isDeleting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-md hover:bg-muted disabled:opacity-50"
           >
             Cancel
           </button>

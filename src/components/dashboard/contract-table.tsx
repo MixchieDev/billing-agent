@@ -59,7 +59,7 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
   };
 
   return (
-    <div className="rounded-lg border bg-white">
+    <div className="rounded-lg border bg-card">
       <Table>
         <TableHeader>
           <TableRow>
@@ -77,7 +77,7 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
         <TableBody>
           {contracts.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={9} className="h-24 text-center text-gray-500">
+              <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                 No contracts found
               </TableCell>
             </TableRow>
@@ -85,9 +85,9 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
             contracts.map((contract) => (
               <TableRow
                 key={contract.id}
-                className="hover:bg-gray-50"
+                className="hover:bg-muted"
               >
-                <TableCell className="font-mono text-sm text-gray-600">
+                <TableCell className="font-mono text-sm text-muted-foreground">
                   {contract.customerNumber || '-'}
                 </TableCell>
                 <TableCell className="font-medium">{contract.companyName}</TableCell>
@@ -115,7 +115,7 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
                           e.stopPropagation();
                           onEdit(contract);
                         }}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        className="p-1.5 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                         title="Edit Contract"
                       >
                         <Pencil className="h-4 w-4" />
@@ -127,7 +127,7 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
                           e.stopPropagation();
                           onDelete(contract);
                         }}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                         title="Delete Contract"
                       >
                         <Trash2 className="h-4 w-4" />

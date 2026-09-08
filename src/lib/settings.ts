@@ -1,7 +1,7 @@
 import prisma from './prisma';
 
 // Default settings values
-const DEFAULTS: Record<string, any> = {
+export const DEFAULTS: Record<string, any> = {
   // SOA Template Settings
   'soa.yowi.bankName': 'BDO',
   'soa.yowi.bankAccountName': 'YAHSHUA OUTSOURCING WORLDWIDE INC.',
@@ -41,6 +41,23 @@ const DEFAULTS: Record<string, any> = {
     { value: 'COMPLIANCE', label: 'Compliance' },
     { value: 'HR', label: 'HR' },
   ],
+
+  // Collections ladder (days overdue at which each follow-up level fires; which
+  // levels the nightly sweep auto-sends). L4 (suspension) + PDC lead times are
+  // Phase 3.
+  'collections.l1Days': 1,
+  'collections.l2Days': 7,
+  'collections.l3Days': 15,
+  // Dormant by default: the nightly sweep evaluates the whole ladder and
+  // reports what it WOULD send, but mails nothing until an operator arms a
+  // level in Settings. Shipping this armed would chase the entire existing
+  // book on the first run, since lastFollowUpLevel starts at 0 for every
+  // invoice that predates the collections upgrade.
+  'collections.autoSendLevels': [],
+
+  // Contract renewals: how many days ahead of contractEndDate the nightly
+  // sweep raises a reminder. One reminder per renewal, not per night.
+  'renewals.leadDays': 45,
 };
 
 // Cache for settings (refreshed every 5 minutes)

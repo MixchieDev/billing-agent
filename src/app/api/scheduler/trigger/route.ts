@@ -39,10 +39,51 @@ export async function GET(request: NextRequest) {
     const { triggerBillingJob } = await import('@/lib/scheduler');
     const result = await triggerBillingJob();
 
+    // Second phase: the collections sweep (follow-up ladder + broken promises).
+    // Isolated so a sweep failure never breaks the billing run.
+    let collections;
+    try {
+      const { runCollectionsSweep } = await import('@/lib/collections-service');
+      const sweep = await runCollectionsSweep();
+      collections = {
+        invoicesScanned: sweep.invoicesScanned,
+        followUpsSent: sweep.followUpsSent,
+        promisesBroken: sweep.promisesBroken,
+        armedLevels: sweep.armedLevels,
+        // Report-only mode: what arming those levels would have sent.
+        wouldHaveSent: sweep.suppressedTotal,
+        wouldHaveSentByLevel: sweep.suppressed,
+      };
+      console.log('[Cron Trigger] Collections sweep:', collections);
+    } catch (sweepError) {
+      console.error('[Cron Trigger] Collections sweep failed:', sweepError);
+      collections = { error: sweepError instanceof Error ? sweepError.message : 'sweep failed' };
+    }
+
+    // Third phase: contract renewals. Isolated for the same reason — a renewal
+    // failure must not take down billing or collections.
+    let renewals;
+    try {
+      const { runRenewalSweep } = await import('@/lib/renewal-service');
+      const r = await runRenewalSweep();
+      renewals = {
+        leadDays: r.leadDays,
+        scanned: r.scanned,
+        reminded: r.reminded,
+        contractsWithNoEndDate: r.missingEndDate,
+      };
+      console.log('[Cron Trigger] Renewal sweep:', renewals);
+    } catch (renewalError) {
+      console.error('[Cron Trigger] Renewal sweep failed:', renewalError);
+      renewals = { error: renewalError instanceof Error ? renewalError.message : 'renewal sweep failed' };
+    }
+
     return NextResponse.json({
       message: 'Billing job triggered successfully',
       source,
       ...result,
+      collections,
+      renewals,
     });
   } catch (error) {
     console.error('[Cron Trigger] Error:', error);
@@ -72,10 +113,43 @@ export async function POST(request: NextRequest) {
     const { triggerBillingJob } = await import('@/lib/scheduler');
     const result = await triggerBillingJob();
 
+    let collections;
+    try {
+      const { runCollectionsSweep } = await import('@/lib/collections-service');
+      const sweep = await runCollectionsSweep();
+      collections = {
+        invoicesScanned: sweep.invoicesScanned,
+        followUpsSent: sweep.followUpsSent,
+        promisesBroken: sweep.promisesBroken,
+        armedLevels: sweep.armedLevels,
+        // Report-only mode: what arming those levels would have sent.
+        wouldHaveSent: sweep.suppressedTotal,
+        wouldHaveSentByLevel: sweep.suppressed,
+      };
+    } catch (sweepError) {
+      collections = { error: sweepError instanceof Error ? sweepError.message : 'sweep failed' };
+    }
+
+    let renewals;
+    try {
+      const { runRenewalSweep } = await import('@/lib/renewal-service');
+      const r = await runRenewalSweep();
+      renewals = {
+        leadDays: r.leadDays,
+        scanned: r.scanned,
+        reminded: r.reminded,
+        contractsWithNoEndDate: r.missingEndDate,
+      };
+    } catch (renewalError) {
+      renewals = { error: renewalError instanceof Error ? renewalError.message : 'renewal sweep failed' };
+    }
+
     return NextResponse.json({
       message: 'Billing job triggered successfully',
       source: 'manual',
       ...result,
+      collections,
+      renewals,
     });
   } catch (error) {
     console.error('[Cron Trigger] Error:', error);
