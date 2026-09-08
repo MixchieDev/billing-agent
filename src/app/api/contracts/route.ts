@@ -203,6 +203,7 @@ export async function POST(request: NextRequest) {
         monthlyFee: body.monthlyFee,
         paymentPlan: body.paymentPlan || null,
         contractStart: body.contractStart ? new Date(body.contractStart) : null,
+        contractEndDate: body.contractEndDate ? new Date(body.contractEndDate) : null,
         nextDueDate: body.nextDueDate ? new Date(body.nextDueDate) : null,
         status,
         vatType,

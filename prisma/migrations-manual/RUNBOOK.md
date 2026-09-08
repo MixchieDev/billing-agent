@@ -27,8 +27,8 @@ export DIRECT_URL="postgresql://...:5432/postgres"   # NOT 6543
 
 ## Step 1 — schema
 
-`001-collections-upgrade.sql` adds 1 enum value, 4 enum types, 11 columns and
-2 indexes. It is idempotent: re-running it changes nothing, and it has been
+`001-collections-upgrade.sql` adds 2 enum values, 4 enum types, 12 columns and
+3 indexes (collections plus contract renewals). It is idempotent: re-running it changes nothing, and it has been
 executed against staging to prove both.
 
 ```bash
@@ -77,7 +77,19 @@ invoice, and the sweep's `autoSendLevels`. Do not merge until it does.
 Only now. The branch is `feat/collections-pr9-wht2307` (19 commits, main already
 merged in).
 
-## Step 6 — confirm the sweep is still dormant
+## Step 6 — renewals
+
+The nightly job also raises renewal reminders, 45 days ahead by default
+(`renewals.leadDays` in Settings). It only ever creates in-app notifications —
+it never emails a client.
+
+Right after deploying, open **Renewals** and look at the "No renewal date"
+count. Every active contract without an end date can never trigger a reminder,
+and today that is **all 203 of them** — the field has never been captured. The
+feature is only as good as that backfill, so setting those dates is the real
+launch task.
+
+## Step 7 — confirm the collections sweep is still dormant
 
 The nightly sweep is wired into the existing daily cron, so deploying arms the
 schedule. It ships **dormant** — `collections.autoSendLevels` defaults to `[]`
@@ -112,6 +124,10 @@ hand would discard any payments recorded through the new path.
 
 ## Known state at time of writing (2026-09-08)
 
-Preflight against production says NOT READY, as expected — none of the 11
-columns, 4 tables or 4 enum types exist yet, and `InvoiceStatus` has no
-`PARTIALLY_PAID`. That is exactly what this runbook adds.
+Preflight against production says NOT READY, as expected — none of the 12
+columns, 4 tables or 4 enum types exist yet, and neither
+`InvoiceStatus.PARTIALLY_PAID` nor `NotificationType.CONTRACT_RENEWAL` is
+present. That is exactly what this runbook adds.
+
+203 of 203 active contracts have no `contractEndDate`. Nothing breaks — they
+simply show under "No renewal date" until someone fills them in.

@@ -54,6 +54,10 @@ export const DEFAULTS: Record<string, any> = {
   // book on the first run, since lastFollowUpLevel starts at 0 for every
   // invoice that predates the collections upgrade.
   'collections.autoSendLevels': [],
+
+  // Contract renewals: how many days ahead of contractEndDate the nightly
+  // sweep raises a reminder. One reminder per renewal, not per night.
+  'renewals.leadDays': 45,
 };
 
 // Cache for settings (refreshed every 5 minutes)

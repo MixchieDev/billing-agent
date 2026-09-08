@@ -7,6 +7,7 @@
 --     Deliberately OUTSIDE the transaction: Postgres will not let a value
 --     added by ALTER TYPE be used in the same transaction that adds it.
 ALTER TYPE "InvoiceStatus" ADD VALUE IF NOT EXISTS 'PARTIALLY_PAID';
+ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'CONTRACT_RENEWAL';
 
 BEGIN;
 
@@ -21,6 +22,7 @@ DO $$ BEGIN CREATE TYPE "Wht2307Status" AS ENUM ('NOT_APPLICABLE', 'PENDING', 'R
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- 2. new columns on existing tables ------------------------------------
+ALTER TABLE "Contract" ADD COLUMN IF NOT EXISTS "renewalNoticeAt" TIMESTAMP(3);
 ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "createdById" TEXT;
 ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "reviewFlag" "ReviewFlag" DEFAULT 'CHANGED'::"ReviewFlag" NOT NULL;
 ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "amountPaidTotal" DECIMAL(15,2) DEFAULT 0 NOT NULL;
@@ -34,6 +36,7 @@ ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "wht2307RequestCount" INTEGER DEF
 ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "wht2307RequestedAt" TIMESTAMP(3);
 
 -- 3. indexes -----------------------------------------------------------
+CREATE INDEX IF NOT EXISTS "Contract_contractEndDate_idx" ON public."Contract" USING btree ("contractEndDate");
 CREATE INDEX IF NOT EXISTS "Invoice_followUpPausedUntil_idx" ON public."Invoice" USING btree ("followUpPausedUntil");
 CREATE INDEX IF NOT EXISTS "Invoice_wht2307Status_idx" ON public."Invoice" USING btree ("wht2307Status");
 

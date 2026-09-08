@@ -72,6 +72,7 @@ export async function PATCH(
     const updateData: {
       autoSendEnabled?: boolean;
       contractEndDate?: Date | null;
+      renewalNoticeAt?: Date | null;
       billingDayOfMonth?: number | null;
       autoApprove?: boolean;
     } = {};
@@ -82,6 +83,9 @@ export async function PATCH(
 
     if (body.contractEndDate !== undefined) {
       updateData.contractEndDate = body.contractEndDate ? new Date(body.contractEndDate) : null;
+      // Moving the renewal date starts a new cycle, so clear the old reminder
+      // flag — otherwise a renewed contract would never be reminded again.
+      updateData.renewalNoticeAt = null;
     }
 
     if (body.billingDayOfMonth !== undefined) {
@@ -241,6 +245,9 @@ export async function PUT(
     if (typeof body.autoSendEnabled === 'boolean') updateData.autoSendEnabled = body.autoSendEnabled;
     if (body.contractEndDate !== undefined) {
       updateData.contractEndDate = body.contractEndDate ? new Date(body.contractEndDate) : null;
+      // Moving the renewal date starts a new cycle, so clear the old reminder
+      // flag — otherwise a renewed contract would never be reminded again.
+      updateData.renewalNoticeAt = null;
     }
     if (body.billingDayOfMonth !== undefined) {
       updateData.billingDayOfMonth = body.billingDayOfMonth || null;

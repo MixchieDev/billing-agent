@@ -29,6 +29,7 @@ interface Contract {
   monthlyFee: number;
   paymentPlan: string | null;
   contractStart: string | null;
+  contractEndDate: string | null;
   nextDueDate: string | null;
   status: string;
   vatType: string;
@@ -82,6 +83,7 @@ export function ContractFormModal({
     monthlyFee: '',
     paymentPlan: 'Monthly',
     contractStart: '',
+    contractEndDate: '',
     nextDueDate: '',
     status: 'ACTIVE',
     vatType: 'VAT',
@@ -106,6 +108,7 @@ export function ContractFormModal({
         monthlyFee: contract.monthlyFee?.toString() || '',
         paymentPlan: contract.paymentPlan || 'Monthly',
         contractStart: contract.contractStart ? contract.contractStart.split('T')[0] : '',
+        contractEndDate: contract.contractEndDate ? contract.contractEndDate.split('T')[0] : '',
         nextDueDate: contract.nextDueDate ? contract.nextDueDate.split('T')[0] : '',
         status: contract.status || 'ACTIVE',
         vatType: contract.vatType || 'VAT',
@@ -128,6 +131,7 @@ export function ContractFormModal({
         monthlyFee: '',
         paymentPlan: 'Monthly',
         contractStart: '',
+        contractEndDate: '',
         nextDueDate: '',
         status: 'ACTIVE',
         vatType: 'VAT',
@@ -170,6 +174,7 @@ export function ContractFormModal({
           ...formData,
           monthlyFee: parseFloat(formData.monthlyFee) || 0,
           contractStart: formData.contractStart || null,
+          contractEndDate: formData.contractEndDate || null,
           nextDueDate: formData.nextDueDate || null,
         }),
       });
@@ -387,6 +392,22 @@ export function ContractFormModal({
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Renewal Date
+              </label>
+              <input
+                type="date"
+                name="contractEndDate"
+                value={formData.contractEndDate}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                When this contract comes up for renewal. Leave blank only if it
+                genuinely has no end date &mdash; blanks are listed as untracked.
+              </p>
             </div>
           </div>
 

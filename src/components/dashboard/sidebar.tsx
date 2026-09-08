@@ -28,6 +28,7 @@ import {
   CalendarClock,
   Receipt,
   BrushCleaning,
+  CalendarSync,
 } from 'lucide-react';
 
 const navigation = [
@@ -37,6 +38,7 @@ const navigation = [
   { name: 'Promises to Pay', href: '/dashboard/promises', icon: CalendarClock },
   { name: '2307 Certificates', href: '/dashboard/wht2307', icon: Receipt },
   { name: 'Invoice Cleanup', href: '/dashboard/cleanup', icon: BrushCleaning },
+  { name: 'Renewals', href: '/dashboard/renewals', icon: CalendarSync },
   { name: 'Pending Approval', href: '/dashboard/pending', icon: Clock },
   { name: 'Approved', href: '/dashboard/approved', icon: CheckCircle },
   { name: 'Rejected', href: '/dashboard/rejected', icon: XCircle },

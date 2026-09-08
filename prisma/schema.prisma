@@ -203,6 +203,9 @@ model Contract {
   emails            String?
   address           String?
   customerNumber    String?            @unique
+  /// Last time a renewal reminder went out for this contract, so the nightly
+  /// sweep reminds once per renewal rather than every night for 45 days.
+  renewalNoticeAt   DateTime?
   billingEntity     Company            @relation(fields: [billingEntityId], references: [id])
   partner           Partner?           @relation(fields: [partnerId], references: [id])
   lineItems         InvoiceLineItem[]
@@ -215,6 +218,7 @@ model Contract {
   @@index([nextDueDate])
   @@index([createdAt])
   @@index([status, nextDueDate])
+  @@index([contractEndDate])
 }
 
 model Invoice {
@@ -739,6 +743,7 @@ enum NotificationType {
   SCHEDULE_APPROVED
   SCHEDULE_REJECTED
   INVOICE_VOID
+  CONTRACT_RENEWAL
 }
 
 enum ScheduleStatus {

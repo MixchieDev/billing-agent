@@ -60,11 +60,30 @@ export async function GET(request: NextRequest) {
       collections = { error: sweepError instanceof Error ? sweepError.message : 'sweep failed' };
     }
 
+    // Third phase: contract renewals. Isolated for the same reason — a renewal
+    // failure must not take down billing or collections.
+    let renewals;
+    try {
+      const { runRenewalSweep } = await import('@/lib/renewal-service');
+      const r = await runRenewalSweep();
+      renewals = {
+        leadDays: r.leadDays,
+        scanned: r.scanned,
+        reminded: r.reminded,
+        contractsWithNoEndDate: r.missingEndDate,
+      };
+      console.log('[Cron Trigger] Renewal sweep:', renewals);
+    } catch (renewalError) {
+      console.error('[Cron Trigger] Renewal sweep failed:', renewalError);
+      renewals = { error: renewalError instanceof Error ? renewalError.message : 'renewal sweep failed' };
+    }
+
     return NextResponse.json({
       message: 'Billing job triggered successfully',
       source,
       ...result,
       collections,
+      renewals,
     });
   } catch (error) {
     console.error('[Cron Trigger] Error:', error);
@@ -111,11 +130,26 @@ export async function POST(request: NextRequest) {
       collections = { error: sweepError instanceof Error ? sweepError.message : 'sweep failed' };
     }
 
+    let renewals;
+    try {
+      const { runRenewalSweep } = await import('@/lib/renewal-service');
+      const r = await runRenewalSweep();
+      renewals = {
+        leadDays: r.leadDays,
+        scanned: r.scanned,
+        reminded: r.reminded,
+        contractsWithNoEndDate: r.missingEndDate,
+      };
+    } catch (renewalError) {
+      renewals = { error: renewalError instanceof Error ? renewalError.message : 'renewal sweep failed' };
+    }
+
     return NextResponse.json({
       message: 'Billing job triggered successfully',
       source: 'manual',
       ...result,
       collections,
+      renewals,
     });
   } catch (error) {
     console.error('[Cron Trigger] Error:', error);
