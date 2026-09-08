@@ -246,7 +246,17 @@ export function InvoiceTable({
     return <Badge variant={variants[status] || 'secondary'}>{labels[status] || status}</Badge>;
   };
 
-  const getDaysUntilBadge = (dueDate: Date) => {
+  /**
+   * A countdown only means something while money is still owed. On a settled or
+   * closed invoice "12 days overdue" keeps ticking against a debt that no
+   * longer exists, which reads as a collections problem that isn't there.
+   */
+  const SETTLED_STATUSES = ['PAID', 'VOID', 'REJECTED'];
+
+  const getDaysUntilBadge = (dueDate: Date, status: string) => {
+    if (SETTLED_STATUSES.includes(status)) {
+      return <span className="text-muted-foreground">—</span>;
+    }
     const days = daysUntil(dueDate);
     if (days < 0) {
       return <Badge variant="destructive">{Math.abs(days)} days overdue</Badge>;
@@ -354,7 +364,7 @@ export function InvoiceTable({
                   {formatDateShort(invoice.createdAt)}
                 </TableCell>
                 <TableCell>{formatDateShort(invoice.dueDate)}</TableCell>
-                <TableCell>{getDaysUntilBadge(invoice.dueDate)}</TableCell>
+                <TableCell>{getDaysUntilBadge(invoice.dueDate, invoice.status)}</TableCell>
                 <TableCell>
                   <Badge
                     variant={invoice.billingEntity === 'YOWI' ? 'default' : 'secondary'}
