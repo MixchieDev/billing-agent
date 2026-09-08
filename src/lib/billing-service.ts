@@ -249,6 +249,9 @@ export async function createInvoiceFromContract(params: CreateInvoiceParams) {
       grossAmount: calculation.grossAmount,
       withholdingTax: calculation.withholdingTax,
       netAmount: calculation.netAmount,
+      // Nothing collected yet, so the whole net is outstanding. Set at creation
+      // or the collections views read NULL on every newly billed invoice.
+      balanceDue: calculation.netAmount,
       vatType: contract.vatType,
       hasWithholding: params.hasWithholding ?? false,
       withholdingCode: params.hasWithholding ? 'WC160' : null,

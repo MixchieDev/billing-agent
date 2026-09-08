@@ -186,6 +186,7 @@ export async function generateRcbcInvoice(monthStr: string, userId: string): Pro
       grossAmount: summary.grossAmount,
       withholdingTax: summary.withholdingTax,
       netAmount: summary.netAmount,
+      balanceDue: summary.netAmount,
       vatType: VatType.VAT,
       hasWithholding: true,
       withholdingCode: 'WC160',

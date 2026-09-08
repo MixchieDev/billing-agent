@@ -296,6 +296,7 @@ export async function generateInvoice(
       grossAmount: totalGrossAmount,
       withholdingTax: totalWithholdingTax,
       netAmount: totalNetAmount,
+      balanceDue: totalNetAmount,
       discountAmount: totalDiscountAmount > 0 ? totalDiscountAmount : null,
       vatType: request.vatType ?? VatType.VAT,
       hasWithholding: hasWithholding,
