@@ -17,7 +17,7 @@ const CSVImportModal = dynamic(
   { ssr: false }
 );
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Loader2, Upload, Plus, Search, X } from 'lucide-react';
+import { RefreshCw, Loader2, Upload, Download, Plus, Search, X } from 'lucide-react';
 import { useProductTypes } from '@/lib/hooks/use-api';
 
 interface Partner {
@@ -78,6 +78,7 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
   const [total, setTotal] = useState(initialData?.total ?? 0);
   // Book-wide annual value across the current filters, not just this page.
   const [bookValue, setBookValue] = useState<{ count: number; annual: number } | null>(null);
+  const [exporting, setExporting] = useState(false);
   const limit = 50;
 
   // Modal states
@@ -210,6 +211,47 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
     setShowFormModal(true);
   };
 
+  /**
+   * Exports every contract matching the CURRENT filters — not just the page on
+   * screen. The same params the list uses, minus pagination.
+   */
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      setError(null);
+
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      if (statusFilter) params.set('status', statusFilter);
+      if (billingEntityFilter) params.set('billingEntity', billingEntityFilter);
+      if (productTypeFilter) params.set('productType', productTypeFilter);
+
+      const response = await fetch(`/api/contracts/export?${params.toString()}`);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Export failed');
+      }
+
+      const disposition = response.headers.get('Content-Disposition');
+      const match = disposition?.match(/filename="(.+)"/);
+      const filename = match ? match[1] : 'Contracts.csv';
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleEditContract = async (contract: ContractRow) => {
     // Fetch full contract details
     try {
@@ -336,6 +378,11 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
             <Button variant="outline" onClick={fetchContracts} disabled={loading}>
               <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
+            </Button>
+
+            <Button variant="outline" onClick={handleExport} disabled={exporting || loading}>
+              <Download className="mr-2 h-4 w-4" />
+              {exporting ? 'Exporting…' : 'Export CSV'}
             </Button>
 
             <Button variant="outline" onClick={() => setShowImportModal(true)}>
