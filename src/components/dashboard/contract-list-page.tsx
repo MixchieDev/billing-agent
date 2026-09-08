@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Header } from '@/components/dashboard/header';
 import { ContractTable, ContractRow } from '@/components/dashboard/contract-table';
+import { formatCurrency } from '@/lib/utils';
 import { DeleteConfirmationModal } from '@/components/dashboard/delete-confirmation-modal';
 
 // Lazy-load heavy modals (only mounted when opened).
@@ -75,6 +76,8 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(initialData?.totalPages ?? 1);
   const [total, setTotal] = useState(initialData?.total ?? 0);
+  // Book-wide annual value across the current filters, not just this page.
+  const [bookValue, setBookValue] = useState<{ count: number; annual: number } | null>(null);
   const limit = 50;
 
   // Modal states
@@ -136,6 +139,7 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
         companyName: contract.companyName,
         productType: contract.productType,
         monthlyFee: Number(contract.monthlyFee),
+        billingType: contract.billingType ?? 'RECURRING',
         status: contract.status,
         nextDueDate: contract.nextDueDate ? new Date(contract.nextDueDate) : null,
         billingEntity: contract.billingEntity?.code || 'YOWI',
@@ -148,6 +152,9 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
       }));
 
       setContracts(transformedContracts);
+      if (typeof data?.activeAnnualValue === 'number') {
+        setBookValue({ count: data.activeCount ?? 0, annual: data.activeAnnualValue });
+      }
     } catch (err: any) {
       setError(err.message);
       console.error('Error fetching contracts:', err);
@@ -245,6 +252,19 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
       <Header title="Contracts" subtitle="Manage client contracts and billing agreements" />
 
       <div className="flex-1 space-y-6 p-6">
+        {/* Book value across the current filters — the table footer can only
+            total the rows on this page. */}
+        {bookValue && bookValue.count > 0 && (
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg border bg-card px-5 py-4">
+            <span className="text-2xl font-bold">{formatCurrency(bookValue.annual)}</span>
+            <span className="text-sm text-muted-foreground">annual contract value</span>
+            <span className="ml-auto text-sm text-muted-foreground">
+              {bookValue.count} active contract{bookValue.count === 1 ? '' : 's'} ·{' '}
+              {formatCurrency(bookValue.annual / 12)}/mo
+            </span>
+          </div>
+        )}
+
         {/* Actions bar */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">

@@ -94,9 +94,21 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Annualised value of the whole filtered set, not just this page — the
+    // table footer can only total the 50 rows it can see.
+    const activeAgg = await prisma.contract.aggregate({
+      where: { ...where, status: ContractStatus.ACTIVE },
+      _sum: { monthlyFee: true },
+      _count: true,
+    });
+    const activeMonthly = Number(activeAgg._sum.monthlyFee ?? 0);
+
     return NextResponse.json({
       contracts,
       total,
+      activeCount: activeAgg._count,
+      activeMonthlyValue: activeMonthly,
+      activeAnnualValue: activeMonthly * 12,
       page: fetchAll ? 1 : page,
       limit: fetchAll ? total : limit,
       totalPages: fetchAll ? 1 : Math.max(1, Math.ceil(total / Math.max(limit, 1))),

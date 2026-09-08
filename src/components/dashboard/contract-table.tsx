@@ -6,6 +6,7 @@ import {
   TableCell,
   TableHead,
   TableHeader,
+  TableFooter,
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +20,7 @@ export interface ContractRow {
   companyName: string;
   productType: string;
   monthlyFee: number;
+  billingType?: 'RECURRING' | 'ONE_TIME' | null;
   status: 'ACTIVE' | 'INACTIVE' | 'STOPPED' | 'NOT_STARTED';
   nextDueDate: Date | null;
   billingEntity: 'YOWI' | 'ABBA';
@@ -58,6 +60,20 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
     return <Badge variant="outline">{productType}</Badge>;
   };
 
+  /**
+   * Annualised value of a recurring contract. One-time contracts have no annual
+   * run-rate, so they show the fee itself rather than a fabricated x12.
+   */
+  const annualValue = (c: { monthlyFee: number; billingType?: string | null }) =>
+    c.billingType === 'ONE_TIME'
+      ? formatCurrency(c.monthlyFee)
+      : formatCurrency(c.monthlyFee * 12);
+
+  const bookAnnual = contracts
+    .filter((c) => c.status === 'ACTIVE')
+    .reduce((sum, c) => sum + (c.billingType === 'ONE_TIME' ? c.monthlyFee : c.monthlyFee * 12), 0);
+  const activeCount = contracts.filter((c) => c.status === 'ACTIVE').length;
+
   return (
     <div className="rounded-lg border bg-card">
       <Table>
@@ -68,6 +84,7 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
             <TableHead>Partner</TableHead>
             <TableHead>Product Type</TableHead>
             <TableHead className="text-right">Monthly Fee</TableHead>
+            <TableHead className="text-right">Annual Value</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Next Due Date</TableHead>
             <TableHead>Billing Entity</TableHead>
@@ -77,7 +94,7 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
         <TableBody>
           {contracts.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+              <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
                 No contracts found
               </TableCell>
             </TableRow>
@@ -98,6 +115,9 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
                 </TableCell>
                 <TableCell>{getProductBadge(contract.productType)}</TableCell>
                 <TableCell className="text-right">{formatCurrency(contract.monthlyFee)}</TableCell>
+                <TableCell className="text-right font-medium">
+                  {annualValue(contract)}
+                </TableCell>
                 <TableCell>{getStatusBadge(contract.status)}</TableCell>
                 <TableCell>
                   {contract.nextDueDate ? formatDateShort(contract.nextDueDate) : '-'}
@@ -139,6 +159,22 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
             ))
           )}
         </TableBody>
+        {contracts.length > 0 && (
+          <TableFooter>
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={4} className="text-muted-foreground">
+                {activeCount} active contract{activeCount === 1 ? '' : 's'} on this page
+              </TableCell>
+              <TableCell className="text-right text-muted-foreground">
+                {formatCurrency(bookAnnual / 12)}/mo
+              </TableCell>
+              <TableCell className="text-right font-semibold">
+                {formatCurrency(bookAnnual)}
+              </TableCell>
+              <TableCell colSpan={4} />
+            </TableRow>
+          </TableFooter>
+        )}
       </Table>
     </div>
   );
