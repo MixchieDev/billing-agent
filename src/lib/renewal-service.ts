@@ -57,35 +57,63 @@ export function renewalStage(days: number, leadDays: number): RenewalStage {
   return 'later';
 }
 
+/** What the sweep should raise for a contract tonight, if anything. */
+export type NoticeKind = 'reminder' | 'lapsed' | null;
+
 /**
- * Should tonight's sweep remind about this contract?
+ * Decide tonight's notice for one contract.
  *
- * Fires when the contract is inside the lead window and we haven't already
- * reminded for THIS renewal. Deliberately `days <= leadDays` rather than
- * `days === leadDays`: an exact-day test would miss any contract already
- * inside the window when this shipped, and would skip a day entirely if the
- * cron failed to run — the two ways a renewal actually gets missed.
+ * Two moments matter, and both are once-only:
  *
- * A reminder sent before the contract's end date counts for that renewal; once
- * the end date moves (the contract was renewed), the old notice is stale and
- * the next cycle reminds again.
+ *  - `reminder` — the contract has entered the lead window. Deliberately
+ *    `days <= leadDays` rather than `days === leadDays`: an exact-day test
+ *    would skip any contract already inside the window when this shipped, and
+ *    would skip a renewal entirely if the cron missed that one night.
+ *
+ *  - `lapsed` — the end date has passed without the contract being renewed.
+ *    Without this a lapse is silent: it sits on the Renewals page waiting for
+ *    someone to notice, which is the exact failure this feature exists to
+ *    prevent. It also catches contracts that lapsed BEFORE this shipped, since
+ *    they have no notice recorded at all.
+ *
+ * Both phases share `renewalNoticeAt`, distinguished by where it sits relative
+ * to the end date: a reminder is always written before the end date, a lapse
+ * notice always after. So a notice on or before the end date means the lapse
+ * alert is still owed; one after it means the lapse has already been raised.
  */
+export function noticeDue(
+  contractEnd: Date,
+  noticeSentAt: Date | null,
+  today: Date,
+  leadDays: number
+): NoticeKind {
+  const days = daysUntil(contractEnd, today);
+
+  if (days < 0) {
+    // Lapsed. Raise once, then stay quiet.
+    if (!noticeSentAt) return 'lapsed';
+    return noticeSentAt.getTime() <= contractEnd.getTime() ? 'lapsed' : null;
+  }
+
+  if (days > leadDays) return null; // not yet in the window
+
+  if (!noticeSentAt) return 'reminder';
+  // A notice only counts for THIS renewal if it was sent after this renewal's
+  // window opened. An older one belongs to a previous cycle — the contract has
+  // since been renewed and the end date moved — so it must not suppress the
+  // new reminder.
+  const windowOpened = contractEnd.getTime() - leadDays * 86_400_000;
+  return noticeSentAt.getTime() < windowOpened ? 'reminder' : null;
+}
+
+/** Back-compat: true when a lead-time reminder is due. */
 export function needsNotice(
   contractEnd: Date,
   noticeSentAt: Date | null,
   today: Date,
   leadDays: number
 ): boolean {
-  const days = daysUntil(contractEnd, today);
-  if (days > leadDays) return false; // not yet in the window
-  if (days < 0) return false; // already lapsed — the list shows it, don't re-mail
-  if (!noticeSentAt) return true;
-  // A notice only counts for THIS renewal if it was sent after this renewal's
-  // window opened. An older one belongs to a previous cycle — the contract has
-  // since been renewed and the end date moved — so it must not suppress the
-  // new reminder.
-  const windowOpened = contractEnd.getTime() - leadDays * 86_400_000;
-  return noticeSentAt.getTime() < windowOpened;
+  return noticeDue(contractEnd, noticeSentAt, today, leadDays) === 'reminder';
 }
 
 async function leadDaysSetting(): Promise<number> {
@@ -164,7 +192,9 @@ export interface RenewalSweepResult {
   leadDays: number;
   scanned: number;
   reminded: number;
-  contracts: { id: string; companyName: string; daysUntil: number }[];
+  contracts: { id: string; companyName: string; daysUntil: number; kind: NoticeKind }[];
+  /** Of `reminded`, how many were lapse alerts rather than lead-time reminders. */
+  lapsed: number;
   missingEndDate: number;
 }
 
@@ -186,24 +216,31 @@ export async function runRenewalSweep(today: Date = new Date()): Promise<Renewal
     },
   });
 
-  const due = active.filter((c) =>
-    needsNotice(c.contractEndDate!, c.renewalNoticeAt, today, leadDays)
-  );
+  const due = active
+    .map((c) => ({ c, kind: noticeDue(c.contractEndDate!, c.renewalNoticeAt, today, leadDays) }))
+    .filter((x): x is { c: (typeof active)[number]; kind: 'reminder' | 'lapsed' } => x.kind !== null);
 
-  const contracts: { id: string; companyName: string; daysUntil: number }[] = [];
-  for (const c of due) {
+  const contracts: { id: string; companyName: string; daysUntil: number; kind: NoticeKind }[] = [];
+  let lapsed = 0;
+  for (const { c, kind } of due) {
     const days = daysUntil(c.contractEndDate!, today);
+    const endStr = c.contractEndDate!.toISOString().slice(0, 10);
+    const fee = Number(c.monthlyFee).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+    if (kind === 'lapsed') lapsed++;
     await prisma.notification.create({
       data: {
         type: NotificationType.CONTRACT_RENEWAL,
-        title: `Renewal in ${days} day${days === 1 ? '' : 's'}: ${c.companyName}`,
+        title:
+          kind === 'lapsed'
+            ? `Contract LAPSED: ${c.companyName}`
+            : `Renewal in ${days} day${days === 1 ? '' : 's'}: ${c.companyName}`,
         message:
-          `${c.companyName} (${c.billingEntity?.code ?? ''}) is up for renewal on ` +
-          `${c.contractEndDate!.toISOString().slice(0, 10)} — ` +
-          `${days} day${days === 1 ? '' : 's'} away. Monthly fee ${Number(c.monthlyFee).toLocaleString(
-            'en-PH',
-            { minimumFractionDigits: 2 }
-          )}.`,
+          kind === 'lapsed'
+            ? `${c.companyName} (${c.billingEntity?.code ?? ''}) passed its renewal date on ` +
+              `${endStr}, ${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} ago, and has not ` +
+              `been renewed. Monthly fee ${fee} is still being billed.`
+            : `${c.companyName} (${c.billingEntity?.code ?? ''}) is up for renewal on ` +
+              `${endStr} — ${days} day${days === 1 ? '' : 's'} away. Monthly fee ${fee}.`,
         link: '/dashboard/renewals',
         entityType: 'Contract',
         entityId: c.id,
@@ -213,12 +250,19 @@ export async function runRenewalSweep(today: Date = new Date()): Promise<Renewal
       where: { id: c.id },
       data: { renewalNoticeAt: today },
     });
-    contracts.push({ id: c.id, companyName: c.companyName, daysUntil: days });
+    contracts.push({ id: c.id, companyName: c.companyName, daysUntil: days, kind });
   }
 
   const missingEndDate = await prisma.contract.count({
     where: { status: ContractStatus.ACTIVE, contractEndDate: null },
   });
 
-  return { leadDays, scanned: active.length, reminded: contracts.length, contracts, missingEndDate };
+  return {
+    leadDays,
+    scanned: active.length,
+    reminded: contracts.length,
+    lapsed,
+    contracts,
+    missingEndDate,
+  };
 }

@@ -1,4 +1,4 @@
-import { daysUntil, renewalStage, needsNotice, DEFAULT_LEAD_DAYS } from '@/lib/renewal-service';
+import { daysUntil, renewalStage, needsNotice, noticeDue, DEFAULT_LEAD_DAYS } from '@/lib/renewal-service';
 
 const d = (s: string) => new Date(`${s}T00:00:00Z`);
 const TODAY = d('2026-09-08');
@@ -89,5 +89,52 @@ describe('needsNotice — the "no renewal is missed" guarantee', () => {
     expect(needsNotice(d('2026-10-23'), null, TODAY, 30)).toBe(false); // 45 out, 30-day lead
     expect(needsNotice(d('2026-10-08'), null, TODAY, 30)).toBe(true); // 30 out
     expect(needsNotice(d('2026-11-07'), null, TODAY, 90)).toBe(true); // 60 out, 90-day lead
+  });
+});
+
+describe('lapse alerts — a contract must not lapse silently', () => {
+  const offsets = { lead: 45 };
+  const LEADD = offsets.lead;
+
+  it('raises a lapse alert once the end date has passed', () => {
+    expect(noticeDue(d('2026-09-07'), null, TODAY, LEADD)).toBe('lapsed');
+    expect(noticeDue(d('2026-08-10'), null, TODAY, LEADD)).toBe('lapsed');
+  });
+
+  it('catches contracts that lapsed long before this shipped', () => {
+    // No notice was ever recorded for these — they must still surface.
+    expect(noticeDue(d('2026-03-08'), null, TODAY, LEADD)).toBe('lapsed');
+    expect(noticeDue(d('2025-01-01'), null, TODAY, LEADD)).toBe('lapsed');
+  });
+
+  it('still alerts after a lead-time reminder was already sent', () => {
+    // Reminded on 20 Sep for a 1 Oct renewal; by 8 Oct it has lapsed.
+    const end = d('2026-10-01');
+    const reminded = d('2026-09-20');
+    expect(noticeDue(end, reminded, d('2026-10-08'), LEADD)).toBe('lapsed');
+  });
+
+  it('raises the lapse alert only once', () => {
+    const end = d('2026-08-10');
+    const lapseNotice = d('2026-08-11'); // written after the end date
+    expect(noticeDue(end, lapseNotice, TODAY, LEADD)).toBeNull();
+    expect(noticeDue(end, lapseNotice, d('2026-12-01'), LEADD)).toBeNull();
+  });
+
+  it('treats a notice written on the end date itself as still owing the alert', () => {
+    const end = d('2026-09-01');
+    expect(noticeDue(end, end, TODAY, LEADD)).toBe('lapsed');
+  });
+
+  it('reminds again for the next cycle once the contract is renewed', () => {
+    // Lapse alert sent Aug 2026; contract later renewed to Oct 2027.
+    const lapseNotice = d('2026-08-11');
+    expect(noticeDue(d('2027-10-01'), lapseNotice, d('2027-09-01'), LEADD)).toBe('reminder');
+  });
+
+  it('does not confuse the two phases', () => {
+    expect(noticeDue(d('2026-10-23'), null, TODAY, LEADD)).toBe('reminder'); // 45 out
+    expect(noticeDue(d('2026-11-07'), null, TODAY, LEADD)).toBeNull(); // 60 out
+    expect(noticeDue(TODAY, null, TODAY, LEADD)).toBe('reminder'); // due today, not lapsed
   });
 });

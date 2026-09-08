@@ -70,6 +70,7 @@ export async function GET(request: NextRequest) {
         leadDays: r.leadDays,
         scanned: r.scanned,
         reminded: r.reminded,
+        lapsedAlerts: r.lapsed,
         contractsWithNoEndDate: r.missingEndDate,
       };
       console.log('[Cron Trigger] Renewal sweep:', renewals);
@@ -138,6 +139,7 @@ export async function POST(request: NextRequest) {
         leadDays: r.leadDays,
         scanned: r.scanned,
         reminded: r.reminded,
+        lapsedAlerts: r.lapsed,
         contractsWithNoEndDate: r.missingEndDate,
       };
     } catch (renewalError) {
