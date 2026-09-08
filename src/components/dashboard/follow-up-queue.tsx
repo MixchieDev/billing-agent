@@ -13,9 +13,11 @@ import { useApi } from '@/lib/hooks/use-api';
 import { formatCurrency, formatDateShort } from '@/lib/utils';
 import {
   RefreshCw, Loader2, MailWarning, CalendarClock, Moon, CheckCircle2, AlertTriangle,
+  CalendarSync,
 } from 'lucide-react';
 import { DataState } from '@/components/dashboard/data-state';
 import { format } from 'date-fns';
+import Link from 'next/link';
 
 type QueueCategory = 'BROKEN_PROMISE' | 'NO_EMAIL' | 'MAXED' | 'REVIEW';
 
@@ -45,6 +47,19 @@ interface QueueData {
     status: string;
     invoice: { id: string; billingNo: string | null; customerName: string; company: { code: string } | null };
   }>;
+  renewalsDue: Array<{
+    id: string;
+    companyName: string;
+    productType: string;
+    entity: string;
+    monthlyFee: number;
+    contractEndDate: string;
+    daysUntil: number;
+    stage: 'overdue' | 'due' | 'soon' | 'later';
+    contactPerson: string | null;
+    email: string | null;
+  }>;
+  renewalMeta: { leadDays: number; missingCount: number };
   settings: { offsets: Record<number, number>; autoSendLevels: number[] };
 }
 
@@ -63,6 +78,10 @@ export function FollowUpQueue() {
 
   const needsAction = useMemo(
     () => (data?.needsAction ?? []).filter((r) => entityFilter === 'ALL' || r.entity === entityFilter),
+    [data, entityFilter]
+  );
+  const renewalsDue = useMemo(
+    () => (data?.renewalsDue ?? []).filter((r) => entityFilter === 'ALL' || r.entity === entityFilter),
     [data, entityFilter]
   );
   const autoTonight = useMemo(
@@ -223,6 +242,60 @@ export function FollowUpQueue() {
                 onRetry={() => mutate()}
                 emptyMessage="Nothing needs a human right now. 🎉"
               />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 2 — Renewals. Same worklist: a lapsing contract needs a human the
+            same way a broken promise does, and a bell nobody opens is a miss. */}
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-2">
+            <CalendarSync className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base">
+              Renewals needing a call {data && <span className="font-normal text-muted-foreground">({renewalsDue.length})</span>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {renewalsDue.length > 0 ? (
+              <ul className="divide-y divide-border">
+                {renewalsDue.map((r) => (
+                  <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Badge variant={r.daysUntil < 0 ? 'destructive' : 'warning'}>
+                        {r.daysUntil < 0 ? `${Math.abs(r.daysUntil)}d ago` : `${r.daysUntil}d`}
+                      </Badge>
+                      <Badge variant="outline">{r.entity}</Badge>
+                      <span className="truncate">
+                        <span className="font-medium">{r.companyName}</span>
+                        <span className="text-muted-foreground">
+                          {' · renews '}{format(new Date(r.contractEndDate), 'MMM d, yyyy')}
+                          {r.contactPerson ? ` · ${r.contactPerson}` : ''}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatCurrency(r.monthlyFee)}/mo
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <DataState
+                isLoading={isLoading}
+                error={error}
+                subject="renewals"
+                onRetry={() => mutate()}
+                emptyMessage={`Nothing renewing in the next ${data?.renewalMeta?.leadDays ?? 45} days.`}
+              />
+            )}
+            {!!data?.renewalMeta?.missingCount && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                <Link href="/dashboard/renewals" className="underline underline-offset-4">
+                  {data.renewalMeta.missingCount} active contract
+                  {data.renewalMeta.missingCount === 1 ? ' has' : 's have'} no renewal date
+                </Link>
+                {' '}— those can never appear here.
+              </p>
             )}
           </CardContent>
         </Card>

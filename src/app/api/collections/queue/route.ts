@@ -6,6 +6,7 @@ import { getSettings } from '@/lib/settings';
 import { decideFollowUp } from '@/lib/collections-service';
 import { calculateDaysOverdue } from '@/lib/follow-up-service';
 import { subDays } from 'date-fns';
+import { loadRenewals } from '@/lib/renewal-service';
 
 const MAX_LEVEL = 3;
 
@@ -42,9 +43,12 @@ export async function GET() {
       2: Number(s['collections.l2Days']),
       3: Number(s['collections.l3Days']),
     };
+    // Must match runCollectionsSweep's fallback exactly — this queue claims to
+    // be a faithful preview of the sweep, so a different default here would
+    // show invoices as "auto-sending tonight" that the sweep will never send.
     const autoSendLevels: number[] = Array.isArray(s['collections.autoSendLevels'])
       ? s['collections.autoSendLevels']
-      : [1, 2, 3];
+      : [];
 
     const [candidates, recentAuto] = await prisma.$transaction([
       // Overdue, chaseable, un-paused — same population the sweep scans, plus
@@ -174,10 +178,20 @@ export async function GET() {
       }
     }
 
+    // Renewals belong on the same worklist: a lapsing contract is as much a
+    // collections officer's job as an overdue invoice, and a reminder nobody
+    // opens is a reminder missed.
+    const { renewals, leadDays, missingCount } = await loadRenewals();
+    const renewalsDue = renewals
+      .filter((r) => r.stage === 'due' || r.stage === 'overdue')
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+
     return NextResponse.json({
       needsAction,
       autoTonight,
       recentAuto,
+      renewalsDue,
+      renewalMeta: { leadDays, missingCount },
       settings: { offsets, autoSendLevels },
     });
   } catch (error) {

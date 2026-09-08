@@ -109,6 +109,8 @@ export function NotificationDropdown() {
         return '📧';
       case 'INVOICE_OVERDUE':
         return '⚠️';
+      case 'CONTRACT_RENEWAL':
+        return '📅';
       default:
         return '🔔';
     }
