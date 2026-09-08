@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogoMark } from '@/components/logo';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -42,6 +43,9 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
+          <div className="mb-3 flex justify-center text-foreground">
+            <LogoMark className="h-11 w-11" />
+          </div>
           <CardTitle className="text-2xl">YAHSHUA-ABBA</CardTitle>
           <CardDescription>Billing Agent System</CardDescription>
         </CardHeader>

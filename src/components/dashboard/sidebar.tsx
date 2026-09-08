@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import { cn } from '@/lib/utils';
+import { Logo, LogoMark } from '@/components/logo';
 import {
   LayoutDashboard,
   FileText,
@@ -115,19 +116,15 @@ export function Sidebar() {
         collapsed ? 'w-16' : 'w-64'
       )}
     >
-      {/* Logo */}
-      <div className="flex h-16 items-center justify-center border-b border-sidebar-border">
+      {/* Logo. The mark carries the name when collapsed, so the separate
+          "Billing Agent" strip is no longer needed. */}
+      <div className="flex h-16 items-center justify-center border-b border-sidebar-border px-3 text-sidebar-foreground">
         {collapsed ? (
-          <span className="text-xl font-bold text-sidebar-foreground">YA</span>
+          <LogoMark className="h-8 w-8" />
         ) : (
-          <h1 className="text-xl font-bold text-sidebar-foreground">YAHSHUA-ABBA</h1>
+          <Logo markClassName="h-8 w-8 shrink-0" />
         )}
       </div>
-      {!collapsed && (
-        <div className="flex h-8 items-center justify-center bg-sidebar-accent">
-          <span className="text-xs text-muted-foreground">Billing Agent</span>
-        </div>
-      )}
 
       {/* Collapse Toggle */}
       <button
