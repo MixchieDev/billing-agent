@@ -13,6 +13,9 @@ import { Badge } from '@/components/ui/badge';
 import { formatCurrency, formatDateShort } from '@/lib/utils';
 import { Pencil, Trash2 } from 'lucide-react';
 
+/** Mirrors renewals.leadDays; a contract inside this window needs attention. */
+const RENEWAL_LEAD_DAYS = 45;
+
 export interface ContractRow {
   id: string;
   customerNumber?: string;
@@ -64,6 +67,46 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
    * Annualised value of a recurring contract. One-time contracts have no annual
    * run-rate, so they show the fee itself rather than a fabricated x12.
    */
+  /**
+   * A renewal date is only useful with its urgency attached — and a MISSING one
+   * matters more than any date shown, since a contract with no renewal date can
+   * never raise a reminder. It says so rather than showing a bare dash.
+   */
+  const renewalCell = (c: ContractRow) => {
+    if (!c.contractEndDate) {
+      return <span className="text-xs text-muted-foreground italic">not set</span>;
+    }
+    const end = c.contractEndDate;
+    // Read "now" per render, not at module load — a tab left open overnight
+    // would otherwise keep counting from yesterday.
+    const now = new Date();
+    const days = Math.round(
+      (Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()) -
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())) /
+        86_400_000
+    );
+    // Only an ACTIVE contract can meaningfully lapse or be chased for renewal.
+    const live = c.status === 'ACTIVE';
+    return (
+      <div className="text-sm">
+        <div>{formatDateShort(end)}</div>
+        {live && days < 0 && (
+          <Badge variant="destructive" className="mt-1">
+            lapsed {Math.abs(days)}d ago
+          </Badge>
+        )}
+        {live && days >= 0 && days <= RENEWAL_LEAD_DAYS && (
+          <Badge variant="warning" className="mt-1">
+            in {days}d
+          </Badge>
+        )}
+        {live && days > RENEWAL_LEAD_DAYS && (
+          <div className="text-xs text-muted-foreground">in {days}d</div>
+        )}
+      </div>
+    );
+  };
+
   const annualValue = (c: { monthlyFee: number; billingType?: string | null }) =>
     c.billingType === 'ONE_TIME'
       ? formatCurrency(c.monthlyFee)
@@ -87,6 +130,7 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
             <TableHead className="text-right">Annual Value</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Next Due Date</TableHead>
+            <TableHead>Renewal Date</TableHead>
             <TableHead>Billing Entity</TableHead>
             <TableHead className="text-center">Actions</TableHead>
           </TableRow>
@@ -94,7 +138,7 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
         <TableBody>
           {contracts.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
+              <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
                 No contracts found
               </TableCell>
             </TableRow>
@@ -122,6 +166,7 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
                 <TableCell>
                   {contract.nextDueDate ? formatDateShort(contract.nextDueDate) : '-'}
                 </TableCell>
+                <TableCell>{renewalCell(contract)}</TableCell>
                 <TableCell>
                   <Badge variant={contract.billingEntity === 'YOWI' ? 'default' : 'secondary'}>
                     {contract.billingEntity}
@@ -171,7 +216,7 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
               <TableCell className="text-right font-semibold">
                 {formatCurrency(bookAnnual)}
               </TableCell>
-              <TableCell colSpan={4} />
+              <TableCell colSpan={5} />
             </TableRow>
           </TableFooter>
         )}

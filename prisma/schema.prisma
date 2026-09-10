@@ -24,6 +24,7 @@ model User {
   rejections        Invoice[]          @relation("RejectedBy")
   voids             Invoice[]          @relation("VoidedBy")
   notifications     Notification[]
+  renewalDecisions  ContractRenewal[]
   schedulesApproved ScheduledBilling[] @relation("ScheduleApprovedBy")
   schedulesCreated  ScheduledBilling[] @relation("ScheduleCreatedBy")
   schedulesRejected ScheduledBilling[] @relation("ScheduleRejectedBy")
@@ -206,6 +207,7 @@ model Contract {
   /// Last time a renewal reminder went out for this contract, so the nightly
   /// sweep reminds once per renewal rather than every night for 45 days.
   renewalNoticeAt   DateTime?
+  renewals          ContractRenewal[]
   billingEntity     Company            @relation(fields: [billingEntityId], references: [id])
   partner           Partner?           @relation(fields: [partnerId], references: [id])
   lineItems         InvoiceLineItem[]
@@ -648,6 +650,39 @@ enum BillingModel {
   DIRECT
   GLOBE_INNOVE
   RCBC_CONSOLIDATED
+}
+
+/// What happened at the end of one contract term.
+enum RenewalOutcome {
+  RENEWED
+  NOT_RENEWING
+  LAPSED
+}
+
+/// One record per contract term ending — the answer to "did they renew?".
+/// Kept as history rather than a status field so last cycle's outcome survives
+/// the next one, which is what makes a renewal rate computable.
+model ContractRenewal {
+  id              String         @id @default(cuid())
+  contractId      String
+  outcome         RenewalOutcome
+  /// The end date this decision was about.
+  previousEndDate DateTime
+  /// Where the term moved to. Null for NOT_RENEWING and LAPSED.
+  newEndDate      DateTime?
+  /// Monthly fee before and after, so uplift or discount at renewal is visible.
+  previousFee     Decimal        @db.Decimal(15, 2)
+  newFee          Decimal?       @db.Decimal(15, 2)
+  note            String?
+  decidedById     String?
+  decidedAt       DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+
+  contract  Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  decidedBy User?    @relation(fields: [decidedById], references: [id])
+
+  @@index([contractId, decidedAt])
+  @@index([outcome, decidedAt])
 }
 
 enum ContractStatus {

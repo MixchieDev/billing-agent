@@ -131,3 +131,34 @@ present. That is exactly what this runbook adds.
 
 203 of 203 active contracts have no `contractEndDate`. Nothing breaks — they
 simply show under "No renewal date" until someone fills them in.
+
+
+---
+
+# Migration 002 — renewal outcome tracking
+
+Adds the `RenewalOutcome` enum and the `ContractRenewal` table, which records
+what happened at the end of each contract term — renewed, not renewing, or
+lapsed — with the old and new dates, the fee before and after, who decided and
+when. History rather than a status field, so last cycle's outcome survives the
+next one and a renewal rate is computable.
+
+Additive only. Run **after** 001, over the direct 5432 connection:
+
+```bash
+psql "$DIRECT_URL" -f prisma/migrations-manual/002-renewal-tracking.sql
+DATABASE_URL="$DIRECT_URL" npx prisma db push
+```
+
+`db push` should report creating **only** `ContractRenewal`. Then confirm:
+
+```bash
+DATABASE_URL="$DIRECT_URL" npx tsx prisma/migrations-manual/check-migration.ts
+```
+
+The enum SQL was executed against staging, where it already exists, to prove it
+is valid and re-runnable (1/1 statements, no change).
+
+Marking a contract "not renewing" deliberately does **not** stop its billing —
+the term stands and invoices keep generating until someone changes the contract
+status. Ending billing stays a separate, deliberate act.

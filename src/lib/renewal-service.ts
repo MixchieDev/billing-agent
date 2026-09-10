@@ -12,7 +12,7 @@
 
 import prisma from './prisma';
 import { getSettings } from './settings';
-import { ContractStatus, NotificationType } from '@/generated/prisma';
+import { ContractStatus, NotificationType, RenewalOutcome } from '@/generated/prisma';
 
 export const DEFAULT_LEAD_DAYS = 45;
 
@@ -30,6 +30,9 @@ export interface RenewalRow {
   contactPerson: string | null;
   email: string | null;
   noticeSentAt: string | null;
+  /** Most recent decided outcome, so the list shows what already happened. */
+  lastOutcome: 'RENEWED' | 'NOT_RENEWING' | 'LAPSED' | null;
+  lastDecidedAt: string | null;
 }
 
 /**
@@ -129,6 +132,7 @@ export async function loadRenewals(): Promise<{
   missingEndDate: { id: string; companyName: string; entity: string; monthlyFee: number }[];
   counts: Record<RenewalStage, number>;
   missingCount: number;
+  rate: RenewalRate;
 }> {
   const leadDays = await leadDaysSetting();
 
@@ -139,6 +143,11 @@ export async function loadRenewals(): Promise<{
         id: true, companyName: true, productType: true, monthlyFee: true,
         contractEndDate: true, contactPerson: true, email: true,
         renewalNoticeAt: true, billingEntity: { select: { code: true } },
+        renewals: {
+          orderBy: { decidedAt: 'desc' },
+          take: 1,
+          select: { outcome: true, decidedAt: true, newEndDate: true },
+        },
       },
       orderBy: { contractEndDate: 'asc' },
     }),
@@ -171,6 +180,8 @@ export async function loadRenewals(): Promise<{
       contactPerson: c.contactPerson,
       email: c.email,
       noticeSentAt: c.renewalNoticeAt ? c.renewalNoticeAt.toISOString() : null,
+      lastOutcome: c.renewals[0]?.outcome ?? null,
+      lastDecidedAt: c.renewals[0]?.decidedAt.toISOString() ?? null,
     };
   });
 
@@ -185,6 +196,7 @@ export async function loadRenewals(): Promise<{
     })),
     counts,
     missingCount: withoutEnd.length,
+    rate: await renewalRate(),
   };
 }
 
@@ -265,4 +277,123 @@ export async function runRenewalSweep(today: Date = new Date()): Promise<Renewal
     contracts,
     missingEndDate,
   };
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Recording what actually happened at the end of a term.
+ * ------------------------------------------------------------------ */
+
+export interface RecordRenewalInput {
+  contractId: string;
+  outcome: RenewalOutcome;
+  /** Required for RENEWED — where the term moves to. */
+  newEndDate?: Date | null;
+  /** Optional fee change agreed at renewal. */
+  newFee?: number | null;
+  note?: string | null;
+  userId?: string | null;
+}
+
+export interface RecordRenewalResult {
+  success: boolean;
+  message: string;
+}
+
+/**
+ * Record a renewal decision and move the contract to match it.
+ *
+ * The history row is the point: a status field would be overwritten by the
+ * next cycle, and then "did they renew last year?" is unanswerable. Writing
+ * history and mutating the contract together also means the contract can never
+ * show a term that no decision accounts for.
+ */
+export async function recordRenewal(input: RecordRenewalInput): Promise<RecordRenewalResult> {
+  const contract = await prisma.contract.findUnique({
+    where: { id: input.contractId },
+    select: { id: true, companyName: true, contractEndDate: true, monthlyFee: true, status: true },
+  });
+
+  if (!contract) return { success: false, message: 'Contract not found' };
+  if (!contract.contractEndDate) {
+    return {
+      success: false,
+      message: 'This contract has no renewal date, so there is no term to close out. Set one first.',
+    };
+  }
+
+  if (input.outcome === RenewalOutcome.RENEWED) {
+    if (!input.newEndDate) {
+      return { success: false, message: 'A renewed contract needs its new renewal date.' };
+    }
+    if (input.newEndDate.getTime() <= contract.contractEndDate.getTime()) {
+      return {
+        success: false,
+        message: 'The new renewal date must be after the current one — otherwise the term never moves forward.',
+      };
+    }
+  }
+
+  const renewed = input.outcome === RenewalOutcome.RENEWED;
+
+  await prisma.contractRenewal.create({
+    data: {
+      contractId: contract.id,
+      outcome: input.outcome,
+      previousEndDate: contract.contractEndDate,
+      newEndDate: renewed ? input.newEndDate! : null,
+      previousFee: contract.monthlyFee,
+      newFee: renewed && input.newFee != null ? input.newFee : null,
+      note: input.note?.trim() || null,
+      decidedById: input.userId ?? null,
+    },
+  });
+
+  await prisma.contract.update({
+    where: { id: contract.id },
+    data: renewed
+      ? {
+          contractEndDate: input.newEndDate!,
+          // A new term is a new cycle, so the next reminder must fire.
+          renewalNoticeAt: null,
+          ...(input.newFee != null ? { monthlyFee: input.newFee } : {}),
+        }
+      : {
+          // Not renewing or lapsed: the term stands as it is. Deactivating the
+          // contract is a separate, deliberate act — billing may still need to
+          // run out the notice period.
+          renewalNoticeAt: new Date(),
+        },
+  });
+
+  return {
+    success: true,
+    message: renewed
+      ? `${contract.companyName} renewed to ${input.newEndDate!.toISOString().slice(0, 10)}`
+      : `${contract.companyName} marked ${input.outcome === RenewalOutcome.NOT_RENEWING ? 'not renewing' : 'lapsed'}`,
+  };
+}
+
+export interface RenewalRate {
+  renewed: number;
+  notRenewed: number;
+  total: number;
+  /** Null when nothing has come up for renewal yet — not zero, which would read as total failure. */
+  rate: number | null;
+}
+
+/** Renewal rate over a trailing window, decided outcomes only. */
+export async function renewalRate(days = 365): Promise<RenewalRate> {
+  const since = new Date(Date.now() - days * 86_400_000);
+  const rows = await prisma.contractRenewal.groupBy({
+    by: ['outcome'],
+    where: { decidedAt: { gte: since } },
+    _count: { _all: true },
+    orderBy: { outcome: 'asc' },
+  });
+  const count = (o: RenewalOutcome) => rows.find((r) => r.outcome === o)?._count._all ?? 0;
+  const renewed = count(RenewalOutcome.RENEWED);
+  const notRenewed = count(RenewalOutcome.NOT_RENEWING) + count(RenewalOutcome.LAPSED);
+  const total = renewed + notRenewed;
+  return { renewed, notRenewed, total, rate: total > 0 ? renewed / total : null };
 }

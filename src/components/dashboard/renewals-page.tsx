@@ -12,7 +12,7 @@ import {
 import { useApi } from '@/lib/hooks/use-api';
 import { formatCurrency, formatDateShort } from '@/lib/utils';
 import { DataState, statValue } from '@/components/dashboard/data-state';
-import { RefreshCw, Loader2, CalendarClock, AlertTriangle, HelpCircle } from 'lucide-react';
+import { RefreshCw, Loader2, CalendarClock, AlertTriangle, HelpCircle, TrendingUp } from 'lucide-react';
 
 type Stage = 'overdue' | 'due' | 'soon' | 'later';
 
@@ -28,6 +28,8 @@ interface Renewal {
   contactPerson: string | null;
   email: string | null;
   noticeSentAt: string | null;
+  lastOutcome: 'RENEWED' | 'NOT_RENEWING' | 'LAPSED' | null;
+  lastDecidedAt: string | null;
 }
 
 interface RenewalData {
@@ -36,6 +38,7 @@ interface RenewalData {
   missingEndDate: { id: string; companyName: string; entity: string; monthlyFee: number }[];
   counts: Record<Stage, number>;
   missingCount: number;
+  rate: { renewed: number; notRenewed: number; total: number; rate: number | null };
 }
 
 const TABS: Array<{ key: Stage | 'all'; label: string }> = [
@@ -55,6 +58,7 @@ const STAGE_BADGE: Record<Stage, { variant: 'destructive' | 'warning' | 'success
 
 export function RenewalsPage() {
   const [tab, setTab] = useState<Stage | 'all'>('due');
+  const [saving, setSaving] = useState<string | null>(null);
   const { data, error, isLoading, mutate } = useApi<RenewalData>('/api/renewals');
 
   const rows = (data?.renewals ?? []).filter((r) => tab === 'all' || r.stage === tab);
@@ -62,6 +66,62 @@ export function RenewalsPage() {
   const atRiskValue = (data?.renewals ?? [])
     .filter((r) => r.stage === 'due' || r.stage === 'overdue')
     .reduce((s, r) => s + r.monthlyFee, 0);
+
+  /** Record what happened at the end of a term. */
+  const decide = async (r: Renewal, outcome: 'RENEWED' | 'NOT_RENEWING' | 'LAPSED') => {
+    let newEndDate: string | null = null;
+    let newFee: string | null = null;
+
+    if (outcome === 'RENEWED') {
+      const suggested = new Date(r.contractEndDate);
+      suggested.setFullYear(suggested.getFullYear() + 1);
+      newEndDate = window.prompt(
+        `${r.companyName} renewed.\n\nNew renewal date (YYYY-MM-DD):`,
+        suggested.toISOString().slice(0, 10)
+      );
+      if (newEndDate === null) return;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(newEndDate.trim())) {
+        alert('Enter the date as YYYY-MM-DD.');
+        return;
+      }
+      newFee = window.prompt(
+        `New monthly fee for ${r.companyName}?\n\nLeave as is to keep ${formatCurrency(r.monthlyFee)}.`,
+        String(r.monthlyFee)
+      );
+      if (newFee === null) return;
+    } else if (
+      !window.confirm(
+        `Mark ${r.companyName} as ${outcome === 'NOT_RENEWING' ? 'not renewing' : 'lapsed'}?\n\n` +
+          `The contract stays active and keeps billing — stopping that is a separate step.`
+      )
+    ) {
+      return;
+    }
+
+    const note = window.prompt('Note (optional) — why, and who agreed it:', '') ?? null;
+
+    setSaving(r.id);
+    try {
+      const res = await fetch(`/api/contracts/${r.id}/renewal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          outcome,
+          newEndDate: newEndDate?.trim() || null,
+          newFee: newFee && Number(newFee) !== r.monthlyFee ? Number(newFee) : null,
+          note,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to record');
+      mutate();
+      alert(body.message);
+    } catch (e) {
+      alert(`Error: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      setSaving(null);
+    }
+  };
 
   return (
     <div className="flex flex-col">
@@ -71,7 +131,7 @@ export function RenewalsPage() {
       />
 
       <div className="flex-1 space-y-6 p-6">
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -100,6 +160,29 @@ export function RenewalsPage() {
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 {error ? 'Figure unavailable' : 'end date already passed'}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Renewal rate
+              </CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {data?.rate?.rate === null || data?.rate === undefined || error
+                  ? '—'
+                  : `${Math.round(data.rate.rate * 100)}%`}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {error
+                  ? 'Figure unavailable'
+                  : data?.rate?.total
+                    ? `${data.rate.renewed} of ${data.rate.total} renewed, last 12 months`
+                    : 'nothing has come up for renewal yet'}
               </p>
             </CardContent>
           </Card>
@@ -159,7 +242,8 @@ export function RenewalsPage() {
                     <TableHead>Renews</TableHead>
                     <TableHead className="text-right">Countdown</TableHead>
                     <TableHead>Contact</TableHead>
-                    <TableHead>Reminded</TableHead>
+                    <TableHead>Outcome</TableHead>
+                    <TableHead className="text-right">Record</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -189,8 +273,54 @@ export function RenewalsPage() {
                         <div>{r.contactPerson || '—'}</div>
                         <div className="text-xs text-muted-foreground">{r.email || 'no email'}</div>
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {r.noticeSentAt ? formatDateShort(new Date(r.noticeSentAt)) : 'not yet'}
+                      <TableCell>
+                        {r.lastOutcome ? (
+                          <div className="text-xs">
+                            <Badge
+                              variant={
+                                r.lastOutcome === 'RENEWED'
+                                  ? 'success'
+                                  : r.lastOutcome === 'NOT_RENEWING'
+                                    ? 'secondary'
+                                    : 'destructive'
+                              }
+                            >
+                              {r.lastOutcome === 'NOT_RENEWING' ? 'not renewing' : r.lastOutcome.toLowerCase()}
+                            </Badge>
+                            {r.lastDecidedAt && (
+                              <div className="mt-1 text-muted-foreground">
+                                {formatDateShort(new Date(r.lastDecidedAt))}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            {r.noticeSentAt
+                              ? `reminded ${formatDateShort(new Date(r.noticeSentAt))}`
+                              : 'undecided'}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1.5">
+                          <Button
+                            size="sm"
+                            disabled={saving === r.id}
+                            onClick={() => decide(r, 'RENEWED')}
+                            className="bg-green-600 text-white hover:bg-green-700"
+                          >
+                            {saving === r.id ? 'Saving…' : 'Renewed'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={saving === r.id}
+                            onClick={() => decide(r, 'NOT_RENEWING')}
+                            title="Client is not renewing"
+                          >
+                            Not renewing
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -261,9 +391,11 @@ export function RenewalsPage() {
         )}
 
         <p className="text-xs text-muted-foreground">
-          The nightly job raises one in-app reminder per renewal, {leadDays} days out — it never
-          emails the client, since the renewal conversation is yours to start. Change the lead time
-          with the <code>renewals.leadDays</code> setting.
+          The nightly job raises one in-app reminder per renewal, {leadDays} days out, and a second
+          alert if a contract passes its date without being renewed. It never emails the client —
+          the renewal conversation is yours to start. Recording an outcome keeps the history, so
+          the renewal rate above is real rather than a guess; marking a contract not renewing does
+          not stop its billing, which stays a separate, deliberate step.
         </p>
       </div>
     </div>
