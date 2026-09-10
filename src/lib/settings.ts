@@ -54,6 +54,10 @@ export const DEFAULTS: Record<string, any> = {
   // book on the first run, since lastFollowUpLevel starts at 0 for every
   // invoice that predates the collections upgrade.
   'collections.autoSendLevels': [],
+  // Ceiling on how many follow-ups one nightly sweep may send. The existing
+  // book has never been chased, so without a cap the first armed run drains the
+  // whole backlog in one burst. 0 means no limit.
+  'collections.maxPerRun': 25,
 
   // Contract renewals: how many days ahead of contractEndDate the nightly
   // sweep raises a reminder. One reminder per renewal, not per night.

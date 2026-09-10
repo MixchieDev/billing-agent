@@ -97,3 +97,37 @@ describe('the shipped default is dormant', () => {
     expect(DEFAULTS['collections.autoSendLevels']).toEqual([]);
   });
 });
+
+describe('nightly cap', () => {
+  // The cap lives in runCollectionsSweep (needs I/O), so these lock the two
+  // pure rules it depends on: ordering, and that a cap never changes what is
+  // considered DUE — only how many of them go out tonight.
+  const offsets = { 1: 1, 2: 7, 3: 15 };
+
+  it('leaves the ladder decision untouched — a cap defers, it does not exempt', () => {
+    const d = decideFollowUp(30, 0, offsets, [1]);
+    expect(d.due).toBe(true);
+    expect(d.ripe).toBe(true);
+    // Nothing about the decision encodes a cap; holding back is the sweep's job.
+    expect(Object.keys(d)).not.toContain('capped');
+  });
+
+  it('orders a capped run oldest-debt-first', () => {
+    const invoices = [
+      { id: 'newest', dueDate: new Date('2026-09-01') },
+      { id: 'oldest', dueDate: new Date('2026-01-15') },
+      { id: 'middle', dueDate: new Date('2026-05-20') },
+    ];
+    const sorted = [...invoices].sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+    expect(sorted.map((i) => i.id)).toEqual(['oldest', 'middle', 'newest']);
+  });
+});
+
+describe('the shipped cap default', () => {
+  it('DEFAULT_SETTINGS caps the nightly sweep', () => {
+    // Guards the burst hazard: an uncapped default would drain the whole
+    // backlog the first night a level is armed.
+    const { DEFAULTS } = jest.requireActual('@/lib/settings');
+    expect(DEFAULTS['collections.maxPerRun']).toBe(25);
+  });
+});

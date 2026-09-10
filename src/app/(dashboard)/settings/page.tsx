@@ -5,6 +5,7 @@ import { Header } from '@/components/dashboard/header';
 import { Button } from '@/components/ui/button';
 import { Save, Loader2, RefreshCw, Palette, Building2, Plus, Trash2, Percent, Package } from 'lucide-react';
 import { EmailTemplatesPage } from '@/components/dashboard/email-templates-page';
+import { CollectionsSettingsPanel } from '@/components/dashboard/collections-settings-panel';
 
 interface Setting {
   key: string;
@@ -635,6 +636,7 @@ export default function SettingsPage() {
     { id: 'scheduler', label: 'Scheduler' },
     { id: 'email', label: 'Email Templates' },
     { id: 'follow-up', label: 'Follow-up Emails' },
+    { id: 'collections', label: 'Collections' },
   ];
 
   // Render template editor card
@@ -1535,6 +1537,8 @@ export default function SettingsPage() {
             )}
 
             {/* Follow-up Emails Tab */}
+            {activeTab === 'collections' && <CollectionsSettingsPanel />}
+
             {activeTab === 'follow-up' && (
               <div className="space-y-8">
                 <div>

@@ -83,6 +83,9 @@ export interface CollectionsSweepResult {
   promisesBroken: number;
   /** Levels currently armed. Empty means the sweep is in report-only mode. */
   armedLevels: number[];
+  /** Nightly ceiling in force (0 = none) and how many it held back. */
+  maxPerRun: number;
+  cappedOut: number;
   suppressed: SuppressedByLevel;
   suppressedTotal: number;
   decisions: SweepDecision[];
@@ -126,6 +129,7 @@ export async function runCollectionsSweep(): Promise<CollectionsSweepResult> {
       'collections.l2Days',
       'collections.l3Days',
       'collections.autoSendLevels',
+      'collections.maxPerRun',
     ]);
     const offsets: Record<number, number> = {
       1: Number(s['collections.l1Days']),
@@ -137,6 +141,9 @@ export async function runCollectionsSweep(): Promise<CollectionsSweepResult> {
     const autoSendLevels: number[] = Array.isArray(s['collections.autoSendLevels'])
       ? s['collections.autoSendLevels']
       : [];
+    // 0 (or anything unparseable) means no ceiling.
+    const rawCap = Number(s['collections.maxPerRun']);
+    const maxPerRun = Number.isFinite(rawCap) && rawCap > 0 ? Math.floor(rawCap) : 0;
 
     // 3. Chaseable, overdue, un-paused invoices with room to escalate.
     const candidates = await prisma.invoice.findMany({
@@ -149,6 +156,13 @@ export async function runCollectionsSweep(): Promise<CollectionsSweepResult> {
       },
       select: { id: true, dueDate: true, lastFollowUpLevel: true, lastFollowUpAt: true },
     });
+
+    // Oldest debt first, so a capped run drains the backlog in an order anyone
+    // would defend rather than whatever the query happened to return.
+    candidates.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+
+    let sentThisRun = 0;
+    let cappedOut = 0;
 
     for (const inv of candidates) {
       // Already chased today (e.g. a manual re-trigger) → leave it alone.
@@ -173,13 +187,26 @@ export async function runCollectionsSweep(): Promise<CollectionsSweepResult> {
         suppressed[decision.level] = (suppressed[decision.level] ?? 0) + 1;
       }
 
+      // At the ceiling: stop sending, but keep evaluating so the run still
+      // reports the full picture of what was owed tonight.
+      if (decision.due && maxPerRun > 0 && sentThisRun >= maxPerRun) {
+        cappedOut++;
+        entry.reason = `held back — nightly cap of ${maxPerRun} reached`;
+        decisions.push(entry);
+        continue;
+      }
+
       if (decision.due) {
         try {
           const res = await sendFollowUpEmail(inv.id); // system action (userId null)
           entry.sent = res.success;
-          if (res.success) followUpsSent++;
-          else entry.reason = res.message;
-          if (!res.success) errors.push({ invoiceId: inv.id, error: res.message });
+          if (res.success) {
+            followUpsSent++;
+            sentThisRun++;
+          } else {
+            entry.reason = res.message;
+            errors.push({ invoiceId: inv.id, error: res.message });
+          }
         } catch (e) {
           entry.reason = e instanceof Error ? e.message : String(e);
           errors.push({ invoiceId: inv.id, error: entry.reason });
@@ -197,11 +224,23 @@ export async function runCollectionsSweep(): Promise<CollectionsSweepResult> {
         invoicesScanned: candidates.length,
         followUpsSent,
         promisesBroken,
-        suppressed: { armedLevels: autoSendLevels, byLevel: suppressed, total: suppressedTotal },
+        suppressed: {
+          armedLevels: autoSendLevels,
+          byLevel: suppressed,
+          total: suppressedTotal,
+          maxPerRun,
+          cappedOut,
+        },
         errors: errors.length ? (errors as unknown as Prisma.InputJsonValue) : undefined,
       },
     });
 
+    if (cappedOut > 0) {
+      console.log(
+        `[Collections] Nightly cap of ${maxPerRun} reached — ${cappedOut} follow-up(s) held ` +
+          `back for tomorrow.`
+      );
+    }
     if (suppressedTotal > 0) {
       console.log(
         `[Collections] Report-only: ${suppressedTotal} follow-up(s) withheld ` +
@@ -216,6 +255,8 @@ export async function runCollectionsSweep(): Promise<CollectionsSweepResult> {
       followUpsSent,
       promisesBroken,
       armedLevels: autoSendLevels,
+      maxPerRun,
+      cappedOut,
       suppressed,
       suppressedTotal,
       decisions,
