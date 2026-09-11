@@ -14,6 +14,19 @@ import prisma from './prisma';
 import { getSettings } from './settings';
 
 export const DEFAULT_GRACE_DAYS = 7;
+export const MAX_GRACE_DAYS = 90;
+
+/**
+ * The grace period, as a number of days that can defensibly appear in a notice.
+ *
+ * Anything out of range falls back to the default rather than being clamped to
+ * the nearest bound: a stored -5 clamped to 1 would tell a client they have one
+ * day, which is not what anyone configured.
+ */
+export function resolveGraceDays(value: unknown): number {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) && n >= 1 && n <= MAX_GRACE_DAYS ? n : DEFAULT_GRACE_DAYS;
+}
 
 export type SuspensionStage =
   /** Notice sent, grace period still running. */
@@ -76,8 +89,7 @@ export async function loadSuspensions(): Promise<{
   dueValue: number;
 }> {
   const cfg = await getSettings(['collections.suspensionGraceDays']);
-  const graceDays =
-    Math.max(1, Math.floor(Number(cfg['collections.suspensionGraceDays'])) || DEFAULT_GRACE_DAYS);
+  const graceDays = resolveGraceDays(cfg['collections.suspensionGraceDays']);
 
   // Every invoice that has ever had a suspension notice — including paid ones,
   // because a paid invoice on a suspended account is the signal to restore it.

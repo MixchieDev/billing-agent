@@ -1,4 +1,4 @@
-import { suspensionStage, DEFAULT_GRACE_DAYS } from '@/lib/suspension-service';
+import { suspensionStage, resolveGraceDays, DEFAULT_GRACE_DAYS } from '@/lib/suspension-service';
 
 const d = (s: string) => new Date(`${s}T00:00:00Z`);
 const TODAY = d('2026-09-11');
@@ -29,5 +29,28 @@ describe('suspensionStage', () => {
 
   it('ships a 7-day grace period', () => {
     expect(DEFAULT_GRACE_DAYS).toBe(7);
+  });
+});
+
+describe('resolveGraceDays — it ends up in a client-facing notice', () => {
+  it('accepts sensible values', () => {
+    expect(resolveGraceDays(7)).toBe(7);
+    expect(resolveGraceDays(1)).toBe(1);
+    expect(resolveGraceDays(30)).toBe(30);
+    expect(resolveGraceDays('14')).toBe(14);
+  });
+
+  it('falls back rather than clamping to a bound', () => {
+    // -5 clamped to 1 would tell a client they have one day. Nobody set that.
+    expect(resolveGraceDays(-5)).toBe(DEFAULT_GRACE_DAYS);
+    expect(resolveGraceDays(0)).toBe(DEFAULT_GRACE_DAYS);
+    expect(resolveGraceDays(999)).toBe(DEFAULT_GRACE_DAYS);
+  });
+
+  it('falls back on junk and absence', () => {
+    expect(resolveGraceDays('abc')).toBe(DEFAULT_GRACE_DAYS);
+    expect(resolveGraceDays(null)).toBe(DEFAULT_GRACE_DAYS);
+    expect(resolveGraceDays(undefined)).toBe(DEFAULT_GRACE_DAYS);
+    expect(resolveGraceDays({})).toBe(DEFAULT_GRACE_DAYS);
   });
 });

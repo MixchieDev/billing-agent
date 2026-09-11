@@ -11,6 +11,7 @@ import {
 } from './email-service';
 import { generateInvoicePdfLib, SOASettings } from './pdf-generator';
 import { getSOASettings, getInvoiceTemplate, getSettings } from './settings';
+import { resolveGraceDays } from './suspension-service';
 import { formatCurrency, formatDate } from './utils';
 
 export interface FollowUpResult {
@@ -145,7 +146,9 @@ export async function sendFollowUpEmail(
       'collections.suspensionGraceDays',
       'collections.proofOfPaymentEmail',
     ]);
-    const graceDays = Math.max(1, Math.floor(Number(cfg['collections.suspensionGraceDays'])) || 7);
+    // Same resolution the Suspensions list uses, so the deadline printed in the
+    // notice and the deadline counted down on screen can never disagree.
+    const graceDays = resolveGraceDays(cfg['collections.suspensionGraceDays']);
     const deadline = new Date();
     deadline.setDate(deadline.getDate() + graceDays);
 

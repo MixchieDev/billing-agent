@@ -32,6 +32,8 @@ interface Config {
   l4Days: number;
   autoSendLevels: number[];
   maxPerRun: number;
+  suspensionGraceDays: number;
+  proofOfPaymentEmail: string;
 }
 
 const LEVELS = [
@@ -286,6 +288,52 @@ export function CollectionsSettingsPanel() {
             <span className="text-sm text-muted-foreground">
               0 means no limit. The oldest debts are chased first, so a capped run drains the
               backlog over several nights instead of in one burst.
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* The two values the level-4 notice prints verbatim. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Suspension notice</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            These appear in the level-4 notice itself, so changing them changes what the client is
+            told. The grace period also sets the deadline the Suspensions list counts down to.
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3 rounded-md border p-3">
+            <span className="text-sm font-medium">Grace period</span>
+            <input
+              type="number"
+              min={1}
+              max={90}
+              value={config.suspensionGraceDays}
+              onChange={(e) =>
+                setConfig({ ...config, suspensionGraceDays: Number(e.target.value) })
+              }
+              className="w-20 rounded-md border border-border px-2 py-1 text-sm"
+            />
+            <span className="text-sm text-muted-foreground">
+              days from the notice before the account is due to be set read-only. The notice says
+              &ldquo;within {config.suspensionGraceDays || 7} days from the date of this
+              notice&rdquo; and prints the resulting date.
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 rounded-md border p-3">
+            <span className="text-sm font-medium">Proof of payment to</span>
+            <input
+              type="email"
+              value={config.proofOfPaymentEmail}
+              onChange={(e) => setConfig({ ...config, proofOfPaymentEmail: e.target.value })}
+              className="w-72 rounded-md border border-border px-2 py-1 text-sm"
+              placeholder="billingcollection@abba.works"
+            />
+            <span className="text-sm text-muted-foreground">
+              the address clients are asked to send proof to.
             </span>
           </div>
         </CardContent>

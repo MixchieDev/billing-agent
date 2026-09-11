@@ -11,6 +11,8 @@ const KEYS = [
   'collections.l4Days',
   'collections.autoSendLevels',
   'collections.maxPerRun',
+  'collections.suspensionGraceDays',
+  'collections.proofOfPaymentEmail',
 ] as const;
 
 /**
@@ -55,6 +57,8 @@ export async function GET() {
         l4Days: Number(s['collections.l4Days']),
         autoSendLevels: armed,
         maxPerRun: Number(s['collections.maxPerRun']) || 0,
+        suspensionGraceDays: Number(s['collections.suspensionGraceDays']) || 7,
+        proofOfPaymentEmail: String(s['collections.proofOfPaymentEmail'] ?? ''),
       },
       runs,
       levelsWithTemplate,
@@ -101,6 +105,20 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // The grace period is printed in the notice the client receives, so it has
+    // to be a sane number of days — never zero, which would mean "suspend today".
+    const rawGrace = Math.floor(Number(body.suspensionGraceDays));
+    const suspensionGraceDays =
+      Number.isFinite(rawGrace) && rawGrace >= 1 ? Math.min(rawGrace, 90) : 7;
+
+    const proofEmail = String(body.proofOfPaymentEmail ?? '').trim();
+    if (proofEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(proofEmail)) {
+      return NextResponse.json(
+        { error: 'Proof-of-payment address must be a valid email — it is printed in the suspension notice.' },
+        { status: 400 }
+      );
+    }
+
     const rawCap = Math.floor(Number(body.maxPerRun));
     const maxPerRun = Number.isFinite(rawCap) && rawCap >= 0 ? Math.min(rawCap, 1000) : 25;
 
@@ -111,6 +129,8 @@ export async function PUT(request: NextRequest) {
       'collections.l4Days': l4,
       'collections.autoSendLevels': levels,
       'collections.maxPerRun': maxPerRun,
+      'collections.suspensionGraceDays': suspensionGraceDays,
+      'collections.proofOfPaymentEmail': proofEmail,
     };
 
     for (const [key, value] of Object.entries(values)) {
@@ -128,14 +148,21 @@ export async function PUT(request: NextRequest) {
         action: 'COLLECTIONS_SETTINGS_UPDATED',
         entityType: 'Settings',
         entityId: 'collections',
-        details: { autoSendLevels: levels, maxPerRun, l1Days: l1, l2Days: l2, l3Days: l3, l4Days: l4 },
+        details: {
+          autoSendLevels: levels, maxPerRun, l1Days: l1, l2Days: l2, l3Days: l3, l4Days: l4,
+          suspensionGraceDays, proofOfPaymentEmail: proofEmail,
+        },
       },
     });
 
     clearSettingsCache();
 
     return NextResponse.json({
-      settings: { l1Days: l1, l2Days: l2, l3Days: l3, l4Days: l4, autoSendLevels: levels, maxPerRun },
+      settings: {
+        l1Days: l1, l2Days: l2, l3Days: l3, l4Days: l4,
+        autoSendLevels: levels, maxPerRun,
+        suspensionGraceDays, proofOfPaymentEmail: proofEmail,
+      },
       message: levels.length
         ? `Auto-send armed for level${levels.length > 1 ? 's' : ''} ${levels.join(', ')}` +
           (maxPerRun ? `, capped at ${maxPerRun} per night` : ', with no nightly cap')
