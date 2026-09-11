@@ -41,6 +41,7 @@ interface Contract {
   tin: string | null;
   mobile: string | null;
   remarks: string | null;
+  followUpEnabled?: boolean;
   partner?: Partner | null;
   billingEntity?: Company;
 }
@@ -94,6 +95,7 @@ export function ContractFormModal({
     tin: '',
     mobile: '',
     remarks: '',
+    followUpEnabled: true,
   });
 
   // Initialize form when contract changes
@@ -119,6 +121,7 @@ export function ContractFormModal({
         tin: contract.tin || '',
         mobile: contract.mobile || '',
         remarks: contract.remarks || '',
+        followUpEnabled: contract.followUpEnabled ?? true,
       });
     } else {
       // Reset form for new contract
@@ -142,6 +145,7 @@ export function ContractFormModal({
         tin: '',
         mobile: '',
         remarks: '',
+        followUpEnabled: true,
       });
     }
     setError(null);
@@ -175,6 +179,7 @@ export function ContractFormModal({
           monthlyFee: parseFloat(formData.monthlyFee) || 0,
           contractStart: formData.contractStart || null,
           contractEndDate: formData.contractEndDate || null,
+          followUpEnabled: formData.followUpEnabled,
           nextDueDate: formData.nextDueDate || null,
         }),
       });
@@ -514,6 +519,30 @@ export function ContractFormModal({
                 placeholder="09171234567"
               />
             </div>
+          </div>
+
+          {/* Automated chasing — off means this client is followed up by hand. */}
+          <div className="rounded-md border p-3">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                name="followUpEnabled"
+                checked={formData.followUpEnabled}
+                onChange={handleChange}
+                className="mt-0.5 h-4 w-4 cursor-pointer accent-primary"
+              />
+              <span>
+                <span className="block text-sm font-medium text-foreground">
+                  Include in automated follow-ups
+                </span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  When on, overdue invoices for this client are chased by the nightly ladder.
+                  Turn it off for clients you follow up on your own schedule &mdash; their
+                  invoices still appear in the Follow-up Queue so you can send by hand.
+                  Applies to invoices raised from now on.
+                </span>
+              </span>
+            </label>
           </div>
 
           {/* Remarks */}

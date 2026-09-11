@@ -3,7 +3,7 @@ const need = {
   invoiceCols: ['createdById','reviewFlag','amountPaidTotal','balanceDue','wht2307Status',
     'wht2307ReceivedAt','followUpPausedUntil','suspensionNoticeAt','suspendedAt',
     'wht2307RequestCount','wht2307RequestedAt'],
-  contractCols: ['renewalNoticeAt'],
+  contractCols: ['renewalNoticeAt','followUpEnabled'],
   tables: ['CollectionRun','InvoicePayment','PdcCheck','PromiseToPay','ContractRenewal'],
   enums: ['PdcStatus','PtpStatus','ReviewFlag','Wht2307Status','RenewalOutcome'],
   // Values added to EXISTING enums — easy to miss, since the type is present

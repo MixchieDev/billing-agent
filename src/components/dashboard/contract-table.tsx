@@ -24,6 +24,7 @@ export interface ContractRow {
   productType: string;
   monthlyFee: number;
   billingType?: 'RECURRING' | 'ONE_TIME' | null;
+  followUpEnabled?: boolean;
   status: 'ACTIVE' | 'INACTIVE' | 'STOPPED' | 'NOT_STARTED';
   nextDueDate: Date | null;
   billingEntity: 'YOWI' | 'ABBA';
@@ -151,7 +152,14 @@ export function ContractTable({ contracts, onContractClick, onEdit, onDelete }: 
                 <TableCell className="font-mono text-sm text-muted-foreground">
                   {contract.customerNumber || '-'}
                 </TableCell>
-                <TableCell className="font-medium">{contract.companyName}</TableCell>
+                <TableCell>
+                  <div className="font-medium">{contract.companyName}</div>
+                  {contract.followUpEnabled === false && (
+                    <div className="mt-0.5 text-xs text-muted-foreground">
+                      followed up manually
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell>
                   <Badge variant="outline">
                     {contract.partner?.code || 'Direct'}

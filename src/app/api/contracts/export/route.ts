@@ -23,7 +23,7 @@ const HEADERS = [
   'Next Due Date', 'Last Payment', 'Days Overdue',
   'Contact Person', 'Email', 'All Emails', 'Mobile', 'TIN', 'Address',
   'VAT Type', 'Withholding Rate', 'Employee Count', 'Rate Per Employee',
-  'Auto Send', 'Auto Approve', 'Remarks', 'Created',
+  'Auto Send', 'Auto Approve', 'Auto Follow-up', 'Remarks', 'Created',
 ];
 
 const iso = (d: Date | null) => (d ? format(d, 'yyyy-MM-dd') : '');
@@ -91,6 +91,7 @@ export async function GET(request: NextRequest) {
         c.vatType, c.withholdingRate === null ? '' : Number(c.withholdingRate),
         c.employeeCount, money(c.ratePerEmployee),
         c.autoSendEnabled ? 'Yes' : 'No', c.autoApprove ? 'Yes' : 'No',
+        c.followUpEnabled ? 'Yes' : 'No',
         c.remarks, iso(c.createdAt),
       ].map(cell).join(',');
     });

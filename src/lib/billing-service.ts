@@ -252,6 +252,9 @@ export async function createInvoiceFromContract(params: CreateInvoiceParams) {
       // Nothing collected yet, so the whole net is outstanding. Set at creation
       // or the collections views read NULL on every newly billed invoice.
       balanceDue: calculation.netAmount,
+      // Inherit the client's chasing preference; without this every new invoice
+      // is chaseable regardless of what was set on the contract.
+      followUpEnabled: contract.followUpEnabled,
       vatType: contract.vatType,
       hasWithholding: params.hasWithholding ?? false,
       withholdingCode: params.hasWithholding ? 'WC160' : null,

@@ -56,6 +56,7 @@ function hydrateContracts(rows: ContractInitialData['contracts']): ContractRow[]
     ...c,
     nextDueDate: c.nextDueDate ? new Date(c.nextDueDate) : null,
     contractEndDate: c.contractEndDate ? new Date(c.contractEndDate) : null,
+    followUpEnabled: c.followUpEnabled ?? true,
     billingEntity: (c.billingEntity as 'YOWI' | 'ABBA') || 'YOWI',
   }));
 }
@@ -141,6 +142,7 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
         productType: contract.productType,
         monthlyFee: Number(contract.monthlyFee),
         billingType: contract.billingType ?? 'RECURRING',
+        followUpEnabled: contract.followUpEnabled ?? true,
         status: contract.status,
         nextDueDate: contract.nextDueDate ? new Date(contract.nextDueDate) : null,
         billingEntity: contract.billingEntity?.code || 'YOWI',

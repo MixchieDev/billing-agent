@@ -207,6 +207,10 @@ model Contract {
   /// Last time a renewal reminder went out for this contract, so the nightly
   /// sweep reminds once per renewal rather than every night for 45 days.
   renewalNoticeAt   DateTime?
+  /// Whether the automated follow-up ladder may chase this client's invoices.
+  /// New invoices inherit it at creation. Clients on their own collection
+  /// rhythm are turned off here and chased by hand.
+  followUpEnabled   Boolean            @default(true)
   renewals          ContractRenewal[]
   billingEntity     Company            @relation(fields: [billingEntityId], references: [id])
   partner           Partner?           @relation(fields: [partnerId], references: [id])

@@ -162,3 +162,38 @@ is valid and re-runnable (1/1 statements, no change).
 Marking a contract "not renewing" deliberately does **not** stop its billing —
 the term stands and invoices keep generating until someone changes the contract
 status. Ending billing stays a separate, deliberate act.
+
+
+---
+
+# Migration 003 — per-client follow-up control
+
+Adds `Contract.followUpEnabled` (default true). New invoices inherit it at
+creation, so a client set to manual follow-up stops entering the nightly ladder
+from their next invoice onward.
+
+Additive only, one column. Run over the direct 5432 connection:
+
+```bash
+psql "$DIRECT_URL" -f prisma/migrations-manual/003-contract-followup-flag.sql
+DATABASE_URL="$DIRECT_URL" npx tsx prisma/migrations-manual/check-migration.ts
+```
+
+No `prisma db push` needed — there are no new tables.
+
+Validated by executing against staging, where the column already exists: 1/1
+statements, no change.
+
+## Turning the existing book off
+
+The column defaults to **true**, so migrating changes nothing on its own. Two
+separate things have to be switched off to stop automated chasing today:
+
+1. `Contract.followUpEnabled = false` — stops FUTURE invoices for that client
+   entering the ladder.
+2. `Invoice.followUpEnabled = false` on the invoices already raised — the
+   ladder reads the flag on the invoice, not the contract, so existing invoices
+   keep being chased until this is set.
+
+Doing only the first is the easy mistake: the client looks switched off in the
+contracts list while their existing overdue invoices are still being emailed.

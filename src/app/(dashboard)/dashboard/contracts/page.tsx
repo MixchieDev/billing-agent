@@ -60,6 +60,7 @@ export default async function ContractsPage() {
     paymentPlan: c.paymentPlan,
     autoSendEnabled: c.autoSendEnabled ?? true,
     contractEndDate: c.contractEndDate ? c.contractEndDate.toISOString() : null,
+    followUpEnabled: c.followUpEnabled,
     partner: c.partner
       ? {
           id: c.partner.id,
