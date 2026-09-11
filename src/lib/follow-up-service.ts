@@ -10,7 +10,7 @@ import {
   EmailPlaceholderData,
 } from './email-service';
 import { generateInvoicePdfLib, SOASettings } from './pdf-generator';
-import { getSOASettings, getInvoiceTemplate } from './settings';
+import { getSOASettings, getInvoiceTemplate, getSettings } from './settings';
 import { formatCurrency, formatDate } from './utils';
 
 export interface FollowUpResult {
@@ -27,7 +27,9 @@ export interface CanSendFollowUpResult {
   nextLevel?: number;
 }
 
-const MAX_FOLLOW_UP_LEVEL = 3;
+const MAX_FOLLOW_UP_LEVEL = 4;
+/** The level whose notice threatens read-only access. */
+export const SUSPENSION_LEVEL = 4;
 
 /**
  * Check if a follow-up can be sent for an invoice
@@ -59,7 +61,7 @@ export async function canSendFollowUp(invoiceId: string): Promise<CanSendFollowU
 
   const nextLevel = invoice.lastFollowUpLevel + 1;
   if (nextLevel > MAX_FOLLOW_UP_LEVEL) {
-    return { canSend: false, reason: 'Maximum follow-up level (3) reached' };
+    return { canSend: false, reason: 'Maximum follow-up level (4) reached' };
   }
 
   // Check if customer has email
@@ -132,6 +134,50 @@ export async function sendFollowUpEmail(
   // Calculate days overdue
   const daysOverdue = calculateDaysOverdue(invoice.dueDate);
 
+  // Level 4 is the suspension notice, and its wording makes commitments — a
+  // deadline date, the reminders already sent, where to pay. Those have to come
+  // from the record rather than be typed in, or the notice states something the
+  // system cannot back up.
+  const isSuspensionNotice = level === SUSPENSION_LEVEL;
+  let suspensionFields: Record<string, string> = {};
+  if (isSuspensionNotice) {
+    const cfg = await getSettings([
+      'collections.suspensionGraceDays',
+      'collections.proofOfPaymentEmail',
+    ]);
+    const graceDays = Math.max(1, Math.floor(Number(cfg['collections.suspensionGraceDays'])) || 7);
+    const deadline = new Date();
+    deadline.setDate(deadline.getDate() + graceDays);
+
+    // Every reminder already sent for this invoice, so the notice can say
+    // "despite our previous reminders dated …" truthfully.
+    const priorLogs = await prisma.followUpLog.findMany({
+      where: { invoiceId: invoice.id, status: EmailStatus.SENT },
+      orderBy: { sentAt: 'asc' },
+      select: { sentAt: true, level: true },
+    });
+    const priorDates = priorLogs.map((l) => formatDate(l.sentAt));
+
+    const code = (invoice.company?.code === 'YOWI' || invoice.company?.code === 'ABBA')
+      ? invoice.company.code
+      : 'ABBA';
+    const soa = await getSOASettings(code);
+    const paymentDetails = soa.bankAccounts
+      .map((a) => `${a.bankName} — ${a.bankAccountName} — ${a.bankAccountNo}`)
+      .join('\n');
+
+    suspensionFields = {
+      graceDays: String(graceDays),
+      suspensionDate: formatDate(deadline),
+      priorReminderDates: priorDates.length
+        ? priorDates.join(', ')
+        : 'our earlier correspondence',
+      priorReminderCount: String(priorDates.length),
+      paymentDetails,
+      proofOfPaymentEmail: String(cfg['collections.proofOfPaymentEmail'] ?? ''),
+    };
+  }
+
   // Prepare placeholder data
   const placeholderData: EmailPlaceholderData = {
     customerName: invoice.customerName,
@@ -143,6 +189,7 @@ export async function sendFollowUpEmail(
     companyName: invoice.company?.name || 'YAHSHUA-ABBA',
     clientCompanyName: invoice.customerName,
     daysOverdue: daysOverdue.toString(),
+    ...suspensionFields,
   };
 
   // Generate email content from template
@@ -216,6 +263,8 @@ export async function sendFollowUpEmail(
           followUpCount: { increment: 1 },
           lastFollowUpAt: new Date(),
           lastFollowUpLevel: level,
+          // Starts the grace clock the Suspensions list counts down from.
+          ...(level === SUSPENSION_LEVEL ? { suspensionNoticeAt: new Date() } : {}),
         },
       });
 

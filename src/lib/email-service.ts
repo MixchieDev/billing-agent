@@ -36,6 +36,12 @@ export interface EmailPlaceholderData {
   clientCompanyName: string; // The actual client company name (from contract)
   paymentUrl?: string; // HitPay checkout URL for online payment
   daysOverdue?: string; // For follow-up emails
+  /**
+   * Placeholders specific to one kind of email (the level-4 suspension notice
+   * supplies suspensionDate, graceDays, priorReminderDates, paymentDetails and
+   * so on). Anything here is substituted by name.
+   */
+  [key: string]: string | undefined;
 }
 
 // Additional email attachment (for invoice attachments from database)
@@ -172,9 +178,12 @@ export function replacePlaceholders(text: string, data: EmailPlaceholderData): s
     .replace(/\{\{companyName\}\}/g, data.companyName)
     .replace(/\{\{clientCompanyName\}\}/g, data.clientCompanyName);
 
-  // Add daysOverdue placeholder for follow-up emails
-  if (data.daysOverdue !== undefined) {
-    result = result.replace(/\{\{daysOverdue\}\}/g, data.daysOverdue);
+  // Anything else the caller supplied, substituted by name. Without this a
+  // template using a placeholder the caller knows about but this function does
+  // not would reach the client as literal "{{suspensionDate}}" text.
+  for (const [key, value] of Object.entries(data)) {
+    if (value === undefined) continue;
+    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
   }
 
   return result;

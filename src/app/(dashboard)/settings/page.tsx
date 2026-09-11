@@ -110,6 +110,7 @@ export default function SettingsPage() {
     { name: 'Follow-up Level 1 - Gentle Reminder', subject: 'Reminder: Invoice {{billingNo}} - Payment Due', greeting: 'Dear {{customerName}},', body: 'This is a friendly reminder that invoice {{billingNo}} for {{totalAmount}} was due on {{dueDate}} ({{daysOverdue}} days ago).\n\nIf you have already made the payment, please disregard this message and kindly send us your proof of payment.', closing: 'Thank you for your continued business.\n\nBest regards,\n{{companyName}} Billing Team', level: 1 },
     { name: 'Follow-up Level 2 - Firm Reminder', subject: 'Second Notice: Invoice {{billingNo}} - Payment Overdue', greeting: 'Dear {{customerName}},', body: 'This is a follow-up regarding invoice {{billingNo}} for {{totalAmount}}, which was due on {{dueDate}} and is now {{daysOverdue}} days overdue.\n\nPlease arrange for payment at your earliest convenience.', closing: 'Thank you for your prompt attention.\n\nBest regards,\n{{companyName}} Billing Team', level: 2 },
     { name: 'Follow-up Level 3 - Final Notice', subject: 'URGENT: Final Notice - Invoice {{billingNo}}', greeting: 'Dear {{customerName}},', body: 'This is our final notice regarding invoice {{billingNo}} for {{totalAmount}}, which is now {{daysOverdue}} days past the due date.\n\nImmediate payment is required. Please contact us if you need to discuss payment arrangements.', closing: 'Sincerely,\n{{companyName}} Billing Team', level: 3 },
+    { name: 'Follow-up Level 4 - Suspension Notice', subject: 'FINAL NOTICE: Account Suspension \u2014 Invoice {{billingNo}}', greeting: 'YAHSHUA day!', body: 'This serves as a final notice regarding the outstanding balance on your account amounting to {{totalAmount}}, covering invoice {{billingNo}}. Despite our previous reminders dated {{priorReminderDates}}, the balance remains unsettled.\n\nPlease be advised that if full payment is not received within {{graceDays}} days from the date of this notice, or by {{suspensionDate}}, your account will be set to read-only access. Your existing data and records will remain viewable, but all processing functions \u2014 including payroll runs, timekeeping updates, and report generation \u2014 will be suspended until the account is settled.\n\nFull access will be restored promptly upon receipt and verification of payment. Payment may be made through:\n\n{{paymentDetails}}\n\nKindly forward your proof of payment to {{proofOfPaymentEmail}} once settled.', closing: 'Thank you for your prompt attention.\n\n{{companyName}} Billing Team', level: 4 },
   ]);
   const [followUpLoading, setFollowUpLoading] = useState(false);
   const [savingFollowUp, setSavingFollowUp] = useState(false);
@@ -215,7 +216,7 @@ export default function SettingsPage() {
 
       // Map to our state structure
       if (followUpTpls.length > 0) {
-        const mapped = [1, 2, 3].map((level) => {
+        const mapped = [1, 2, 3, 4].map((level) => {
           const existing = followUpTpls.find((t: any) => t.followUpLevel === level);
           if (existing) {
             return {

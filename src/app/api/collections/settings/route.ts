@@ -8,6 +8,7 @@ const KEYS = [
   'collections.l1Days',
   'collections.l2Days',
   'collections.l3Days',
+  'collections.l4Days',
   'collections.autoSendLevels',
   'collections.maxPerRun',
 ] as const;
@@ -51,6 +52,7 @@ export async function GET() {
         l1Days: Number(s['collections.l1Days']),
         l2Days: Number(s['collections.l2Days']),
         l3Days: Number(s['collections.l3Days']),
+        l4Days: Number(s['collections.l4Days']),
         autoSendLevels: armed,
         maxPerRun: Number(s['collections.maxPerRun']) || 0,
       },
@@ -74,9 +76,12 @@ export async function PUT(request: NextRequest) {
 
     const body = await request.json();
 
-    const levels = Array.isArray(body.autoSendLevels)
-      ? [...new Set(body.autoSendLevels.map(Number))].filter((n) => n === 1 || n === 2 || n === 3).sort()
+    const rawLevels: number[] = Array.isArray(body.autoSendLevels)
+      ? (body.autoSendLevels as unknown[]).map((v) => Number(v))
       : [];
+    const levels = [...new Set(rawLevels)]
+      .filter((n) => Number.isInteger(n) && n >= 1 && n <= 4)
+      .sort((a, b) => a - b);
 
     const day = (v: unknown, fallback: number) => {
       const n = Math.floor(Number(v));
@@ -85,12 +90,13 @@ export async function PUT(request: NextRequest) {
     const l1 = day(body.l1Days, 1);
     const l2 = day(body.l2Days, 7);
     const l3 = day(body.l3Days, 15);
+    const l4 = day(body.l4Days, 30);
 
     // Out-of-order offsets would let a later level fire before an earlier one,
     // so the ladder would escalate backwards.
-    if (!(l1 <= l2 && l2 <= l3)) {
+    if (!(l1 <= l2 && l2 <= l3 && l3 <= l4)) {
       return NextResponse.json(
-        { error: 'Day offsets must increase: level 1 no later than level 2, level 2 no later than level 3.' },
+        { error: 'Day offsets must increase from level 1 through level 4.' },
         { status: 400 }
       );
     }
@@ -102,6 +108,7 @@ export async function PUT(request: NextRequest) {
       'collections.l1Days': l1,
       'collections.l2Days': l2,
       'collections.l3Days': l3,
+      'collections.l4Days': l4,
       'collections.autoSendLevels': levels,
       'collections.maxPerRun': maxPerRun,
     };
@@ -121,14 +128,14 @@ export async function PUT(request: NextRequest) {
         action: 'COLLECTIONS_SETTINGS_UPDATED',
         entityType: 'Settings',
         entityId: 'collections',
-        details: { autoSendLevels: levels, maxPerRun, l1Days: l1, l2Days: l2, l3Days: l3 },
+        details: { autoSendLevels: levels, maxPerRun, l1Days: l1, l2Days: l2, l3Days: l3, l4Days: l4 },
       },
     });
 
     clearSettingsCache();
 
     return NextResponse.json({
-      settings: { l1Days: l1, l2Days: l2, l3Days: l3, autoSendLevels: levels, maxPerRun },
+      settings: { l1Days: l1, l2Days: l2, l3Days: l3, l4Days: l4, autoSendLevels: levels, maxPerRun },
       message: levels.length
         ? `Auto-send armed for level${levels.length > 1 ? 's' : ''} ${levels.join(', ')}` +
           (maxPerRun ? `, capped at ${maxPerRun} per night` : ', with no nightly cap')

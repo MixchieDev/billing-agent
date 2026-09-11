@@ -1,8 +1,8 @@
 /** Unit tests for the pure collections ladder decision (PR-4). */
 import { decideFollowUp } from '@/lib/collections-service';
 
-const offsets = { 1: 1, 2: 7, 3: 15 };
-const all = [1, 2, 3];
+const offsets = { 1: 1, 2: 7, 3: 15, 4: 30 };
+const all = [1, 2, 3, 4];
 
 describe('decideFollowUp', () => {
   it('not yet overdue enough for level 1', () => {
@@ -30,14 +30,20 @@ describe('decideFollowUp', () => {
     expect(d.level).toBe(3);
   });
 
-  it('never escalates past level 3', () => {
+  it('escalates to level 4, the suspension notice', () => {
     const d = decideFollowUp(100, 3, offsets, all);
+    expect(d.due).toBe(true);
+    expect(d.level).toBe(4);
+  });
+
+  it('never escalates past level 4 — the ladder ends, it does not nag forever', () => {
+    const d = decideFollowUp(100, 4, offsets, all);
     expect(d.due).toBe(false);
     expect(d.level).toBeNull();
     expect(d.reason).toMatch(/max level/);
   });
 
-  it('climbs one level per run, not straight to 3', () => {
+  it('climbs one level per run, not straight to the suspension notice', () => {
     // A very overdue, un-chased invoice only gets level 1 this run.
     const d = decideFollowUp(30, 0, offsets, all);
     expect(d.level).toBe(1);
@@ -54,7 +60,7 @@ describe('decideFollowUp', () => {
 });
 
 describe('dormant-by-default safety', () => {
-  const offsets = { 1: 1, 2: 7, 3: 15 };
+  const offsets = { 1: 1, 2: 7, 3: 15, 4: 30 };
 
   it('sends nothing when no level is armed', () => {
     for (const [days, last] of [[1, 0], [7, 1], [15, 2], [90, 0]] as const) {
@@ -83,7 +89,7 @@ describe('dormant-by-default safety', () => {
   });
 
   it('never treats a maxed-out invoice as withheld', () => {
-    const d = decideFollowUp(100, 3, offsets, []);
+    const d = decideFollowUp(100, 4, offsets, []);
     expect(d.ripe).toBe(false);
     expect(d.level).toBeNull();
   });
@@ -102,7 +108,7 @@ describe('nightly cap', () => {
   // The cap lives in runCollectionsSweep (needs I/O), so these lock the two
   // pure rules it depends on: ordering, and that a cap never changes what is
   // considered DUE — only how many of them go out tonight.
-  const offsets = { 1: 1, 2: 7, 3: 15 };
+  const offsets = { 1: 1, 2: 7, 3: 15, 4: 30 };
 
   it('leaves the ladder decision untouched — a cap defers, it does not exempt', () => {
     const d = decideFollowUp(30, 0, offsets, [1]);
@@ -129,5 +135,28 @@ describe('the shipped cap default', () => {
     // backlog the first night a level is armed.
     const { DEFAULTS } = jest.requireActual('@/lib/settings');
     expect(DEFAULTS['collections.maxPerRun']).toBe(25);
+  });
+});
+
+describe('level 4 — the suspension notice', () => {
+  const offsets = { 1: 1, 2: 7, 3: 15, 4: 30 };
+
+  it('is reached only after level 3, and only at its own offset', () => {
+    expect(decideFollowUp(20, 3, offsets, [4]).due).toBe(false); // not 30d overdue yet
+    expect(decideFollowUp(30, 3, offsets, [4]).due).toBe(true);
+    expect(decideFollowUp(30, 3, offsets, [4]).level).toBe(4);
+  });
+
+  it('is armed independently — arming 1-3 never sends a suspension notice', () => {
+    const d = decideFollowUp(90, 3, offsets, [1, 2, 3]);
+    expect(d.level).toBe(4);
+    expect(d.due).toBe(false);
+    expect(d.ripe).toBe(true); // reported, so you can see it is owed
+  });
+
+  it('ships with a 30-day offset and a 7-day grace period', () => {
+    const { DEFAULTS } = jest.requireActual('@/lib/settings');
+    expect(DEFAULTS['collections.l4Days']).toBe(30);
+    expect(DEFAULTS['collections.suspensionGraceDays']).toBe(7);
   });
 });

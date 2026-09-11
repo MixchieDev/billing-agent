@@ -29,6 +29,7 @@ interface Config {
   l1Days: number;
   l2Days: number;
   l3Days: number;
+  l4Days: number;
   autoSendLevels: number[];
   maxPerRun: number;
 }
@@ -37,7 +38,11 @@ const LEVELS = [
   { n: 1, label: 'Level 1 — gentle reminder' },
   { n: 2, label: 'Level 2 — firm reminder' },
   { n: 3, label: 'Level 3 — final notice' },
+  { n: 4, label: 'Level 4 — suspension notice' },
 ];
+
+/** Level 4 warns of read-only access, so it gets its own caution. */
+const SUSPENSION_LEVEL = 4;
 
 export function CollectionsSettingsPanel() {
   const [config, setConfig] = useState<Config | null>(null);
@@ -107,6 +112,19 @@ export function CollectionsSettingsPanel() {
           `Arming it would send nothing and log an error against every overdue invoice. ` +
           `Add the template under the Follow-up Emails tab first.`
       );
+      return;
+    }
+
+    // Level 4 threatens to cut off service. Arming it for automatic sending is
+    // a bigger step than the rest and deserves its own answer.
+    if (
+      config.autoSendLevels.includes(SUSPENSION_LEVEL) &&
+      !saved?.autoSendLevels.includes(SUSPENSION_LEVEL) &&
+      !window.confirm(
+        'Level 4 is the suspension notice — it tells a client their account will be set ' +
+          'to read-only.\n\nArm it for AUTOMATIC sending, with no one reviewing each one first?'
+      )
+    ) {
       return;
     }
 
@@ -199,7 +217,7 @@ export function CollectionsSettingsPanel() {
           {LEVELS.map((lvl) => {
             const on = config.autoSendLevels.includes(lvl.n);
             const cost = costOf(lvl.n);
-            const dayKey = (['l1Days', 'l2Days', 'l3Days'] as const)[lvl.n - 1];
+            const dayKey = (['l1Days', 'l2Days', 'l3Days', 'l4Days'] as const)[lvl.n - 1];
             return (
               <div
                 key={lvl.n}
@@ -229,6 +247,12 @@ export function CollectionsSettingsPanel() {
                   />
                   <span>days overdue</span>
                 </div>
+
+                {lvl.n === SUSPENSION_LEVEL && (
+                  <span className="text-xs text-amber-700 dark:text-amber-500">
+                    Warns of read-only access and starts the grace clock
+                  </span>
+                )}
 
                 {!levelsWithTemplate.includes(lvl.n) && (
                   <span className="text-xs font-medium text-destructive">

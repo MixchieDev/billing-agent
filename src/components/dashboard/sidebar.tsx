@@ -30,6 +30,7 @@ import {
   Receipt,
   BrushCleaning,
   CalendarSync,
+  Lock,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -68,6 +69,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { name: 'Follow-up Queue', href: '/dashboard/follow-ups', icon: MailWarning },
       { name: 'Promises to Pay', href: '/dashboard/promises', icon: CalendarClock },
       { name: '2307 Certificates', href: '/dashboard/wht2307', icon: Receipt },
+      { name: 'Suspensions', href: '/dashboard/suspensions', icon: Lock },
     ],
   },
   {

@@ -17,7 +17,7 @@ import prisma from './prisma';
 import { getSettings } from './settings';
 import { sendFollowUpEmail, calculateDaysOverdue } from './follow-up-service';
 
-const MAX_LEVEL = 3;
+const MAX_LEVEL = 4;
 
 export interface FollowUpDecision {
   due: boolean;
@@ -128,6 +128,7 @@ export async function runCollectionsSweep(): Promise<CollectionsSweepResult> {
       'collections.l1Days',
       'collections.l2Days',
       'collections.l3Days',
+      'collections.l4Days',
       'collections.autoSendLevels',
       'collections.maxPerRun',
     ]);
@@ -135,6 +136,7 @@ export async function runCollectionsSweep(): Promise<CollectionsSweepResult> {
       1: Number(s['collections.l1Days']),
       2: Number(s['collections.l2Days']),
       3: Number(s['collections.l3Days']),
+      4: Number(s['collections.l4Days']),
     };
     // Absent/malformed setting means dormant, never "chase everything". A
     // missing row must not be the difference between silence and 200 emails.

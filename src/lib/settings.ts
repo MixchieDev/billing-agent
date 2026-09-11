@@ -58,6 +58,12 @@ export const DEFAULTS: Record<string, any> = {
   // book has never been chased, so without a cap the first armed run drains the
   // whole backlog in one burst. 0 means no limit.
   'collections.maxPerRun': 25,
+  // Level 4 is the suspension notice: the account is set to read-only if the
+  // balance is still unsettled after the grace period. Suspension itself is a
+  // manual act in the service platform — the app only tracks what is due.
+  'collections.l4Days': 30,
+  'collections.suspensionGraceDays': 7,
+  'collections.proofOfPaymentEmail': 'billingcollection@abba.works',
 
   // Contract renewals: how many days ahead of contractEndDate the nightly
   // sweep raises a reminder. One reminder per renewal, not per night.
