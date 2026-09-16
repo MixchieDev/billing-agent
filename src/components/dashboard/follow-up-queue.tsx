@@ -19,7 +19,10 @@ import { DataState } from '@/components/dashboard/data-state';
 import { format } from 'date-fns';
 import Link from 'next/link';
 
-type QueueCategory = 'BROKEN_PROMISE' | 'NO_EMAIL' | 'MAXED' | 'REVIEW';
+/** Level 4 is the suspension notice. */
+const SUSPENSION_LEVEL = 4;
+
+type QueueCategory = 'BROKEN_PROMISE' | 'NO_EMAIL' | 'MAXED' | 'MANUAL' | 'REVIEW';
 
 interface QueueRow {
   id: string;
@@ -68,6 +71,7 @@ const CATEGORY_META: Record<QueueCategory, { label: string; variant: 'destructiv
   MAXED: { label: 'Needs escalation', variant: 'destructive' },
   NO_EMAIL: { label: 'No email', variant: 'warning' },
   REVIEW: { label: 'Review & send', variant: 'warning' },
+  MANUAL: { label: 'Manual follow-up', variant: 'secondary' },
 };
 
 export function FollowUpQueue() {
@@ -91,7 +95,16 @@ export function FollowUpQueue() {
 
   const handleSendNow = async (row: QueueRow) => {
     const level = row.lastFollowUpLevel + 1;
-    if (!window.confirm(`Send follow-up level ${level} for ${row.billingNo ?? row.id.slice(0, 8)} to ${row.customerName}?`)) return;
+    const ref = row.billingNo ?? row.id.slice(0, 8);
+    // Level 4 tells the client their account will be set to read-only. That
+    // deserves to be named, not hidden behind "level 4".
+    const prompt =
+      level === SUSPENSION_LEVEL
+        ? `Send the SUSPENSION NOTICE for ${ref} to ${row.customerName}?\n\n` +
+          `This tells them their account will be set to read-only if they don't pay within the ` +
+          `grace period, and starts that clock.`
+        : `Send the level-${level} reminder for ${ref} to ${row.customerName}?`;
+    if (!window.confirm(prompt)) return;
     setSendingId(row.id);
     try {
       const res = await fetch(`/api/invoices/${row.id}/follow-up`, { method: 'POST' });
@@ -178,7 +191,10 @@ export function FollowUpQueue() {
                 <TableBody>
                   {needsAction.map((row) => {
                     const meta = CATEGORY_META[row.category];
-                    const canSend = row.category === 'REVIEW' || row.category === 'BROKEN_PROMISE';
+                    const canSend =
+                      row.category === 'REVIEW' ||
+                      row.category === 'BROKEN_PROMISE' ||
+                      row.category === 'MANUAL';
                     return (
                       <TableRow key={row.id}>
                         <TableCell>
@@ -207,7 +223,11 @@ export function FollowUpQueue() {
                                 className="text-orange-600 hover:bg-orange-50 hover:text-orange-700"
                               >
                                 <MailWarning className="mr-1 h-4 w-4" />
-                                {sendingId === row.id ? 'Sending…' : `Send L${row.nextLevel}`}
+                                {sendingId === row.id
+                                  ? 'Sending…'
+                                  : row.nextLevel === SUSPENSION_LEVEL
+                                    ? 'Send suspension notice'
+                                    : `Send L${row.nextLevel}`}
                               </Button>
                             )}
                             <Button

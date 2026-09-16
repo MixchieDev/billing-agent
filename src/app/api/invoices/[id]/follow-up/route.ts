@@ -25,7 +25,7 @@ export async function POST(
     const { id } = await params;
 
     // Check if follow-up can be sent
-    const canSendResult = await canSendFollowUp(id);
+    const canSendResult = await canSendFollowUp(id, { manual: true });
     if (!canSendResult.canSend) {
       return NextResponse.json(
         { error: canSendResult.reason },
@@ -34,7 +34,7 @@ export async function POST(
     }
 
     // Send follow-up email
-    const result = await sendFollowUpEmail(id, session.user.id);
+    const result = await sendFollowUpEmail(id, session.user.id, { manual: true });
 
     if (result.success) {
       return NextResponse.json({
@@ -72,7 +72,7 @@ export async function GET(
     const { id } = await params;
 
     // Check if follow-up can be sent
-    const canSendResult = await canSendFollowUp(id);
+    const canSendResult = await canSendFollowUp(id, { manual: true });
 
     // Get follow-up history
     const history = await getFollowUpHistory(id);

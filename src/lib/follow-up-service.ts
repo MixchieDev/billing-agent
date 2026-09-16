@@ -35,7 +35,20 @@ export const SUSPENSION_LEVEL = 4;
 /**
  * Check if a follow-up can be sent for an invoice
  */
-export async function canSendFollowUp(invoiceId: string): Promise<CanSendFollowUpResult> {
+/**
+ * `manual` means a person chose to send this one. followUpEnabled only governs
+ * the AUTOMATED ladder — a client on manual follow-up is exactly the case where
+ * someone sends by hand, so it must not block them. Defaults to automated, so
+ * any caller that doesn't say otherwise keeps respecting the flag.
+ */
+export interface FollowUpSendOptions {
+  manual?: boolean;
+}
+
+export async function canSendFollowUp(
+  invoiceId: string,
+  options: FollowUpSendOptions = {}
+): Promise<CanSendFollowUpResult> {
   const invoice = await prisma.invoice.findUnique({
     where: { id: invoiceId },
     select: {
@@ -56,8 +69,11 @@ export async function canSendFollowUp(invoiceId: string): Promise<CanSendFollowU
     return { canSend: false, reason: 'Invoice must be SENT or PARTIALLY_PAID to send follow-up' };
   }
 
-  if (!invoice.followUpEnabled) {
-    return { canSend: false, reason: 'Follow-up is disabled for this invoice' };
+  if (!invoice.followUpEnabled && !options.manual) {
+    return {
+      canSend: false,
+      reason: 'Automated follow-up is off for this invoice — send it manually from the Follow-up Queue',
+    };
   }
 
   const nextLevel = invoice.lastFollowUpLevel + 1;
@@ -92,13 +108,14 @@ export function calculateDaysOverdue(dueDate: Date): number {
  */
 export async function sendFollowUpEmail(
   invoiceId: string,
-  userId?: string
+  userId?: string,
+  options: FollowUpSendOptions = {}
 ): Promise<FollowUpResult> {
   // Initialize email service
   initEmailServiceFromEnv();
 
   // Check if we can send follow-up
-  const canSendResult = await canSendFollowUp(invoiceId);
+  const canSendResult = await canSendFollowUp(invoiceId, options);
   if (!canSendResult.canSend) {
     return {
       success: false,

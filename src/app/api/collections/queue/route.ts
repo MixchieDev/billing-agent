@@ -8,16 +8,17 @@ import { calculateDaysOverdue } from '@/lib/follow-up-service';
 import { subDays } from 'date-fns';
 import { loadRenewals } from '@/lib/renewal-service';
 
-const MAX_LEVEL = 3;
+const MAX_LEVEL = 4;
 
-export type QueueCategory = 'BROKEN_PROMISE' | 'NO_EMAIL' | 'MAXED' | 'REVIEW';
+export type QueueCategory = 'BROKEN_PROMISE' | 'NO_EMAIL' | 'MAXED' | 'MANUAL' | 'REVIEW';
 
 /**
  * GET /api/collections/queue
  * The follow-up worklist, partitioned with the SAME ladder decision the nightly
  * sweep uses (decideFollowUp), so the queue is a faithful preview of it:
  *  - needsAction: a human must decide — broken promises, missing email,
- *    max-level-reached, or a level configured as draft-for-review.
+ *    max-level-reached, clients on manual follow-up, or a level configured as
+ *    draft-for-review.
  *  - autoTonight: due for a level the sweep will auto-send tonight.
  *  - recentAuto: follow-ups sent in the last 7 days (reviewable log).
  */
@@ -36,12 +37,14 @@ export async function GET() {
       'collections.l1Days',
       'collections.l2Days',
       'collections.l3Days',
+      'collections.l4Days',
       'collections.autoSendLevels',
     ]);
     const offsets: Record<number, number> = {
       1: Number(s['collections.l1Days']),
       2: Number(s['collections.l2Days']),
       3: Number(s['collections.l3Days']),
+      4: Number(s['collections.l4Days']),
     };
     // Must match runCollectionsSweep's fallback exactly — this queue claims to
     // be a faithful preview of the sweep, so a different default here would
@@ -51,12 +54,13 @@ export async function GET() {
       : [];
 
     const [candidates, recentAuto] = await prisma.$transaction([
-      // Overdue, chaseable, un-paused — same population the sweep scans, plus
-      // maxed-out ones (the sweep skips those; the queue surfaces them).
+      // Overdue and un-paused. Deliberately NOT filtered on followUpEnabled: that
+      // flag switches off the AUTOMATED ladder, and a client on manual follow-up
+      // is precisely one a person has to chase — hiding them here would leave
+      // them nowhere at all.
       prisma.invoice.findMany({
         where: {
           status: { in: ['SENT', 'PARTIALLY_PAID'] },
-          followUpEnabled: true,
           dueDate: { lt: today },
           OR: [{ followUpPausedUntil: null }, { followUpPausedUntil: { lte: today } }],
         },
@@ -72,6 +76,7 @@ export async function GET() {
           status: true,
           lastFollowUpLevel: true,
           lastFollowUpAt: true,
+          followUpEnabled: true,
           company: { select: { code: true } },
           promises: {
             orderBy: { createdAt: 'desc' },
@@ -152,7 +157,22 @@ export async function GET() {
         needsAction.push({
           ...base,
           category: 'MAXED',
-          note: 'All 3 reminder levels sent — needs escalation',
+          note: 'All 4 levels sent, including the suspension notice — needs a person',
+        });
+        continue;
+      }
+
+      // Manual follow-up: the ladder's day-offsets don't apply, because these
+      // clients run on their own timing. Surface every overdue one so the person
+      // chasing decides when. They never go into autoTonight.
+      if (!inv.followUpEnabled) {
+        if (chasedToday) continue;
+        needsAction.push({
+          ...base,
+          category: hasEmail ? 'MANUAL' : 'NO_EMAIL',
+          note: hasEmail
+            ? 'Automated follow-up is off for this client — chase on your own schedule'
+            : 'No contact email on the invoice — follow-up cannot send',
         });
         continue;
       }
