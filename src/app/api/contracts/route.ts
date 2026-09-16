@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { ContractStatus, VatType, BillingType } from '@/generated/prisma';
 import { getProductTypes } from '@/lib/settings';
-import { syncContractToCashManagement } from '@/lib/cash-management-sync';
+import { syncContractById } from '@/lib/cash-management-sync';
 
 export async function GET(request: NextRequest) {
   try {
@@ -258,8 +258,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Fire-and-forget sync to cash management
-    syncContractToCashManagement(contract);
+    // Sync to cash management. after() keeps the function alive until it
+    // finishes, instead of the request being cut off once we've responded.
+    after(() => syncContractById(contract.id));
 
     return NextResponse.json(contract, { status: 201 });
   } catch (error) {

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Save, Loader2, RefreshCw, Palette, Building2, Plus, Trash2, Percent, Package } from 'lucide-react';
 import { EmailTemplatesPage } from '@/components/dashboard/email-templates-page';
 import { CollectionsSettingsPanel } from '@/components/dashboard/collections-settings-panel';
+import { CashSyncPanel } from '@/components/dashboard/cash-sync-panel';
 
 interface Setting {
   key: string;
@@ -638,6 +639,7 @@ export default function SettingsPage() {
     { id: 'email', label: 'Email Templates' },
     { id: 'follow-up', label: 'Follow-up Emails' },
     { id: 'collections', label: 'Collections' },
+    { id: 'cash-sync', label: 'Cash Management Sync' },
   ];
 
   // Render template editor card
@@ -1539,6 +1541,8 @@ export default function SettingsPage() {
 
             {/* Follow-up Emails Tab */}
             {activeTab === 'collections' && <CollectionsSettingsPanel />}
+
+            {activeTab === 'cash-sync' && <CashSyncPanel />}
 
             {activeTab === 'follow-up' && (
               <div className="space-y-8">

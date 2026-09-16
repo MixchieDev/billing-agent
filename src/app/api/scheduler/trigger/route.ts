@@ -79,12 +79,32 @@ export async function GET(request: NextRequest) {
       renewals = { error: renewalError instanceof Error ? renewalError.message : 'renewal sweep failed' };
     }
 
+
+    // Fourth phase: push every contract to cash management, so anything the
+    // per-write sync missed heals overnight. Off until the cash management
+    // receiver stops overwriting the fields it owns (see cash-management-sync).
+    let cashSync;
+    try {
+      const { nightlyReconcileEnabled, reconcileAllContracts } = await import('@/lib/cash-management-sync');
+      if (await nightlyReconcileEnabled()) {
+        const r = await reconcileAllContracts();
+        cashSync = { contracts: r.contracts, sent: r.sent, created: r.created, updated: r.updated, failedBatches: r.failedBatches };
+        console.log('[Cron Trigger] Cash management reconcile:', cashSync);
+      } else {
+        cashSync = { skipped: 'nightly reconciliation is off' };
+      }
+    } catch (syncError) {
+      console.error('[Cron Trigger] Cash management reconcile failed:', syncError);
+      cashSync = { error: syncError instanceof Error ? syncError.message : 'reconcile failed' };
+    }
+
     return NextResponse.json({
       message: 'Billing job triggered successfully',
       source,
       ...result,
       collections,
       renewals,
+      cashSync,
     });
   } catch (error) {
     console.error('[Cron Trigger] Error:', error);
@@ -146,12 +166,32 @@ export async function POST(request: NextRequest) {
       renewals = { error: renewalError instanceof Error ? renewalError.message : 'renewal sweep failed' };
     }
 
+
+    // Fourth phase: push every contract to cash management, so anything the
+    // per-write sync missed heals overnight. Off until the cash management
+    // receiver stops overwriting the fields it owns (see cash-management-sync).
+    let cashSync;
+    try {
+      const { nightlyReconcileEnabled, reconcileAllContracts } = await import('@/lib/cash-management-sync');
+      if (await nightlyReconcileEnabled()) {
+        const r = await reconcileAllContracts();
+        cashSync = { contracts: r.contracts, sent: r.sent, created: r.created, updated: r.updated, failedBatches: r.failedBatches };
+        console.log('[Cron Trigger] Cash management reconcile:', cashSync);
+      } else {
+        cashSync = { skipped: 'nightly reconciliation is off' };
+      }
+    } catch (syncError) {
+      console.error('[Cron Trigger] Cash management reconcile failed:', syncError);
+      cashSync = { error: syncError instanceof Error ? syncError.message : 'reconcile failed' };
+    }
+
     return NextResponse.json({
       message: 'Billing job triggered successfully',
       source: 'manual',
       ...result,
       collections,
       renewals,
+      cashSync,
     });
   } catch (error) {
     console.error('[Cron Trigger] Error:', error);

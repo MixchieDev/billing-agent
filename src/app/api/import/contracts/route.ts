@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { parseContractsCSV, generateContractsTemplate, ContractCSVRow } from '@/lib/csv-parser';
 import { ContractStatus, VatType, BillingType } from '@/generated/prisma';
 import { getProductTypes } from '@/lib/settings';
-import { syncContractsBatchToCashManagement } from '@/lib/cash-management-sync';
+import { syncContractsByIds } from '@/lib/cash-management-sync';
 
 // GET - Download template
 export async function GET() {
@@ -339,30 +339,28 @@ async function executeImport(
     }
   }
 
-  // Fire-and-forget sync imported contracts to cash management
+  // Sync imported contracts to cash management. Previously sent as a bare
+  // array, which the receiver rejects with 400 — so imports never synced.
   if (results.created > 0 || results.updated > 0) {
-    const contractIds = validatedRows
+    const refs = validatedRows
       .filter((r) => r.action !== 'skip')
       .map((r) => r._existingContractId || r.customerNumberToAssign)
-      .filter(Boolean);
+      .filter((v): v is string => !!v);
+    const byId = refs.filter((r) => !r.includes('-'));
+    const byCustomerNumber = refs.filter((r) => r.includes('-'));
 
-    // Fetch the actual contracts with relations for syncing
-    const companyIds = [...new Set(validatedRows.filter((r) => r._companyId).map((r) => r._companyId!))];
-    prisma.contract.findMany({
-      where: {
-        OR: [
-          ...(contractIds.filter((id) => id && !id.includes('-')).length > 0
-            ? [{ id: { in: contractIds.filter((id) => id && !id.includes('-')) as string[] } }]
-            : []),
-          ...(contractIds.filter((id) => id && id.includes('-')).length > 0
-            ? [{ customerNumber: { in: contractIds.filter((id) => id && id.includes('-')) as string[] } }]
-            : []),
-        ],
-      },
-      include: { billingEntity: true, partner: true },
-    })
-      .then((contracts) => syncContractsBatchToCashManagement(contracts))
-      .catch((err) => console.error('[cash-mgmt-sync] Failed to fetch contracts for batch sync:', err));
+    after(async () => {
+      const found = await prisma.contract.findMany({
+        where: {
+          OR: [
+            ...(byId.length ? [{ id: { in: byId } }] : []),
+            ...(byCustomerNumber.length ? [{ customerNumber: { in: byCustomerNumber } }] : []),
+          ],
+        },
+        select: { id: true },
+      });
+      await syncContractsByIds(found.map((c) => c.id));
+    });
   }
 
   // Audit log

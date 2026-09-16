@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { recordRenewal } from '@/lib/renewal-service';
+import { syncContractById } from '@/lib/cash-management-sync';
 import { RenewalOutcome } from '@/generated/prisma';
 
 /** GET — this contract's renewal history, newest first. */
@@ -53,6 +54,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
     if (!result.success) return NextResponse.json({ error: result.message }, { status: 400 });
+    // A renewal moves the end date and possibly the fee — both synced fields, and
+    // until now the one contract write that never reached cash management.
+    after(() => syncContractById(id));
     return NextResponse.json(result);
   } catch (error) {
     console.error('Error recording renewal:', error);
