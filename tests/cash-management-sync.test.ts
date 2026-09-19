@@ -79,3 +79,54 @@ describe('buildPayload', () => {
     expect(typeof buildPayload(contract({ monthlyFee: '5600.50' }), derived).monthlyFee).toBe('number');
   });
 });
+
+describe('retireContract — a deleted contract must not stay Active in cash management', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const prisma = require('@/lib/prisma').default;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { getSetting } = require('@/lib/settings');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { retireContract } = require('@/lib/cash-management-sync');
+  const fetchMock = jest.fn();
+
+  beforeEach(() => {
+    process.env.CASH_MGMT_SYNC_KEY = 'k';
+    global.fetch = fetchMock as never;
+    fetchMock.mockReset();
+    prisma.contract = { count: jest.fn().mockResolvedValue(0) };
+    prisma.settings = { upsert: jest.fn().mockResolvedValue({}) };
+    prisma.auditLog = { create: jest.fn().mockResolvedValue({}) };
+    (getSetting as jest.Mock).mockResolvedValue([]);
+  });
+
+  it('sends the old customer number as cancelled', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, text: async () => '{"updated":1}' });
+    await retireContract(contract());
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.customerNumber).toBe('ABBA-0086');
+    expect(body.status).toBe('CANCELLED');
+  });
+
+  it('never cancels a number a live contract holds now', async () => {
+    prisma.contract.count.mockResolvedValue(1);
+    await retireContract(contract());
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('queues a failed retirement for the next full sync', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500, text: async () => 'boom' });
+    await retireContract(contract());
+    const saved = prisma.settings.upsert.mock.calls[0][0];
+    expect(saved.where.key).toBe('cashSync.pendingRetire');
+    expect(saved.create.value[0].customerNumber).toBe('ABBA-0086');
+  });
+
+  it('builds a valid payload from a snapshot that went through JSON storage', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, text: async () => '{}' });
+    await retireContract(JSON.parse(JSON.stringify(contract())));
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.contractStart).toBe('2026-02-13');
+    expect(body.contractEndDate).toBe('2027-06-01');
+    expect(body.monthlyFee).toBe(5000);
+  });
+});

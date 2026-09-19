@@ -11,9 +11,8 @@
  * Cash management owns these, and they must never be overwritten by a sync:
  *   who acquired (it decides which bank account a collection lands in),
  *   reliability score, bank account, notes
- * The second group is still sent, because the receiver's current code requires
- * it; the receiver change that stops applying them on update is in the cash
- * management repo and must be deployed before nightly reconciliation is on.
+ * The second group is still sent as initial values for a new customer; the
+ * receiver (deployed 2026-09-17) ignores them on update.
  *
  * Two ways a contract reaches cash management:
  *   1. on each write, via syncContractById — scheduled with `after()` so the
@@ -275,6 +274,77 @@ export async function syncContractsByIds(ids: string[]): Promise<SyncResult> {
   }
 }
 
+/**
+ * The receiver never deletes, so a contract deleted here would otherwise live on
+ * there as Active under its old customer number — and when the client is
+ * re-created under a new number, their fee is counted twice. Retiring marks the
+ * old record Cancelled. Read the snapshot before deleting; retire after.
+ */
+export async function loadRetireSnapshot(contractId: string): Promise<SyncContract | null> {
+  return prisma.contract.findUnique({ where: { id: contractId }, select: CONTRACT_SELECT });
+}
+
+const PENDING_RETIRE_KEY = 'cashSync.pendingRetire';
+
+async function pendingRetires(): Promise<SyncContract[]> {
+  const v = await getSetting(PENDING_RETIRE_KEY);
+  return Array.isArray(v) ? (v as SyncContract[]) : [];
+}
+
+async function savePendingRetires(list: SyncContract[]) {
+  await prisma.settings
+    .upsert({
+      where: { key: PENDING_RETIRE_KEY },
+      update: { value: list as never },
+      create: { key: PENDING_RETIRE_KEY, value: list as never },
+    })
+    .catch(() => {});
+}
+
+function retirePayload(c: SyncContract) {
+  const start = c.contractStart ? new Date(c.contractStart) : new Date(c.createdAt);
+  return buildPayload(
+    { ...c, status: 'STOPPED', contractEndDate: c.contractEndDate ? new Date(c.contractEndDate) : null },
+    { contractStart: isoDate(start)!, invoiceDay: c.billingDayOfMonth }
+  );
+}
+
+/**
+ * Mark a deleted contract's customer number Cancelled in cash management. A
+ * failed attempt is queued and retried by the next full reconciliation.
+ */
+export async function retireContract(c: SyncContract): Promise<SyncResult> {
+  if (!c.customerNumber) return { ok: true };
+  // Never cancel a number a live contract holds now.
+  const reused = await prisma.contract.count({ where: { customerNumber: c.customerNumber } });
+  if (reused) return { ok: true, skipped: 1 };
+
+  const result = await post('/sync-contract', retirePayload(c));
+  if (!result.ok) {
+    await recordFailure(c.id, c.customerNumber, `retire: ${result.error ?? `HTTP ${result.status}`}`);
+    const pending = await pendingRetires();
+    if (!pending.some((p) => p.customerNumber === c.customerNumber)) {
+      await savePendingRetires([...pending, c]);
+    }
+  }
+  return result;
+}
+
+/** Retry retirements that failed earlier; keeps only the ones that still fail. */
+async function retryPendingRetires(): Promise<number> {
+  const pending = await pendingRetires();
+  if (!pending.length) return 0;
+  const stillFailing: SyncContract[] = [];
+  for (const c of pending) {
+    const reused = await prisma.contract.count({ where: { customerNumber: c.customerNumber } });
+    if (reused) continue;
+    const r = await post('/sync-contract', retirePayload(c));
+    if (!r.ok) stillFailing.push(c);
+  }
+  await savePendingRetires(stillFailing);
+  return pending.length - stillFailing.length;
+}
+
 export interface ReconcileResult {
   at: string;
   contracts: number;
@@ -284,6 +354,8 @@ export interface ReconcileResult {
   skipped: number;
   failedBatches: number;
   errors: string[];
+  /** Deleted contracts whose earlier retirement failed and succeeded this run. */
+  retired?: number;
 }
 
 /**
@@ -332,6 +404,8 @@ export async function reconcileAllContracts(): Promise<ReconcileResult> {
       }
     }
 
+    result.retired = await retryPendingRetires();
+
     await prisma.jobRun.update({
       where: { id: job.id },
       data: {
@@ -362,11 +436,7 @@ export async function reconcileAllContracts(): Promise<ReconcileResult> {
   return result;
 }
 
-/**
- * Off until the cash management receiver stops overwriting the fields it owns.
- * Before that, a nightly push of every contract would reset who-acquired,
- * reliability, bank account and notes on every customer, every night.
- */
+/** Nightly full push — an admin switch in Settings → Cash Management Sync. */
 export async function nightlyReconcileEnabled(): Promise<boolean> {
   return (await getSetting('cashSync.nightlyReconcile')) === true;
 }

@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { ContractStatus, VatType, BillingType } from '@/generated/prisma';
-import { syncContractById } from '@/lib/cash-management-sync';
+import { syncContractById, loadRetireSnapshot, retireContract } from '@/lib/cash-management-sync';
 
 // GET single contract
 export async function GET(
@@ -334,10 +334,17 @@ export async function DELETE(
       );
     }
 
+    // Snapshot first: after the delete there is nothing left to tell cash
+    // management which customer number to cancel.
+    const retireSnapshot = await loadRetireSnapshot(id);
+
     // Delete the contract
     await prisma.contract.delete({
       where: { id },
     });
+
+    // Cash management never deletes; mark the old number Cancelled there.
+    if (retireSnapshot) after(() => retireContract(retireSnapshot));
 
     // Audit log
     await prisma.auditLog.create({

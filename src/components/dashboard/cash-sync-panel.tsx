@@ -69,8 +69,8 @@ export function CashSyncPanel() {
     if (
       !window.confirm(
         'Push every contract to cash management now?\n\n' +
-          'Until the cash management app is updated, this also resets who acquired, ' +
-          'reliability score, bank account and notes on every customer there.'
+          'Contract terms there are updated to match the billing agent. Who acquired, ' +
+          'reliability score, bank account and notes are left as they are.'
       )
     )
       return;
@@ -96,9 +96,9 @@ export function CashSyncPanel() {
       next &&
       !window.confirm(
         'Turn on the nightly sync of every contract?\n\n' +
-          'Only do this once the cash management app has been updated to stop ' +
-          'overwriting who acquired, reliability score, bank account and notes. ' +
-          'Before that, those four would be reset on every customer, every night.'
+          'Each night, contract terms in cash management are updated to match the ' +
+          'billing agent. Who acquired, reliability score, bank account and notes ' +
+          'are left as they are.'
       )
     )
       return;
@@ -199,8 +199,7 @@ export function CashSyncPanel() {
               <span className="font-medium">Push every contract to cash management each night</span>
               <span className="mt-0.5 block text-muted-foreground">
                 The backstop: anything a single edit failed to send is corrected by the next
-                morning. Leave off until the cash management app has been updated — see the
-                warning when you turn it on.
+                morning.
               </span>
             </span>
           </label>
