@@ -146,7 +146,8 @@ Amount, Total Amount Received. **Table:** Invoice No, Client, Amount, Due Date, 
 Amount Paid, Payment Method, Reference, Entity.
 
 ### 5.6 Contracts (`/dashboard/contracts`)
-**Search**, **Status / Billing Entity / Product Type** filters, **Refresh**, **CSV Import**,
+**Search**, **Status / Billing Entity / Product Type / Partner** filters, **Sort** (newest,
+Company A–Z, Z–A, Customer No. — Export CSV follows the same filters and sort), **Refresh**, **CSV Import**,
 **Create Contract**, pagination. **Table:** Customer No, Company Name, Product Type, Monthly
 Fee, Status, Next Due Date, Billing Entity, Contact, Email, Payment Plan, **Auto‑Send** toggle,
 Actions (Settings, Delete). Modals: *Contract Form* (create/edit), *CSV Import*, *Contract
@@ -534,3 +535,49 @@ Enums: `UserRole`, `BillingModel`, `ContractStatus`, `VatType`, `BillingType`,
 - **Attachments** are stored as **binary rows in Postgres** (≤5 files, ≤5 MB each) — fine at low
   volume; move to object storage if attachment use grows.
 - **No open sign‑up** — an ADMIN must create every user.
+
+---
+
+## 21. Feature considerations (not built)
+
+Ideas agreed worth doing, recorded so they are designed properly rather than patched in.
+
+### 21.1 Parent companies with sub‑companies
+
+*Raised 2026‑09‑21.*
+
+**Today** every contract stands alone. Nothing links a sub‑company to its parent; the only
+common thread is a similar company name, so the parent's view of what the group owes, and a
+single payment covering several subs, both have to be worked out by hand.
+
+**Where it shows up in the data**
+- Group accounts carried under one name: *Almirante Shell Group of Companies* (4 products),
+  *W&W Galam Group of Companies*.
+- Branches or divisions as separate names: *Mindanao Golden Grains Corp.* and
+  *Mindanao Golden Grains Corp. – Hardware*; *Boutique Outsource Solutions – Philippine Branch*.
+- Possibly related companies, to confirm: Del Monte Philippines / Del Monte Foundation /
+  Del Monte Golf Club; Restia Builders / Restia Rice Milling; Unlioil / Unlisteel Depos.
+- The five clients with two TINs found during the consolidated‑billing review.
+
+**What it would touch**
+1. **Data** — a client group (parent name, billing contact, email) that contracts can belong
+   to. Each sub keeps its own TIN, address and contracts: BIR invoices must stay per legal entity.
+2. **Invoicing** — optionally one statement/email to the parent covering every sub, while each
+   invoice is still issued under the sub's own TIN. Overlaps the pending consolidated‑billing
+   design (one contract → one billing); decide both together.
+3. **Collections** — follow‑ups and the Level 4 suspension notice addressed to the group, listing
+   each sub's overdue invoices. Decide whether one sub's arrears suspends the others.
+4. **Payments** — one payment from the parent allocated across several subs' invoices.
+5. **Cash management** — a group total in expected cash; who acquired stays per sub, since it
+   decides the receiving bank account.
+6. **Reports & dashboard** — receivables and revenue rolled up per group.
+
+**Open questions**
+- Who pays — the parent for everyone, each sub for itself, or it varies by group?
+- One email per group, or per sub with the parent copied?
+- Can a sub belong to more than one group? (Assume not.)
+- Is grouping only for direct clients, or also partner‑billed ones (Globe, RCBC)?
+
+**Caveat — don't detect groups by TIN.** 30 contracts carry `000‑360‑916‑000`: the 29 Globe
+contracts (Globe's own TIN) and *KL Seven Accounting Services* (YOWI‑0037), a direct YOWI
+client — that one is probably a copy error worth checking. Groups should be set by hand.

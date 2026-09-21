@@ -178,7 +178,7 @@ export function parseContractsCSV(csvContent: string): ParseResult<ContractCSVRo
     const getValue = (col: string): string => row[colIndex[col]] || '';
 
     const customerId = getValue('customerid');
-    const companyName = getValue('companyname');
+    const companyName = getValue('companyname').trim();
     const productType = getValue('producttype');
     const partner = getValue('partner');
     const billingEntity = getValue('billingentity');

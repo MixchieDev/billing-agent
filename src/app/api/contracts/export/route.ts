@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { ContractStatus, Prisma } from '@/generated/prisma';
 import { format } from 'date-fns';
+import { contractOrderBy } from '@/lib/contract-sort';
 
 /**
  * One CSV field. Quotes anything that could break the row, and prefixes a
@@ -45,11 +46,13 @@ export async function GET(request: NextRequest) {
     const billingEntity = sp.get('billingEntity');
     const productType = sp.get('productType');
     const search = sp.get('search');
+    const partner = sp.get('partner');
 
     const where: Prisma.ContractWhereInput = {
       ...(status && status !== 'ALL' && { status: status as ContractStatus }),
       ...(billingEntity && billingEntity !== 'ALL' && { billingEntity: { code: billingEntity } }),
       ...(productType && productType !== 'ALL' && { productType }),
+      ...(partner && partner !== 'ALL' && { partner: { code: partner } }),
       ...(search && {
         OR: [
           { companyName: { contains: search, mode: 'insensitive' as const } },
@@ -63,7 +66,11 @@ export async function GET(request: NextRequest) {
     const contracts = await prisma.contract.findMany({
       where,
       include: { billingEntity: true, partner: true },
-      orderBy: [{ status: 'asc' }, { companyName: 'asc' }],
+      // Same order as the list on screen when a sort is chosen; otherwise the
+      // export's long-standing status-then-name order.
+      orderBy: sp.get('sort')
+        ? contractOrderBy(sp.get('sort'))
+        : [{ status: 'asc' }, { companyName: 'asc' }],
     });
 
     const today = new Date();

@@ -219,7 +219,7 @@ export async function PUT(
 
     // Only update fields that are provided
     if (body.customerId !== undefined) updateData.customerId = body.customerId;
-    if (body.companyName !== undefined) updateData.companyName = body.companyName;
+    if (body.companyName !== undefined) updateData.companyName = String(body.companyName).trim();
     if (body.productType !== undefined) {
       updateData.productType = body.productType?.toUpperCase() || existingContract.productType;
     }

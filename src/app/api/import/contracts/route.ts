@@ -189,7 +189,7 @@ async function validateRows(rows: ContractCSVRow[], startRowNumber: number = 2) 
       action,
       data: {
         customerId: row.customerId || '',
-        companyName: row.companyName,
+        companyName: row.companyName.trim(),
         productType: row.productType,
         partner: row.partner,
         billingEntity: row.billingEntity,

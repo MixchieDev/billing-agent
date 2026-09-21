@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { CONTRACT_SORTS, type ContractSort } from '@/lib/contract-sort';
 import dynamic from 'next/dynamic';
 import { Header } from '@/components/dashboard/header';
 import { ContractTable, ContractRow } from '@/components/dashboard/contract-table';
@@ -98,6 +99,8 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [billingEntityFilter, setBillingEntityFilter] = useState<string>('');
   const [productTypeFilter, setProductTypeFilter] = useState<string>('');
+  const [partnerFilter, setPartnerFilter] = useState<string>('');
+  const [sort, setSort] = useState<ContractSort>('newest');
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
@@ -120,6 +123,8 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
       if (statusFilter) params.set('status', statusFilter);
       if (billingEntityFilter) params.set('billingEntity', billingEntityFilter);
       if (productTypeFilter) params.set('productType', productTypeFilter);
+      if (partnerFilter) params.set('partner', partnerFilter);
+      if (sort !== 'newest') params.set('sort', sort);
 
       const url = `/api/contracts?${params.toString()}`;
       const response = await fetch(url);
@@ -164,7 +169,7 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, billingEntityFilter, productTypeFilter, debouncedSearch, page]);
+  }, [statusFilter, billingEntityFilter, productTypeFilter, partnerFilter, sort, debouncedSearch, page]);
 
   const fetchPartnersAndCompanies = async () => {
     try {
@@ -227,6 +232,8 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
       if (statusFilter) params.set('status', statusFilter);
       if (billingEntityFilter) params.set('billingEntity', billingEntityFilter);
       if (productTypeFilter) params.set('productType', productTypeFilter);
+      if (partnerFilter) params.set('partner', partnerFilter);
+      if (sort !== 'newest') params.set('sort', sort);
 
       const response = await fetch(`/api/contracts/export?${params.toString()}`);
       if (!response.ok) {
@@ -374,6 +381,31 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
               <option value="">All Products</option>
               {(productTypes || []).map(pt => (
                 <option key={pt.value} value={pt.value}>{pt.label}</option>
+              ))}
+            </select>
+
+            <select
+              value={partnerFilter}
+              onChange={(e) => { setPartnerFilter(e.target.value); setPage(1); }}
+              className={selectClassName}
+              aria-label="Filter by partner"
+            >
+              <option value="">All Partners</option>
+              {[...partners]
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map(p => (
+                  <option key={p.code} value={p.code}>{p.name}</option>
+                ))}
+            </select>
+
+            <select
+              value={sort}
+              onChange={(e) => { setSort(e.target.value as ContractSort); setPage(1); }}
+              className={selectClassName}
+              aria-label="Sort contracts"
+            >
+              {(Object.entries(CONTRACT_SORTS) as [ContractSort, string][]).map(([value, label]) => (
+                <option key={value} value={value}>Sort: {label}</option>
               ))}
             </select>
 

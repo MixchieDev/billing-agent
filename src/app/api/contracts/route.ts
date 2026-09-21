@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 import { ContractStatus, VatType, BillingType } from '@/generated/prisma';
 import { getProductTypes } from '@/lib/settings';
 import { syncContractById } from '@/lib/cash-management-sync';
+import { contractOrderBy } from '@/lib/contract-sort';
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,6 +19,8 @@ export async function GET(request: NextRequest) {
     const billingEntity = searchParams.get('billingEntity');
     const productType = searchParams.get('productType');
     const search = searchParams.get('search');
+    const partner = searchParams.get('partner');
+    const orderBy = contractOrderBy(searchParams.get('sort'));
 
     // Pagination params. Callers populating dropdowns (e.g. schedule creation)
     // pass `limit=all` to opt out of pagination and get every matching row.
@@ -32,6 +35,7 @@ export async function GET(request: NextRequest) {
       ...(status && { status: status as any }),
       ...(billingEntity && { billingEntity: { code: billingEntity } }),
       ...(productType && { productType: productType as any }),
+      ...(partner && { partner: { code: partner } }),
       ...(search && {
         OR: [
           { companyName: { contains: search, mode: 'insensitive' } },
@@ -77,7 +81,7 @@ export async function GET(request: NextRequest) {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip: prismaSkip,
         take: prismaTake,
       });
@@ -88,7 +92,7 @@ export async function GET(request: NextRequest) {
           billingEntity: true,
           partner: true,
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip: prismaSkip,
         take: prismaTake,
       });
@@ -208,7 +212,7 @@ export async function POST(request: NextRequest) {
       data: {
         customerNumber,
         customerId: body.customerId || null,
-        companyName: body.companyName,
+        companyName: String(body.companyName).trim(),
         productType,
         partnerId: partner.id,
         billingEntityId: company.id,
