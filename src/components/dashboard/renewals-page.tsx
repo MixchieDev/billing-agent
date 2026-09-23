@@ -21,6 +21,7 @@ interface Renewal {
   companyName: string;
   productType: string;
   entity: string;
+  partner: string | null;
   monthlyFee: number;
   contractEndDate: string;
   daysUntil: number;
@@ -35,7 +36,7 @@ interface Renewal {
 interface RenewalData {
   leadDays: number;
   renewals: Renewal[];
-  missingEndDate: { id: string; companyName: string; entity: string; monthlyFee: number }[];
+  missingEndDate: { id: string; companyName: string; entity: string; partner: string | null; monthlyFee: number }[];
   counts: Record<Stage, number>;
   missingCount: number;
   rate: { renewed: number; notRenewed: number; total: number; rate: number | null };
@@ -58,14 +59,35 @@ const STAGE_BADGE: Record<Stage, { variant: 'destructive' | 'warning' | 'success
 
 export function RenewalsPage() {
   const [tab, setTab] = useState<Stage | 'all'>('due');
+  const [entity, setEntity] = useState('');
+  const [partner, setPartner] = useState('');
   const [saving, setSaving] = useState<string | null>(null);
   const { data, error, isLoading, mutate } = useApi<RenewalData>('/api/renewals');
 
-  const rows = (data?.renewals ?? []).filter((r) => tab === 'all' || r.stage === tab);
+  // Both lists are filtered the same way, so the totals, the tab counts and
+  // the "no renewal date" card all describe the same slice of the book.
+  const matches = (r: { entity: string; partner: string | null }) =>
+    (!entity || r.entity === entity) && (!partner || r.partner === partner);
+
+  const all = (data?.renewals ?? []).filter(matches);
+  const missing = (data?.missingEndDate ?? []).filter(matches);
+  const rows = all.filter((r) => tab === 'all' || r.stage === tab);
   const leadDays = data?.leadDays ?? 45;
-  const atRiskValue = (data?.renewals ?? [])
+  const atRiskValue = all
     .filter((r) => r.stage === 'due' || r.stage === 'overdue')
     .reduce((s, r) => s + r.monthlyFee, 0);
+
+  const counts: Record<Stage, number> = { overdue: 0, due: 0, soon: 0, later: 0 };
+  for (const r of all) counts[r.stage]++;
+  const filtered = !!entity || !!partner;
+
+  // Dropdown options come from every contract, not the filtered view, so
+  // choosing one option never hides the others.
+  const everyContract = [...(data?.renewals ?? []), ...(data?.missingEndDate ?? [])];
+  const entities = [...new Set(everyContract.map((r) => r.entity).filter(Boolean))].sort();
+  const partners = [
+    ...new Set(everyContract.map((r) => r.partner).filter((p): p is string => !!p)),
+  ].sort();
 
   /** Record what happened at the end of a term. */
   const decide = async (r: Renewal, outcome: 'RENEWED' | 'NOT_RENEWING' | 'LAPSED') => {
@@ -123,6 +145,9 @@ export function RenewalsPage() {
     }
   };
 
+  const selectClassName =
+    'h-9 rounded-md border border-border bg-card px-3 py-1 text-sm shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring';
+
   return (
     <div className="flex flex-col">
       <Header
@@ -141,7 +166,7 @@ export function RenewalsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {statValue(data?.counts.due, (n) => String(n), error)}
+                {statValue(data ? counts.due : undefined, (n) => String(n), error)}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 {error ? 'Figure unavailable' : `within ${leadDays} days · ${formatCurrency(atRiskValue)}/mo at stake`}
@@ -156,7 +181,7 @@ export function RenewalsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {statValue(data?.counts.overdue, (n) => String(n), error)}
+                {statValue(data ? counts.overdue : undefined, (n) => String(n), error)}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 {error ? 'Figure unavailable' : 'end date already passed'}
@@ -181,7 +206,8 @@ export function RenewalsPage() {
                 {error
                   ? 'Figure unavailable'
                   : data?.rate?.total
-                    ? `${data.rate.renewed} of ${data.rate.total} renewed, last 12 months`
+                    ? `${data.rate.renewed} of ${data.rate.total} renewed, last 12 months` +
+                      (filtered ? ' · whole book' : '')
                     : 'nothing has come up for renewal yet'}
               </p>
             </CardContent>
@@ -196,7 +222,7 @@ export function RenewalsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {statValue(data?.missingCount, (n) => String(n), error)}
+                {statValue(data ? missing.length : undefined, (n) => String(n), error)}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 {error ? 'Figure unavailable' : 'active contracts nobody can be reminded about'}
@@ -217,17 +243,49 @@ export function RenewalsPage() {
                 {t.label}
                 {data && t.key !== 'all' && (
                   <span className="ml-2 rounded bg-muted px-1.5 text-xs text-muted-foreground">
-                    {data.counts[t.key as Stage]}
+                    {counts[t.key as Stage]}
                   </span>
                 )}
               </Button>
             ))}
             {isLoading && <Loader2 className="ml-1 h-4 w-4 animate-spin text-muted-foreground" />}
           </div>
-          <Button variant="outline" onClick={() => mutate()} disabled={isLoading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={entity}
+              onChange={(e) => setEntity(e.target.value)}
+              className={selectClassName}
+              aria-label="Filter renewals by billing entity"
+            >
+              <option value="">All entities</option>
+              {entities.map((e) => (
+                <option key={e} value={e}>{e}</option>
+              ))}
+            </select>
+
+            <select
+              value={partner}
+              onChange={(e) => setPartner(e.target.value)}
+              className={selectClassName}
+              aria-label="Filter renewals by partner"
+            >
+              <option value="">All partners</option>
+              {partners.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+
+            {filtered && (
+              <Button variant="ghost" size="sm" onClick={() => { setEntity(''); setPartner(''); }}>
+                Clear
+              </Button>
+            )}
+
+            <Button variant="outline" onClick={() => mutate()} disabled={isLoading}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         <Card>
@@ -238,6 +296,7 @@ export function RenewalsPage() {
                   <TableRow>
                     <TableHead>Client</TableHead>
                     <TableHead>Entity</TableHead>
+                    <TableHead>Partner</TableHead>
                     <TableHead className="text-right">Monthly fee</TableHead>
                     <TableHead>Renews</TableHead>
                     <TableHead className="text-right">Countdown</TableHead>
@@ -254,6 +313,9 @@ export function RenewalsPage() {
                         <div className="text-xs text-muted-foreground">{r.productType}</div>
                       </TableCell>
                       <TableCell><Badge variant="outline">{r.entity}</Badge></TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {r.partner ?? 'Direct'}
+                      </TableCell>
                       <TableCell className="text-right font-medium">
                         {formatCurrency(r.monthlyFee)}
                       </TableCell>
@@ -344,12 +406,12 @@ export function RenewalsPage() {
         </Card>
 
         {/* The real risk isn't a renewal we can see — it's one we can't. */}
-        {!!data?.missingEndDate.length && (
+        {!!missing.length && (
           <Card className="border-destructive/40">
             <CardHeader>
               <CardTitle className="text-base">
-                {data.missingEndDate.length} active contract
-                {data.missingEndDate.length === 1 ? '' : 's'} with no renewal date
+                {missing.length} active contract
+                {missing.length === 1 ? '' : 's'} with no renewal date
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -363,15 +425,19 @@ export function RenewalsPage() {
                     <TableRow>
                       <TableHead>Client</TableHead>
                       <TableHead>Entity</TableHead>
+                      <TableHead>Partner</TableHead>
                       <TableHead className="text-right">Monthly fee</TableHead>
                       <TableHead className="text-right">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.missingEndDate.map((c) => (
+                    {missing.map((c) => (
                       <TableRow key={c.id}>
                         <TableCell className="font-medium">{c.companyName}</TableCell>
                         <TableCell><Badge variant="outline">{c.entity}</Badge></TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {c.partner ?? 'Direct'}
+                        </TableCell>
                         <TableCell className="text-right">{formatCurrency(c.monthlyFee)}</TableCell>
                         <TableCell className="text-right">
                           <Link

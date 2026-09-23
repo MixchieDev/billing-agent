@@ -23,6 +23,8 @@ export interface RenewalRow {
   companyName: string;
   productType: string;
   entity: string;
+  /** Partner name, or null for a direct client — the renewal list groups by it. */
+  partner: string | null;
   monthlyFee: number;
   contractEndDate: string;
   daysUntil: number;
@@ -129,7 +131,7 @@ async function leadDaysSetting(): Promise<number> {
 export async function loadRenewals(): Promise<{
   leadDays: number;
   renewals: RenewalRow[];
-  missingEndDate: { id: string; companyName: string; entity: string; monthlyFee: number }[];
+  missingEndDate: { id: string; companyName: string; entity: string; partner: string | null; monthlyFee: number }[];
   counts: Record<RenewalStage, number>;
   missingCount: number;
   rate: RenewalRate;
@@ -143,6 +145,7 @@ export async function loadRenewals(): Promise<{
         id: true, companyName: true, productType: true, monthlyFee: true,
         contractEndDate: true, contactPerson: true, email: true,
         renewalNoticeAt: true, billingEntity: { select: { code: true } },
+        partner: { select: { name: true } },
         renewals: {
           orderBy: { decidedAt: 'desc' },
           take: 1,
@@ -156,6 +159,7 @@ export async function loadRenewals(): Promise<{
       select: {
         id: true, companyName: true, monthlyFee: true,
         billingEntity: { select: { code: true } },
+        partner: { select: { name: true } },
       },
       orderBy: { companyName: 'asc' },
     }),
@@ -173,6 +177,7 @@ export async function loadRenewals(): Promise<{
       companyName: c.companyName,
       productType: c.productType,
       entity: c.billingEntity?.code ?? '',
+      partner: c.partner?.name ?? null,
       monthlyFee: Number(c.monthlyFee),
       contractEndDate: c.contractEndDate!.toISOString(),
       daysUntil: days,
@@ -192,6 +197,7 @@ export async function loadRenewals(): Promise<{
       id: c.id,
       companyName: c.companyName,
       entity: c.billingEntity?.code ?? '',
+      partner: c.partner?.name ?? null,
       monthlyFee: Number(c.monthlyFee),
     })),
     counts,
