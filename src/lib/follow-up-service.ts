@@ -43,6 +43,12 @@ export const SUSPENSION_LEVEL = 4;
  */
 export interface FollowUpSendOptions {
   manual?: boolean;
+  /**
+   * Send this level instead of the next one on the ladder — how a suspension
+   * notice goes out without first walking through levels 2 and 3. A person has
+   * to choose it: the automated sweep always climbs one step at a time.
+   */
+  level?: number;
 }
 
 export async function canSendFollowUp(
@@ -76,9 +82,27 @@ export async function canSendFollowUp(
     };
   }
 
-  const nextLevel = invoice.lastFollowUpLevel + 1;
+  let nextLevel = invoice.lastFollowUpLevel + 1;
   if (nextLevel > MAX_FOLLOW_UP_LEVEL) {
     return { canSend: false, reason: 'Maximum follow-up level (4) reached' };
+  }
+
+  if (options.level !== undefined) {
+    if (!options.manual) {
+      return { canSend: false, reason: 'A level can only be chosen on a manual send' };
+    }
+    if (!Number.isInteger(options.level) || options.level < 1 || options.level > MAX_FOLLOW_UP_LEVEL) {
+      return { canSend: false, reason: `Choose a level between 1 and ${MAX_FOLLOW_UP_LEVEL}` };
+    }
+    // Skipping ahead is allowed; going back is not — it would rewind the
+    // ladder, and the client has already had the stronger letter.
+    if (options.level < nextLevel) {
+      return {
+        canSend: false,
+        reason: `Level ${options.level} has already been sent for this invoice`,
+      };
+    }
+    nextLevel = options.level;
   }
 
   // Check if customer has email
@@ -287,6 +311,27 @@ export async function sendFollowUpEmail(
           ...(level === SUSPENSION_LEVEL ? { suspensionNoticeAt: new Date() } : {}),
         },
       });
+
+      // Jumping the ladder is a judgement call, so it leaves a trace.
+      if (level > invoice.lastFollowUpLevel + 1) {
+        await prisma.auditLog
+          .create({
+            data: {
+              userId,
+              action: 'FOLLOW_UP_LEVEL_SKIPPED',
+              entityType: 'Invoice',
+              entityId: invoice.id,
+              details: {
+                billingNo: invoice.billingNo,
+                customerName: invoice.customerName,
+                sentLevel: level,
+                laddersNextLevel: invoice.lastFollowUpLevel + 1,
+                suspensionNotice: level === SUSPENSION_LEVEL,
+              },
+            },
+          })
+          .catch(() => {});
+      }
 
       // Create audit log
       await prisma.auditLog.create({

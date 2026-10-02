@@ -69,3 +69,48 @@ describe('canSendFollowUp and the manual follow-up flag', () => {
     expect(r.nextLevel).toBe(4);
   });
 });
+
+/**
+ * The suspension notice must not be stuck behind levels 2 and 3: a client who
+ * has gone quiet can be sent straight to it. The ladder itself never jumps.
+ */
+describe('canSendFollowUp — choosing the level', () => {
+  beforeEach(() => findUnique.mockReset());
+
+  it('lets a person send the suspension notice after only level 1', async () => {
+    findUnique.mockResolvedValue(invoice({ lastFollowUpLevel: 1 }));
+    const r = await canSendFollowUp('inv1', { manual: true, level: 4 });
+    expect(r).toMatchObject({ canSend: true, nextLevel: 4 });
+  });
+
+  it('never lets the automated sweep skip a rung', async () => {
+    findUnique.mockResolvedValue(invoice({ lastFollowUpLevel: 1 }));
+    const r = await canSendFollowUp('inv1', { level: 4 });
+    expect(r.canSend).toBe(false);
+    expect(r.reason).toMatch(/manual send/i);
+  });
+
+  it('refuses to go back down the ladder', async () => {
+    findUnique.mockResolvedValue(invoice({ lastFollowUpLevel: 3 }));
+    const r = await canSendFollowUp('inv1', { manual: true, level: 2 });
+    expect(r.canSend).toBe(false);
+    expect(r.reason).toMatch(/already been sent/i);
+  });
+
+  it('rejects a level outside 1–4', async () => {
+    findUnique.mockResolvedValue(invoice());
+    for (const level of [0, 5, 2.5]) {
+      expect((await canSendFollowUp('inv1', { manual: true, level })).canSend).toBe(false);
+    }
+  });
+
+  it('still climbs one rung when no level is chosen', async () => {
+    findUnique.mockResolvedValue(invoice({ lastFollowUpLevel: 1 }));
+    expect(await canSendFollowUp('inv1', { manual: true })).toMatchObject({ nextLevel: 2 });
+  });
+
+  it('still refuses once level 4 has gone out', async () => {
+    findUnique.mockResolvedValue(invoice({ lastFollowUpLevel: 4 }));
+    expect((await canSendFollowUp('inv1', { manual: true, level: 4 })).canSend).toBe(false);
+  });
+});

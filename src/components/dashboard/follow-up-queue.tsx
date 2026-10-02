@@ -13,7 +13,7 @@ import { useApi } from '@/lib/hooks/use-api';
 import { formatCurrency, formatDateShort } from '@/lib/utils';
 import {
   RefreshCw, Loader2, MailWarning, CalendarClock, Moon, CheckCircle2, AlertTriangle,
-  CalendarSync,
+  CalendarSync, Ban,
 } from 'lucide-react';
 import { DataState } from '@/components/dashboard/data-state';
 import { format } from 'date-fns';
@@ -93,8 +93,13 @@ export function FollowUpQueue() {
     [data, entityFilter]
   );
 
-  const handleSendNow = async (row: QueueRow) => {
-    const level = row.lastFollowUpLevel + 1;
+  /**
+   * `chosenLevel` skips the ladder — the suspension notice does not have to
+   * wait for levels 2 and 3 when a client has gone quiet or broken a promise.
+   */
+  const handleSendNow = async (row: QueueRow, chosenLevel?: number) => {
+    const ladderLevel = row.lastFollowUpLevel + 1;
+    const level = chosenLevel ?? ladderLevel;
     const ref = row.billingNo ?? row.id.slice(0, 8);
     // Level 4 tells the client their account will be set to read-only. That
     // deserves to be named, not hidden behind "level 4".
@@ -102,12 +107,21 @@ export function FollowUpQueue() {
       level === SUSPENSION_LEVEL
         ? `Send the SUSPENSION NOTICE for ${ref} to ${row.customerName}?\n\n` +
           `This tells them their account will be set to read-only if they don't pay within the ` +
-          `grace period, and starts that clock.`
+          `grace period, and starts that clock.` +
+          (level > ladderLevel
+            ? `\n\nThis skips the level-${ladderLevel} reminder${
+                level - ladderLevel > 1 ? ` and the ones after it` : ''
+              }, so it is the last letter they get before suspension.`
+            : '')
         : `Send the level-${level} reminder for ${ref} to ${row.customerName}?`;
     if (!window.confirm(prompt)) return;
     setSendingId(row.id);
     try {
-      const res = await fetch(`/api/invoices/${row.id}/follow-up`, { method: 'POST' });
+      const res = await fetch(`/api/invoices/${row.id}/follow-up`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(chosenLevel ? { level: chosenLevel } : {}),
+      });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Failed to send follow-up');
       mutate();
@@ -228,6 +242,22 @@ export function FollowUpQueue() {
                                   : row.nextLevel === SUSPENSION_LEVEL
                                     ? 'Send suspension notice'
                                     : `Send L${row.nextLevel}`}
+                              </Button>
+                            )}
+                            {/* The ladder is the normal path, not the only one:
+                                a client who has gone quiet can be sent straight
+                                to the suspension notice. */}
+                            {canSend && !!row.nextLevel && row.nextLevel < SUSPENSION_LEVEL && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={sendingId === row.id}
+                                onClick={() => handleSendNow(row, SUSPENSION_LEVEL)}
+                                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                title="Skip the remaining reminders and send the suspension notice now"
+                              >
+                                <Ban className="mr-1 h-4 w-4" />
+                                Suspension notice
                               </Button>
                             )}
                             <Button

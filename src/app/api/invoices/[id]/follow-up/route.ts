@@ -24,8 +24,17 @@ export async function POST(
 
     const { id } = await params;
 
+    // Optional `level`: send that letter instead of the next rung — how a
+    // suspension notice goes out early. No body at all means the next rung.
+    const body = (await request.json().catch(() => ({}))) as { level?: unknown };
+    const level = body?.level === undefined || body.level === null ? undefined : Number(body.level);
+    if (level !== undefined && Number.isNaN(level)) {
+      return NextResponse.json({ error: 'level must be a number' }, { status: 400 });
+    }
+    const options = { manual: true, ...(level !== undefined ? { level } : {}) };
+
     // Check if follow-up can be sent
-    const canSendResult = await canSendFollowUp(id, { manual: true });
+    const canSendResult = await canSendFollowUp(id, options);
     if (!canSendResult.canSend) {
       return NextResponse.json(
         { error: canSendResult.reason },
@@ -34,7 +43,7 @@ export async function POST(
     }
 
     // Send follow-up email
-    const result = await sendFollowUpEmail(id, session.user.id, { manual: true });
+    const result = await sendFollowUpEmail(id, session.user.id, options);
 
     if (result.success) {
       return NextResponse.json({
