@@ -163,6 +163,21 @@ export function parseBankAccounts(value: unknown): BankAccount[] | null {
 }
 
 /**
+ * The company's bank accounts: the Settings list when configured, else the
+ * legacy single account on the Company record.
+ */
+export function bankAccountsOrLegacy(
+  settingValue: unknown,
+  company: { name: string; bankName: string | null; bankAccountName: string | null; bankAccountNo: string | null }
+): BankAccount[] {
+  return parseBankAccounts(settingValue) ?? [{
+    bankName: company.bankName || 'BDO',
+    bankAccountName: company.bankAccountName || company.name,
+    bankAccountNo: company.bankAccountNo || '',
+  }];
+}
+
+/**
  * Get SOA/PDF template settings for a company
  * Bank accounts come from the Settings list (soa.<code>.bankAccounts) when
  * configured, else the legacy single account on the Company model. The legacy
@@ -206,12 +221,7 @@ export async function getSOASettings(companyCode: 'YOWI' | 'ABBA'): Promise<{
     });
     const accountsSetting = accountsRow?.value;
 
-    const legacyAccount: BankAccount = {
-      bankName: company.bankName || 'BDO',
-      bankAccountName: company.bankAccountName || company.name,
-      bankAccountNo: company.bankAccountNo || '',
-    };
-    const bankAccounts = parseBankAccounts(accountsSetting) ?? [legacyAccount];
+    const bankAccounts = bankAccountsOrLegacy(accountsSetting, company);
 
     return {
       // Legacy single fields mirror the first account so old readers keep working.

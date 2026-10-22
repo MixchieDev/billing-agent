@@ -17,6 +17,8 @@ import { Prisma } from '@/generated/prisma';
 import prisma from './prisma';
 import { notifyInvoicePaid } from './notifications';
 import { markOpenPromisesKept } from './promise-service';
+import { bankAccountsOrLegacy, type BankAccount } from './settings';
+import type { ReceivedIn } from './received-in';
 
 // Peso tolerance for "close enough to settled" (rounding / bank fees).
 export const SETTLE_TOLERANCE = new Prisma.Decimal(1);
@@ -59,6 +61,37 @@ export function computeSettlement(
   return { status: 'PARTIALLY_PAID', balanceDue, wht2307Pending: false, isEwtShort: false };
 }
 
+// Money that lands in a bank: staff must say which of the entity's accounts.
+const METHODS_NEEDING_BANK = ['BANK_TRANSFER', 'CHECK'];
+
+/**
+ * Check the chosen "received in" account against the entity's bank accounts and
+ * return the snapshot to store. `required` is set for manually recorded
+ * payments; HitPay settles through payouts, so the webhook passes none.
+ */
+export function resolveReceivedIn(
+  method: string,
+  chosen: ReceivedIn | null | undefined,
+  accounts: BankAccount[],
+  required: boolean
+): ReceivedIn | null {
+  if (!chosen) {
+    if (required && METHODS_NEEDING_BANK.includes(method)) {
+      throw new Error('Choose the bank account the payment was received in.');
+    }
+    return null;
+  }
+  const bankName = chosen.bankName.trim();
+  const bankAccountNo = chosen.bankAccountNo.trim();
+  const match = accounts.find(
+    (a) => a.bankName === bankName && a.bankAccountNo === bankAccountNo
+  );
+  if (!match) {
+    throw new Error("The received-in account is not one of this entity's bank accounts.");
+  }
+  return { bankName: match.bankName, bankAccountNo: match.bankAccountNo };
+}
+
 export interface RecordPaymentInput {
   invoiceId: string;
   amount: number | string | Prisma.Decimal;
@@ -73,6 +106,8 @@ export interface RecordPaymentInput {
    * When set and a shortfall remains, the invoice settles as PAID + 2307 pending.
    */
   settleWithholding?: boolean;
+  /** The entity bank account the money landed in. */
+  receivedIn?: ReceivedIn | null;
 }
 
 // A shortfall larger than this fraction of the net can't plausibly be EWT
@@ -117,6 +152,9 @@ export async function recordPayment(
         status: true,
         netAmount: true,
         withholdingTax: true,
+        company: {
+          select: { code: true, name: true, bankName: true, bankAccountName: true, bankAccountNo: true },
+        },
       },
     });
     if (!invoice) throw new Error('Invoice not found');
@@ -126,6 +164,18 @@ export async function recordPayment(
       );
     }
 
+    // Read through `tx`: with a pool of one connection, a query outside the
+    // transaction would wait on it forever.
+    const accountsRow = await tx.settings.findUnique({
+      where: { key: `soa.${invoice.company.code.toLowerCase()}.bankAccounts` },
+    });
+    const receivedIn = resolveReceivedIn(
+      method,
+      input.receivedIn,
+      bankAccountsOrLegacy(accountsRow?.value, invoice.company),
+      (input.source ?? 'MANUAL') === 'MANUAL'
+    );
+
     const payment = await tx.invoicePayment.create({
       data: {
         invoiceId: invoice.id,
@@ -133,6 +183,8 @@ export async function recordPayment(
         method,
         reference,
         paidDate,
+        receivedInBank: receivedIn?.bankName ?? null,
+        receivedInAccountNo: receivedIn?.bankAccountNo ?? null,
         source: input.source ?? 'MANUAL',
         recordedBy: input.recordedBy ?? null,
       },
@@ -207,6 +259,7 @@ export async function recordPayment(
           amount: amount.toString(),
           method,
           reference,
+          receivedIn: receivedIn ? { ...receivedIn } : null,
           source: input.source ?? 'MANUAL',
           amountPaidTotal: amountPaidTotal.toString(),
           balanceDue: settlement.balanceDue.toString(),

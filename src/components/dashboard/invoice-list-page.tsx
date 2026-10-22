@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Header } from '@/components/dashboard/header';
 import { InvoiceTable, InvoiceRow } from '@/components/dashboard/invoice-table';
 import { MarkPaidModal, InvoiceForPayment } from '@/components/dashboard/mark-paid-modal';
+import { ReceivedInFilter } from '@/components/dashboard/received-in-filter';
 import { PromiseToPayModal, InvoiceForPromise } from '@/components/dashboard/promise-to-pay-modal';
 
 // Lazy-load heavy modals (only mounted when opened).
@@ -47,6 +48,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
   const [searchQuery, setSearchQuery] = useState('');
   const [entityFilter, setEntityFilter] = useState<'ALL' | 'YOWI' | 'ABBA'>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [receivedInFilter, setReceivedInFilter] = useState('');
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -69,19 +71,27 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
       : undefined
     : status;
   const effectiveEntity = entityFilter !== 'ALL' ? entityFilter : undefined;
-  const hasServerFilters = !!debouncedSearch || !!effectiveEntity || (showAllStatuses && statusFilter !== 'ALL');
+  const hasServerFilters =
+    !!debouncedSearch || !!effectiveEntity || !!receivedInFilter || (showAllStatuses && statusFilter !== 'ALL');
 
   // Any filter change should return to the first page, otherwise we could land
   // on a now-empty page of a smaller filtered result set.
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearch, entityFilter, statusFilter]);
+  }, [debouncedSearch, entityFilter, statusFilter, receivedInFilter]);
 
   // Use SWR for data fetching, with all filters applied server-side so search
   // and pagination span the whole table. The server-prefetched fallback is the
   // unfiltered first page, so only use it when no filters are active.
   const { data: invoicesData, error: invoicesError, isLoading, mutate } = useInvoices(
-    { status: effectiveStatus, billingEntity: effectiveEntity, search: debouncedSearch, page: currentPage, limit: pageSize },
+    {
+      status: effectiveStatus,
+      billingEntity: effectiveEntity,
+      search: debouncedSearch,
+      receivedIn: receivedInFilter || undefined,
+      page: currentPage,
+      limit: pageSize,
+    },
     {
       keepPreviousData: true,
       ...(initialData && currentPage === 1 && !hasServerFilters
@@ -129,12 +139,14 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
   // Filtering now happens server-side, so `invoices` is already the filtered
   // page. `hasActiveFilters` tracks the immediate input state to toggle the
   // Clear button and the empty-state messaging.
-  const hasActiveFilters = !!searchQuery || entityFilter !== 'ALL' || (showAllStatuses && statusFilter !== 'ALL');
+  const hasActiveFilters =
+    !!searchQuery || entityFilter !== 'ALL' || !!receivedInFilter || (showAllStatuses && statusFilter !== 'ALL');
 
   const clearFilters = () => {
     setSearchQuery('');
     setEntityFilter('ALL');
     setStatusFilter('ALL');
+    setReceivedInFilter('');
     setCurrentPage(1);
   };
 
@@ -206,6 +218,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
       netAmount: invoice.netAmount,
       amountPaidTotal: invoice.amountPaidTotal,
       balanceDue: invoice.balanceDue,
+      billingEntity: invoice.billingEntity,
     });
   };
 
@@ -243,6 +256,7 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
       paymentReference?: string;
       paidAt?: string;
       settleWithholding?: boolean;
+      receivedIn?: { bankName: string; bankAccountNo: string };
     }
   ) => {
     const response = await fetch(`/api/invoices/${invoiceId}/mark-paid`, {
@@ -383,7 +397,11 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
           {/* Entity filter */}
           <select
             value={entityFilter}
-            onChange={(e) => setEntityFilter(e.target.value as 'ALL' | 'YOWI' | 'ABBA')}
+            onChange={(e) => {
+              setEntityFilter(e.target.value as 'ALL' | 'YOWI' | 'ABBA');
+              // Another entity's account would match nothing.
+              setReceivedInFilter('');
+            }}
             className="rounded-md border border-border bg-card px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
           >
             <option value="ALL">All Entities</option>
@@ -408,6 +426,14 @@ export function InvoiceListPage({ title, subtitle, status, showAllStatuses, init
               <option value="VOID">Void</option>
             </select>
           )}
+
+          {/* Bank account the payment landed in */}
+          <ReceivedInFilter
+            value={receivedInFilter}
+            onChange={setReceivedInFilter}
+            entity={entityFilter}
+            className="rounded-md border border-border bg-card px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+          />
 
           {/* Clear filters button */}
           {hasActiveFilters && (

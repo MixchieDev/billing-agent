@@ -16,6 +16,7 @@ import {
 import { RefreshCw, Loader2, Filter, X, Download } from 'lucide-react';
 import { formatCurrency, formatDateShort } from '@/lib/utils';
 import { format, subDays } from 'date-fns';
+import { ReceivedInFilter } from '@/components/dashboard/received-in-filter';
 
 interface PaidInvoice {
   id: string;
@@ -30,6 +31,7 @@ interface PaidInvoice {
   paidAmount: number | null;
   paymentMethod: string | null;
   paymentReference: string | null;
+  receivedIn: string[]; // "BANK · NUMBER" for each account its payments landed in
 }
 
 export interface PaidInvoicesInitialData {
@@ -56,6 +58,13 @@ function transformPaidInvoices(invoiceList: any[]): PaidInvoice[] {
     paidAmount: inv.paidAmount ? Number(inv.paidAmount) : null,
     paymentMethod: inv.paymentMethod,
     paymentReference: inv.paymentReference,
+    receivedIn: Array.from(
+      new Set(
+        (inv.payments ?? []).map((p: { receivedInBank: string; receivedInAccountNo: string | null }) =>
+          p.receivedInAccountNo ? `${p.receivedInBank} · ${p.receivedInAccountNo}` : p.receivedInBank
+        )
+      )
+    ),
   }));
 
   // Sort by paid date descending (most recent first)
@@ -83,6 +92,7 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
   const [dateTo, setDateTo] = useState(
     () => initialData?.dateTo ?? format(new Date(), 'yyyy-MM-dd')
   );
+  const [receivedIn, setReceivedIn] = useState('');
   const [showFilters, setShowFilters] = useState(true);
 
   // Skip the initial fetch when the server already seeded us.
@@ -97,6 +107,7 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
       params.set('status', 'PAID');
       if (dateFrom) params.set('paidFrom', dateFrom);
       if (dateTo) params.set('paidTo', dateTo);
+      if (receivedIn) params.set('receivedIn', receivedIn);
 
       const url = `/api/invoices?${params.toString()}`;
       const response = await fetch(url);
@@ -111,7 +122,7 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo]);
+  }, [dateFrom, dateTo, receivedIn]);
 
   useEffect(() => {
     if (hasInitialData.current) {
@@ -124,6 +135,7 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
   const clearFilters = () => {
     setDateFrom('');
     setDateTo('');
+    setReceivedIn('');
   };
 
   const handleExport = async () => {
@@ -139,6 +151,7 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
       const params = new URLSearchParams();
       if (dateFrom) params.set('paidFrom', dateFrom);
       if (dateTo) params.set('paidTo', dateTo);
+      if (receivedIn) params.set('receivedIn', receivedIn);
 
       const response = await fetch(`/api/invoices/export?${params.toString()}`);
 
@@ -259,7 +272,17 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
                   className="w-44"
                 />
               </div>
-              {(dateFrom || dateTo) && (
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Received In
+                </label>
+                <ReceivedInFilter
+                  value={receivedIn}
+                  onChange={setReceivedIn}
+                  className="h-10 rounded-md border border-border bg-card px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+              {(dateFrom || dateTo || receivedIn) && (
                 <Button variant="ghost" size="sm" onClick={clearFilters}>
                   <X className="mr-1 h-4 w-4" />
                   Clear
@@ -304,6 +327,7 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
                 <TableHead>Paid Date</TableHead>
                 <TableHead className="text-right">Amount Paid</TableHead>
                 <TableHead>Method</TableHead>
+                <TableHead>Received In</TableHead>
                 <TableHead>Reference</TableHead>
                 <TableHead>Entity</TableHead>
               </TableRow>
@@ -311,7 +335,7 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
             <TableBody>
               {invoices.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
                     {loading ? 'Loading...' : 'No paid invoices found'}
                   </TableCell>
                 </TableRow>
@@ -333,6 +357,9 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
                       {invoice.paidAmount ? formatCurrency(invoice.paidAmount) : formatCurrency(invoice.netAmount)}
                     </TableCell>
                     <TableCell>{getPaymentMethodBadge(invoice.paymentMethod)}</TableCell>
+                    <TableCell className="text-sm">
+                      {invoice.receivedIn.length ? invoice.receivedIn.join(', ') : <span className="text-muted-foreground">-</span>}
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {invoice.paymentReference || '-'}
                     </TableCell>
@@ -351,8 +378,8 @@ export function PaidInvoicesPage({ initialData }: PaidInvoicesPageProps = {}) {
         {/* Empty state */}
         {!loading && invoices.length === 0 && !error && (
           <div className="text-center py-12 text-muted-foreground">
-            No paid invoices found for the selected date range.
-            {(dateFrom || dateTo) && (
+            No paid invoices found for the selected filters.
+            {(dateFrom || dateTo || receivedIn) && (
               <button
                 onClick={clearFilters}
                 className="ml-1 text-blue-600 hover:text-blue-800"

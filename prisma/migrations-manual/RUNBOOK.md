@@ -197,3 +197,23 @@ separate things have to be switched off to stop automated chasing today:
 
 Doing only the first is the easy mistake: the client looks switched off in the
 contracts list while their existing overdue invoices are still being emailed.
+
+---
+
+# Migration 004 — "received in" bank on payments
+
+Adds `InvoicePayment.receivedInBank` and `receivedInAccountNo`. Record Payment
+now asks which of the entity's bank accounts (the list on its invoices) the
+money went into. Required for bank transfers and cheques, optional for cash,
+not asked for HitPay. Feeds the cash management app's actual collections per
+bank account.
+
+Additive only, two nullable columns. **Run before deploying the code** — the new
+code reads these columns, so deploying first breaks Record Payment:
+
+```bash
+psql "$DIRECT_URL" -f prisma/migrations-manual/004-payment-received-in.sql
+DATABASE_URL="$DIRECT_URL" npx tsx prisma/migrations-manual/check-migration.ts
+```
+
+No `prisma db push` needed — there are no new tables.

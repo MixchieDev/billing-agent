@@ -579,6 +579,10 @@ model InvoicePayment {
   method     String // CASH | BANK_TRANSFER | CHECK | HITPAY
   reference  String?
   paidDate   DateTime
+  // Which of the entity's bank accounts the money landed in (snapshot of the
+  // Settings list at recording time). Null for HitPay and older payments.
+  receivedInBank      String?
+  receivedInAccountNo String?
   isEwtShort Boolean  @default(false) // settled net of EWT → 2307 pending
   source     String   @default("MANUAL") // MANUAL | HITPAY_WEBHOOK | BANKREC_SUGGESTED
   recordedBy String?

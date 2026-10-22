@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { generateYtoCsv, InvoiceCsvData } from '@/lib/csv-generator';
+import { receivedInWhere } from '@/lib/received-in';
 import { format } from 'date-fns';
 
 /**
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
     const paidFrom = searchParams.get('paidFrom');
     const paidTo = searchParams.get('paidTo');
     const billingEntity = searchParams.get('billingEntity');
+    const receivedIn = searchParams.get('receivedIn');
 
     // Build date range filter for paidAt
     const paidAtFilter: { gte?: Date; lte?: Date } = {};
@@ -38,6 +40,7 @@ export async function GET(request: NextRequest) {
         status: 'PAID',
         ...(Object.keys(paidAtFilter).length > 0 && { paidAt: paidAtFilter }),
         ...(billingEntity && { company: { code: billingEntity } }),
+        ...receivedInWhere(receivedIn),
       },
       include: {
         company: true,

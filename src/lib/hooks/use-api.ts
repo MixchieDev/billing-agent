@@ -26,6 +26,7 @@ export interface InvoiceQuery {
   status?: string;
   billingEntity?: string;
   search?: string;
+  receivedIn?: string;
   page?: number;
   limit?: number;
 }
@@ -35,6 +36,7 @@ export function useInvoices(query: InvoiceQuery = {}, options?: SWRConfiguration
   if (query.status) params.set('status', query.status);
   if (query.billingEntity) params.set('billingEntity', query.billingEntity);
   if (query.search) params.set('search', query.search);
+  if (query.receivedIn) params.set('receivedIn', query.receivedIn);
   if (query.page) params.set('page', String(query.page));
   if (query.limit) params.set('limit', String(query.limit));
   const url = `/api/invoices${params.toString() ? `?${params.toString()}` : ''}`;

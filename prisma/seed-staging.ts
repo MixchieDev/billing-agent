@@ -40,7 +40,9 @@ async function main() {
     create: { code: 'ABBA', name: 'ABBA Corp.', invoicePrefix: 'A', nextInvoiceNo: 1 },
   });
 
-  // Reset the demo set (payments/promises/follow-ups cascade with invoices).
+  // Reset the demo set (payments/promises/follow-ups cascade with invoices;
+  // email logs don't, and test sends leave some behind).
+  await prisma.emailLog.deleteMany({ where: { invoice: { billingNo: { startsWith: 'DEMO-' } } } });
   await prisma.invoice.deleteMany({ where: { billingNo: { startsWith: 'DEMO-' } } });
   await prisma.pdcCheck.deleteMany({ where: { bankName: 'Demo Bank' } });
 
