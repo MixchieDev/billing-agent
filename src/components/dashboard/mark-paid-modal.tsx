@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { X } from 'lucide-react';
+import { receivedInKey as accountKey } from '@/lib/received-in';
 
 export interface InvoiceForPayment {
   id: string;
@@ -12,6 +13,13 @@ export interface InvoiceForPayment {
   netAmount: number;
   amountPaidTotal?: number;
   balanceDue?: number | null;
+  billingEntity: string; // company code, e.g. YOWI | ABBA — picks the bank accounts
+}
+
+interface BankAccountOption {
+  bankName: string;
+  bankAccountName: string;
+  bankAccountNo: string;
 }
 
 interface MarkPaidModalProps {
@@ -26,6 +34,7 @@ interface MarkPaidModalProps {
       paymentReference?: string;
       paidAt?: string;
       settleWithholding?: boolean;
+      receivedIn?: { bankName: string; bankAccountNo: string };
     }
   ) => Promise<void>;
 }
@@ -36,6 +45,8 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
   const [paymentReference, setPaymentReference] = useState('');
   const [paidAt, setPaidAt] = useState('');
   const [settleWithholding, setSettleWithholding] = useState(false);
+  const [accounts, setAccounts] = useState<BankAccountOption[]>([]);
+  const [receivedInKey, setReceivedInKey] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,8 +69,33 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
       setPaidAt(new Date().toISOString().split('T')[0]);
       setSettleWithholding(false);
       setError(null);
+      setAccounts([]);
+      setReceivedInKey('');
     }
   }, [invoice]);
+
+  // The entity's bank accounts (same list printed on its invoices).
+  const entity = invoice?.billingEntity;
+  useEffect(() => {
+    if (!entity) return;
+    let cancelled = false;
+    fetch(`/api/companies/${entity}/template`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        const list: BankAccountOption[] = data.bankAccounts ?? [];
+        setAccounts(list);
+        // One account → nothing to choose.
+        if (list.length === 1) setReceivedInKey(accountKey(list[0]));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [entity]);
+
+  const needsBank = paymentMethod !== 'CASH';
+  const receivedIn = accounts.find((a) => accountKey(a) === receivedInKey);
 
   const handleSave = async () => {
     if (!invoice) return;
@@ -67,6 +103,10 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
     const amount = parseFloat(paidAmount);
     if (isNaN(amount) || amount <= 0) {
       setError('Please enter a valid amount');
+      return;
+    }
+    if (needsBank && !receivedIn) {
+      setError('Choose the bank account the payment was received in');
       return;
     }
 
@@ -80,6 +120,9 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
         paymentReference: paymentReference || undefined,
         paidAt: paidAt || undefined,
         settleWithholding,
+        receivedIn: receivedIn
+          ? { bankName: receivedIn.bankName, bankAccountNo: receivedIn.bankAccountNo }
+          : undefined,
       });
       onClose();
     } catch (err) {
@@ -169,6 +212,27 @@ export function MarkPaidModal({ invoice, isOpen, onClose, onSave }: MarkPaidModa
               <option value="BANK_TRANSFER">Bank Transfer</option>
               <option value="CASH">Cash</option>
               <option value="CHECK">Check</option>
+            </select>
+          </div>
+
+          {/* Received In */}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1">
+              Received In{!needsBank && ' (Optional)'}
+            </label>
+            <select
+              value={receivedInKey}
+              onChange={(e) => setReceivedInKey(e.target.value)}
+              className={selectClassName}
+            >
+              <option value="">{accounts.length ? 'Choose account…' : 'Loading accounts…'}</option>
+              {accounts.map((a) => (
+                <option key={accountKey(a)} value={accountKey(a)}>
+                  {a.bankName}
+                  {a.bankAccountNo ? ` · ${a.bankAccountNo}` : ''}
+                  {a.bankAccountName ? ` · ${a.bankAccountName}` : ''}
+                </option>
+              ))}
             </select>
           </div>
 

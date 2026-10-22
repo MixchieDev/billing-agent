@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { getPendingInvoices, getInvoiceStats } from '@/lib/billing-service';
+import { receivedInWhere } from '@/lib/received-in';
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
     const paidFrom = searchParams.get('paidFrom');
     const paidTo = searchParams.get('paidTo');
     const search = searchParams.get('search')?.trim();
+    const receivedIn = searchParams.get('receivedIn');
 
     // Pagination params
     const page = parseInt(searchParams.get('page') || '1');
@@ -42,6 +44,7 @@ export async function GET(request: NextRequest) {
       ...(billingEntity && { company: { code: billingEntity } }),
       ...(partner && { billingModel: partner as any }),
       ...(Object.keys(paidAtFilter).length > 0 && { paidAt: paidAtFilter }),
+      ...receivedInWhere(receivedIn),
       // Search across the whole table (customer name or billing number), so a
       // match on any page is found — not just rows already loaded client-side.
       ...(search && {
@@ -76,6 +79,8 @@ export async function GET(request: NextRequest) {
           status: true,
           paidAt: true,
           paidAmount: true,
+          paymentMethod: true,
+          paymentReference: true,
           amountPaidTotal: true,
           balanceDue: true,
           followUpPausedUntil: true,
@@ -85,6 +90,10 @@ export async function GET(request: NextRequest) {
           lastFollowUpLevel: true,
           company: {
             select: { code: true },
+          },
+          payments: {
+            where: { receivedInBank: { not: null } },
+            select: { receivedInBank: true, receivedInAccountNo: true },
           },
           lineItems: {
             select: { description: true },

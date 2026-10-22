@@ -4,6 +4,7 @@ const need = {
     'wht2307ReceivedAt','followUpPausedUntil','suspensionNoticeAt','suspendedAt',
     'wht2307RequestCount','wht2307RequestedAt'],
   contractCols: ['renewalNoticeAt','followUpEnabled'],
+  paymentCols: ['receivedInBank','receivedInAccountNo'],
   tables: ['CollectionRun','InvoicePayment','PdcCheck','PromiseToPay','ContractRenewal'],
   enums: ['PdcStatus','PtpStatus','ReviewFlag','Wht2307Status','RenewalOutcome'],
   // Values added to EXISTING enums — easy to miss, since the type is present
@@ -15,6 +16,7 @@ const need = {
   const q = (s: string) => p.$queryRawUnsafe<any[]>(s);
   const cols = (await q(`SELECT column_name c FROM information_schema.columns WHERE table_name='Invoice'`)).map(r=>r.c);
   const ccols = (await q(`SELECT column_name c FROM information_schema.columns WHERE table_name='Contract'`)).map(r=>r.c);
+  const pcols = (await q(`SELECT column_name c FROM information_schema.columns WHERE table_name='InvoicePayment'`)).map(r=>r.c);
   const tabs = (await q(`SELECT table_name t FROM information_schema.tables WHERE table_schema='public'`)).map(r=>r.t);
   const enums = (await q(`SELECT typname e FROM pg_type WHERE typtype='e'`)).map(r=>r.e);
   const values = (await q(`SELECT t.typname||'.'||e.enumlabel v FROM pg_enum e
@@ -22,6 +24,7 @@ const need = {
   const miss = {
     columns: need.invoiceCols.filter(c => !cols.includes(c)),
     contractColumns: need.contractCols.filter(c => !ccols.includes(c)),
+    paymentColumns: need.paymentCols.filter(c => !pcols.includes(c)),
     tables: need.tables.filter(t => !tabs.includes(t)),
     enums: need.enums.filter(e => !enums.includes(e)),
     enumValues: need.enumValues.filter(([t, v]) => !values.includes(`${t}.${v}`)),
@@ -31,6 +34,7 @@ const need = {
   if (!ready) {
     if (miss.columns.length)         console.log('  missing Invoice columns :', miss.columns.join(', '));
     if (miss.contractColumns.length) console.log('  missing Contract columns:', miss.contractColumns.join(', '));
+    if (miss.paymentColumns.length)  console.log('  missing Payment columns :', miss.paymentColumns.join(', '));
     if (miss.tables.length)          console.log('  missing tables          :', miss.tables.join(', '));
     if (miss.enums.length)           console.log('  missing enum types      :', miss.enums.join(', '));
     if (miss.enumValues.length)      console.log('  missing enum values     :', miss.enumValues.map(([t,v])=>`${t}.${v}`).join(', '));

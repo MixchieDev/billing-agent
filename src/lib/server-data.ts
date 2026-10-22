@@ -86,6 +86,10 @@ export async function fetchInvoicesForServer(
         followUpCount: true,
         lastFollowUpLevel: true,
         company: { select: { code: true } },
+        payments: {
+          where: { receivedInBank: { not: null } },
+          select: { receivedInBank: true, receivedInAccountNo: true },
+        },
         lineItems: { select: { description: true }, take: 1 },
       },
       orderBy: { createdAt: 'desc' },

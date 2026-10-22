@@ -9,6 +9,7 @@ interface MarkPaidRequest {
   paymentReference?: string;
   paidAt?: string; // ISO date string, defaults to now
   settleWithholding?: boolean; // shortfall is an unbilled 2307 deduction
+  receivedIn?: { bankName: string; bankAccountNo: string }; // entity account the money landed in
 }
 
 /**
@@ -67,6 +68,7 @@ export async function POST(
       source: 'MANUAL',
       recordedBy: session.user.id,
       settleWithholding: body.settleWithholding,
+      receivedIn: body.receivedIn ?? null,
     });
 
     return NextResponse.json(result);
@@ -78,7 +80,9 @@ export async function POST(
       message.includes('Invoice not found') ||
       message.includes('Cannot record a payment') ||
       message.includes('greater than zero') ||
-      message.includes('too large to be withholding');
+      message.includes('too large to be withholding') ||
+      message.includes('received in') ||
+      message.includes('received-in');
     return NextResponse.json({ error: message }, { status: isClientError ? 400 : 500 });
   }
 }
