@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { CONTRACT_SORTS, type ContractSort } from '@/lib/contract-sort';
+import { PAYMENT_PLAN_FILTERS, type PaymentPlanFilter } from '@/lib/contract-payment-plan';
 import dynamic from 'next/dynamic';
 import { Header } from '@/components/dashboard/header';
 import { ContractTable, ContractRow } from '@/components/dashboard/contract-table';
@@ -100,6 +101,7 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
   const [billingEntityFilter, setBillingEntityFilter] = useState<string>('');
   const [productTypeFilter, setProductTypeFilter] = useState<string>('');
   const [partnerFilter, setPartnerFilter] = useState<string>('');
+  const [paymentPlanFilter, setPaymentPlanFilter] = useState<PaymentPlanFilter | ''>('');
   const [sort, setSort] = useState<ContractSort>('newest');
 
   const handleSearchChange = (value: string) => {
@@ -124,6 +126,7 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
       if (billingEntityFilter) params.set('billingEntity', billingEntityFilter);
       if (productTypeFilter) params.set('productType', productTypeFilter);
       if (partnerFilter) params.set('partner', partnerFilter);
+      if (paymentPlanFilter) params.set('paymentPlan', paymentPlanFilter);
       if (sort !== 'newest') params.set('sort', sort);
 
       const url = `/api/contracts?${params.toString()}`;
@@ -169,7 +172,7 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, billingEntityFilter, productTypeFilter, partnerFilter, sort, debouncedSearch, page]);
+  }, [statusFilter, billingEntityFilter, productTypeFilter, partnerFilter, paymentPlanFilter, sort, debouncedSearch, page]);
 
   const fetchPartnersAndCompanies = async () => {
     try {
@@ -233,6 +236,7 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
       if (billingEntityFilter) params.set('billingEntity', billingEntityFilter);
       if (productTypeFilter) params.set('productType', productTypeFilter);
       if (partnerFilter) params.set('partner', partnerFilter);
+      if (paymentPlanFilter) params.set('paymentPlan', paymentPlanFilter);
       if (sort !== 'newest') params.set('sort', sort);
 
       const response = await fetch(`/api/contracts/export?${params.toString()}`);
@@ -396,6 +400,18 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
                 .map(p => (
                   <option key={p.code} value={p.code}>{p.name}</option>
                 ))}
+            </select>
+
+            <select
+              value={paymentPlanFilter}
+              onChange={(e) => { setPaymentPlanFilter(e.target.value as PaymentPlanFilter | ''); setPage(1); }}
+              className={selectClassName}
+              aria-label="Filter by payment plan"
+            >
+              <option value="">All Payment Plans</option>
+              {(Object.entries(PAYMENT_PLAN_FILTERS) as [PaymentPlanFilter, string][]).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
             </select>
 
             <select

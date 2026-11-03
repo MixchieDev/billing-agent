@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 import { ContractStatus, Prisma } from '@/generated/prisma';
 import { format } from 'date-fns';
 import { contractOrderBy } from '@/lib/contract-sort';
+import { paymentPlanWhere } from '@/lib/contract-payment-plan';
 
 /**
  * One CSV field. Quotes anything that could break the row, and prefixes a
@@ -47,12 +48,14 @@ export async function GET(request: NextRequest) {
     const productType = sp.get('productType');
     const search = sp.get('search');
     const partner = sp.get('partner');
+    const planWhere = paymentPlanWhere(sp.get('paymentPlan'));
 
     const where: Prisma.ContractWhereInput = {
       ...(status && status !== 'ALL' && { status: status as ContractStatus }),
       ...(billingEntity && billingEntity !== 'ALL' && { billingEntity: { code: billingEntity } }),
       ...(productType && productType !== 'ALL' && { productType }),
       ...(partner && partner !== 'ALL' && { partner: { code: partner } }),
+      ...(planWhere && { AND: [planWhere] }),
       ...(search && {
         OR: [
           { companyName: { contains: search, mode: 'insensitive' as const } },
