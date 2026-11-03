@@ -6,6 +6,7 @@ import { ContractStatus, VatType, BillingType } from '@/generated/prisma';
 import { getProductTypes } from '@/lib/settings';
 import { syncContractById } from '@/lib/cash-management-sync';
 import { contractOrderBy } from '@/lib/contract-sort';
+import { paymentPlanWhere } from '@/lib/contract-payment-plan';
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
     const productType = searchParams.get('productType');
     const search = searchParams.get('search');
     const partner = searchParams.get('partner');
+    const planWhere = paymentPlanWhere(searchParams.get('paymentPlan'));
     const orderBy = contractOrderBy(searchParams.get('sort'));
 
     // Pagination params. Callers populating dropdowns (e.g. schedule creation)
@@ -36,6 +38,7 @@ export async function GET(request: NextRequest) {
       ...(billingEntity && { billingEntity: { code: billingEntity } }),
       ...(productType && { productType: productType as any }),
       ...(partner && { partner: { code: partner } }),
+      ...(planWhere && { AND: [planWhere] }),
       ...(search && {
         OR: [
           { companyName: { contains: search, mode: 'insensitive' } },
