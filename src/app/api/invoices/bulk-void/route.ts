@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+import { queueReceivableSync } from '@/lib/receivables-feed';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
@@ -56,6 +57,7 @@ export async function POST(request: NextRequest) {
     const voided: string[] = [];
     const skipped: { id: string; billingNo: string | null; reason: string }[] = [];
 
+    after(queueReceivableSync(ids));
     for (const id of ids) {
       const inv = found.get(id);
       if (!inv) {

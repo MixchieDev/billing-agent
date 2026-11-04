@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+import { queueReceivableSync } from '@/lib/receivables-feed';
 import prisma from '@/lib/prisma';
 import {
   verifyWebhookSignature,
@@ -143,6 +144,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true, skipped: true });
     }
 
+    after(queueReceivableSync([paymentRequest.invoice.id]));
     // Record the payment (handles partials/EWT, invoice update, audit, notify).
     const result = await recordPayment({
       invoiceId: paymentRequest.invoice.id,

@@ -24,6 +24,7 @@
 import prisma from './prisma';
 import { ContractStatus } from '@/generated/prisma';
 import { getSetting } from './settings';
+import { forecastInputsFor, type ForecastInputs } from './forecast-inputs';
 
 const SYNC_URL = process.env.CASH_MGMT_SYNC_URL || 'https://intent-yak-558.convex.site';
 const TIMEOUT_MS = 15_000;
@@ -45,11 +46,11 @@ export function translateStatus(status: ContractStatus): string {
   return STATUS_FOR_RECEIVER[status];
 }
 
-function entityCode(name: string): string {
+export function entityCode(name: string): string {
   return name.toUpperCase().includes('ABBA') ? 'ABBA' : 'YAHSHUA';
 }
 
-const isoDate = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
+export const isoDate = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
 
 /** Everything the payload needs that isn't a plain contract column. */
 interface Derived {
@@ -57,6 +58,8 @@ interface Derived {
   contractStart: string;
   /** From the contract's active scheduled billing — that is where the real billing day lives. */
   invoiceDay: number | null;
+  /** Net cash per cycle, due day, payment lag and reliability (absent for a retirement). */
+  forecast?: ForecastInputs;
 }
 
 /**
@@ -93,11 +96,13 @@ export async function deriveFor(
     if (!dayByContract.has(s.contractId)) dayByContract.set(s.contractId, s.billingDayOfMonth);
   }
   const firstBilled = new Map(earliest.map((r) => [r.contractId, r.first]));
+  const forecast = await forecastInputsFor(ids);
 
   for (const c of contracts) {
     out.set(c.id, {
       contractStart: isoDate(c.contractStart ?? firstBilled.get(c.id) ?? c.createdAt)!,
       invoiceDay: dayByContract.get(c.id) ?? c.billingDayOfMonth ?? null,
+      forecast: forecast.get(c.id),
     });
   }
   return out;
@@ -148,6 +153,8 @@ export function buildPayload(c: SyncContract, d: Derived) {
     status: translateStatus(c.status),
     billingDayOfMonth: d.invoiceDay,
     id: c.id,
+    // Billing-computed forecast inputs; the cash app's engine switches to them in phase 2.
+    ...d.forecast,
     // --- owned by cash management: initial values for a new customer only ---
     partnerName: c.partner?.name ?? null,
     remarks: c.remarks,
@@ -162,9 +169,11 @@ export interface SyncResult {
   created?: number;
   updated?: number;
   skipped?: number;
+  /** The receiver's full JSON response, for routes that report more than counts. */
+  body?: Record<string, unknown>;
 }
 
-async function post(path: string, body: unknown): Promise<SyncResult> {
+export async function post(path: string, body: unknown): Promise<SyncResult> {
   const apiKey = process.env.CASH_MGMT_SYNC_KEY;
   if (!apiKey) return { ok: false, error: 'CASH_MGMT_SYNC_KEY is not set' };
 
@@ -193,6 +202,7 @@ async function post(path: string, body: unknown): Promise<SyncResult> {
       created: typeof json.created === 'number' ? json.created : undefined,
       updated: typeof json.updated === 'number' ? json.updated : undefined,
       skipped: typeof json.skipped === 'number' ? json.skipped : undefined,
+      body: json,
     };
   } catch (e) {
     const aborted = e instanceof Error && e.name === 'AbortError';

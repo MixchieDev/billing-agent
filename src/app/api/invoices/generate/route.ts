@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+import { queueReceivableSync } from '@/lib/receivables-feed';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
@@ -97,6 +98,7 @@ export async function POST(request: NextRequest) {
 
     // Generate invoice
     const result = await generateInvoice(invoiceRequest);
+    after(queueReceivableSync([result.invoice.id]));
 
     // If sendImmediately is true and invoice is approved, send it
     let emailSent = false;

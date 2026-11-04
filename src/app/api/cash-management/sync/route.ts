@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { getSetting, clearSettingsCache } from '@/lib/settings';
+import { clearSettingsCache } from '@/lib/settings';
 import { reconcileAllContracts } from '@/lib/cash-management-sync';
+import { reconcileReceivables } from '@/lib/receivables-feed';
 
 // A full push of every contract can take a while; give it room.
 export const maxDuration = 120;
@@ -16,8 +17,21 @@ export async function GET() {
 
     const since = new Date(Date.now() - 7 * 86_400_000);
     // Sequential, not Promise.all: production runs Prisma with connection_limit=1.
-    const lastRun = await getSetting('cashSync.lastRun');
-    const nightly = await getSetting('cashSync.nightlyReconcile');
+    // Read the rows directly, not via the cached getSetting: a run writes its
+    // result straight to the table, so the 5-minute cache would show the
+    // previous run right after "Sync now".
+    const rows = await prisma.settings.findMany({
+      where: {
+        key: {
+          in: ['cashSync.lastRun', 'cashSync.nightlyReconcile', 'cashSync.receivablesEnabled', 'cashSync.receivablesLastRun'],
+        },
+      },
+    });
+    const setting = (key: string) => rows.find((r) => r.key === key)?.value;
+    const lastRun = setting('cashSync.lastRun');
+    const nightly = setting('cashSync.nightlyReconcile');
+    const receivablesEnabled = setting('cashSync.receivablesEnabled');
+    const receivablesLastRun = setting('cashSync.receivablesLastRun');
     const failures = await prisma.auditLog.findMany({
       where: { action: 'CASH_SYNC_FAILED', createdAt: { gte: since } },
       orderBy: { createdAt: 'desc' },
@@ -28,6 +42,8 @@ export async function GET() {
     return NextResponse.json({
       lastRun: lastRun ?? null,
       nightlyReconcile: nightly === true,
+      receivablesEnabled: receivablesEnabled === true,
+      receivablesLastRun: receivablesLastRun ?? null,
       recentFailures: failures,
     });
   } catch (error) {
@@ -36,7 +52,11 @@ export async function GET() {
   }
 }
 
-/** POST { action: 'sync' } runs a full push now; { action: 'nightly', enabled } flips the switch. */
+/**
+ * POST { action: 'sync' } pushes every contract now; { action: 'nightly', enabled }
+ * flips the nightly contract sync; { action: 'receivables', enabled } switches the
+ * receivables feed on or off; { action: 'sync-receivables' } pushes it now.
+ */
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -69,6 +89,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ nightlyReconcile: body.enabled });
     }
 
+    if (body.action === 'receivables') {
+      if (typeof body.enabled !== 'boolean') {
+        return NextResponse.json({ error: 'enabled must be true or false' }, { status: 400 });
+      }
+      await prisma.settings.upsert({
+        where: { key: 'cashSync.receivablesEnabled' },
+        update: { value: body.enabled },
+        create: { key: 'cashSync.receivablesEnabled', value: body.enabled },
+      });
+      await prisma.auditLog.create({
+        data: {
+          userId: session.user.id,
+          action: body.enabled ? 'CASH_RECEIVABLES_ON' : 'CASH_RECEIVABLES_OFF',
+          entityType: 'Settings',
+          entityId: 'cashSync.receivablesEnabled',
+          details: { enabled: body.enabled },
+        },
+      });
+      clearSettingsCache();
+      return NextResponse.json({ receivablesEnabled: body.enabled });
+    }
+
+    if (body.action === 'sync-receivables') {
+      const result = await reconcileReceivables();
+      await prisma.auditLog.create({
+        data: {
+          userId: session.user.id,
+          action: 'CASH_RECEIVABLES_RUN',
+          entityType: 'Settings',
+          entityId: 'cashSync',
+          details: { receivables: result.receivables, collections: result.collections, sent: result.sent, errors: result.errors.length },
+        },
+      });
+      return NextResponse.json(result);
+    }
+
     if (body.action === 'sync') {
       const result = await reconcileAllContracts();
       await prisma.auditLog.create({
@@ -83,7 +139,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(result);
     }
 
-    return NextResponse.json({ error: "action must be 'sync' or 'nightly'" }, { status: 400 });
+    return NextResponse.json(
+      { error: "action must be 'sync', 'nightly', 'receivables' or 'sync-receivables'" },
+      { status: 400 }
+    );
   } catch (error) {
     console.error('Error running cash sync:', error);
     return NextResponse.json({ error: 'Failed to run the cash management sync' }, { status: 500 });

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+import { queueReceivableSync } from '@/lib/receivables-feed';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
@@ -32,6 +33,7 @@ export async function POST(
   }
 
   const { id } = await params;
+  after(queueReceivableSync([id]));
   const body = await request.json();
 
   if (!body.promisedDate) {
@@ -73,6 +75,7 @@ export async function DELETE(
   }
 
   const { id } = await params;
+  after(queueReceivableSync([id]));
   const promiseId = new URL(request.url).searchParams.get('promiseId');
   if (!promiseId) {
     return NextResponse.json({ error: 'promiseId is required' }, { status: 400 });

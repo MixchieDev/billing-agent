@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+import { queueReceivableSync } from '@/lib/receivables-feed';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { bulkApproveInvoices } from '@/lib/billing-service';
@@ -27,6 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await bulkApproveInvoices(invoiceIds, session.user.id);
+    after(queueReceivableSync(invoiceIds));
 
     // Log the action
     await prisma.auditLog.create({
