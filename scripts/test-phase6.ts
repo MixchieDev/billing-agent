@@ -214,8 +214,7 @@ async function testPhase6() {
 ✓ YTO CSV generated: ${csvPath}
 
 Dashboard available at: http://localhost:3000/login
-  Email: admin@yahshua-abba.com
-  Password: admin123
+  Sign in with your admin account.
 
 Output files in: ${outputDir}
     `);
