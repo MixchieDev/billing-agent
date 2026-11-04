@@ -5,8 +5,9 @@ const need = {
     'wht2307RequestCount','wht2307RequestedAt'],
   contractCols: ['renewalNoticeAt','followUpEnabled'],
   paymentCols: ['receivedInBank','receivedInAccountNo'],
-  tables: ['CollectionRun','InvoicePayment','PdcCheck','PromiseToPay','ContractRenewal'],
-  enums: ['PdcStatus','PtpStatus','ReviewFlag','Wht2307Status','RenewalOutcome'],
+  tables: ['CollectionRun','InvoicePayment','PdcCheck','PromiseToPay','ContractRenewal',
+    'WorklistItem','WorklistNote'],
+  enums: ['PdcStatus','PtpStatus','ReviewFlag','Wht2307Status','RenewalOutcome','WorklistStatus'],
   // Values added to EXISTING enums — easy to miss, since the type is present
   // either way. Checked as [type, value].
   enumValues: [['InvoiceStatus','PARTIALLY_PAID'], ['NotificationType','CONTRACT_RENEWAL']],

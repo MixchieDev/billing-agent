@@ -217,3 +217,29 @@ DATABASE_URL="$DIRECT_URL" npx tsx prisma/migrations-manual/check-migration.ts
 ```
 
 No `prisma db push` needed — there are no new tables.
+
+---
+
+# Migration 005 — daily Worklist
+
+Adds the `WorklistStatus` enum and two tables, `WorklistItem` and
+`WorklistNote`, for the Worklist page under Getting paid. No existing table
+changes. The file is idempotent and has been run twice against staging, after
+which `prisma migrate diff` from staging to `schema.prisma` was empty.
+
+**Run before deploying the code.** The Worklist page and its API read these
+tables, so deploying first makes that one page fail; nothing else is affected.
+
+```bash
+psql "$DIRECT_URL" -f prisma/migrations-manual/005-worklist.sql
+DATABASE_URL="$DIRECT_URL" npx tsx prisma/migrations-manual/check-migration.ts
+```
+
+No psql? Paste the file into the Supabase SQL editor. No `prisma db push`
+needed: the SQL creates the tables itself.
+
+Rollback, if ever needed (drops worklist data only):
+
+```sql
+DROP TABLE IF EXISTS "WorklistNote"; DROP TABLE IF EXISTS "WorklistItem"; DROP TYPE IF EXISTS "WorklistStatus";
+```

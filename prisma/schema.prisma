@@ -29,6 +29,9 @@ model User {
   schedulesCreated  ScheduledBilling[] @relation("ScheduleCreatedBy")
   schedulesRejected ScheduledBilling[] @relation("ScheduleRejectedBy")
   sessions          Session[]
+  worklistOwned     WorklistItem[]     @relation("WorklistOwner")
+  worklistCreated   WorklistItem[]     @relation("WorklistCreator")
+  worklistNotes     WorklistNote[]
 }
 
 model Account {
@@ -217,6 +220,7 @@ model Contract {
   lineItems         InvoiceLineItem[]
   scheduledBillings ScheduledBilling[]
   invoices          Invoice[]          @relation("ContractToInvoice")
+  worklistItems     WorklistItem[]
 
   @@index([status])
   @@index([billingEntityId])
@@ -573,21 +577,21 @@ model HitpayPaymentRequest {
 // --- Collections upgrade (Phase 1) ---
 
 model InvoicePayment {
-  id         String   @id @default(cuid())
-  invoiceId  String
-  amount     Decimal  @db.Decimal(15, 2)
-  method     String // CASH | BANK_TRANSFER | CHECK | HITPAY
-  reference  String?
-  paidDate   DateTime
+  id                  String   @id @default(cuid())
+  invoiceId           String
+  amount              Decimal  @db.Decimal(15, 2)
+  method              String // CASH | BANK_TRANSFER | CHECK | HITPAY
+  reference           String?
+  paidDate            DateTime
   // Which of the entity's bank accounts the money landed in (snapshot of the
   // Settings list at recording time). Null for HitPay and older payments.
   receivedInBank      String?
   receivedInAccountNo String?
-  isEwtShort Boolean  @default(false) // settled net of EWT → 2307 pending
-  source     String   @default("MANUAL") // MANUAL | HITPAY_WEBHOOK | BANKREC_SUGGESTED
-  recordedBy String?
-  createdAt  DateTime @default(now())
-  invoice    Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  isEwtShort          Boolean  @default(false) // settled net of EWT → 2307 pending
+  source              String   @default("MANUAL") // MANUAL | HITPAY_WEBHOOK | BANKREC_SUGGESTED
+  recordedBy          String?
+  createdAt           DateTime @default(now())
+  invoice             Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@index([invoiceId])
   @@index([paidDate])
@@ -646,6 +650,58 @@ model CollectionRun {
   createdAt       DateTime  @default(now())
 
   @@index([runDate])
+}
+
+/// One line on the daily Worklist: a client to work on (contractId set) or a
+/// free-text task (title only). It sits on every day from startDate until the
+/// day it is marked done, so unfinished work carries over with no copying and
+/// past days can still be looked at.
+model WorklistItem {
+  id               String         @id @default(cuid())
+  startDate        DateTime       @db.Date // Manila day it was first put on the list
+  doneDate         DateTime?      @db.Date // Manila day it was marked done; null while open
+  contractId       String?
+  title            String? // the task text; null for client items
+  ownerId          String
+  createdById      String
+  status           WorklistStatus @default(TODO)
+  /// Working targets only: never touch invoices, AR or the cash feed.
+  /// targetAmount null = the client's full open balance.
+  targetAmount     Decimal?       @db.Decimal(15, 2)
+  uninvoicedAmount Decimal        @default(0) @db.Decimal(15, 2)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  contract         Contract?      @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  owner            User           @relation("WorklistOwner", fields: [ownerId], references: [id])
+  createdBy        User           @relation("WorklistCreator", fields: [createdById], references: [id])
+  notes            WorklistNote[]
+
+  @@index([startDate])
+  @@index([doneDate])
+  @@index([contractId])
+  @@index([ownerId])
+}
+
+/// An update on a worklist item. kind SYSTEM records status, owner and amount
+/// changes so the log reads as a full history of the day's work.
+model WorklistNote {
+  id        String       @id @default(cuid())
+  itemId    String
+  authorId  String
+  kind      String       @default("NOTE") // NOTE | SYSTEM
+  body      String
+  createdAt DateTime     @default(now())
+  item      WorklistItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  author    User         @relation(fields: [authorId], references: [id])
+
+  @@index([itemId, createdAt])
+}
+
+enum WorklistStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  BLOCKED
 }
 
 enum UserRole {
