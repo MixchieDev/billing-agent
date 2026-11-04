@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+import { queueReceivableSync } from '@/lib/receivables-feed';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { rejectInvoice } from '@/lib/billing-service';
@@ -32,6 +33,7 @@ export async function POST(
     }
 
     const { id } = await params;
+    after(queueReceivableSync([id]));
     const body = await request.json();
     const { reason, rescheduleDate } = body;
 

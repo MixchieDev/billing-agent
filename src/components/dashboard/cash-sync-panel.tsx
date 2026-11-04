@@ -18,22 +18,39 @@ interface LastRun {
   errors: string[];
 }
 
+interface ReceivablesRun {
+  at: string;
+  receivables: number;
+  collections: number;
+  sent: number;
+  pruned?: { receivables: number; collections: number };
+  errors: string[];
+}
+
 interface Failure {
   createdAt: string;
   entityId: string;
-  details: { customerNumber?: string | null; error?: string } | null;
+  details: {
+    customerNumber?: string | null;
+    error?: string;
+    feed?: string;
+    invoiceIds?: string[];
+    errors?: string[];
+  } | null;
 }
 
 interface Status {
   lastRun: LastRun | null;
   nightlyReconcile: boolean;
+  receivablesEnabled: boolean;
+  receivablesLastRun: ReceivablesRun | null;
   recentFailures: Failure[];
 }
 
 export function CashSyncPanel() {
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<'sync' | 'nightly' | null>(null);
+  const [busy, setBusy] = useState<'sync' | 'nightly' | 'receivables' | 'sync-receivables' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
@@ -113,6 +130,47 @@ export function CashSyncPanel() {
     }
   };
 
+  const toggleReceivables = async () => {
+    const next = !status?.receivablesEnabled;
+    if (
+      next &&
+      !window.confirm(
+        'Turn on the receivables feed?\n\n' +
+          'Every change to an invoice, payment or promise is sent to cash management, ' +
+          'and each night every open invoice plus the last 13 months of payments is sent ' +
+          'in full. The cash management forecast does not use them yet.'
+      )
+    )
+      return;
+    setBusy('receivables');
+    try {
+      await call({ action: 'receivables', enabled: next });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not change the setting');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const pushReceivables = async () => {
+    if (!window.confirm('Send every open invoice and the last 13 months of payments to cash management now?')) return;
+    setBusy('sync-receivables');
+    try {
+      const r: ReceivablesRun = await call({ action: 'sync-receivables' });
+      await load();
+      alert(
+        r.errors.length
+          ? `Finished with problems: ${r.errors.length} error(s). See the last run below.`
+          : `Sent ${r.receivables} invoices and ${r.collections} payments.`
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Push failed');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 py-12 text-sm text-muted-foreground">
@@ -122,6 +180,7 @@ export function CashSyncPanel() {
   }
 
   const run = status?.lastRun;
+  const rrun = status?.receivablesLastRun;
 
   return (
     <div className="space-y-6">
@@ -207,6 +266,60 @@ export function CashSyncPanel() {
       </Card>
 
       <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base">Receivables feed</CardTitle>
+          <Button size="sm" variant="outline" onClick={pushReceivables} disabled={busy !== null}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${busy === 'sync-receivables' ? 'animate-spin' : ''}`} />
+            {busy === 'sync-receivables' ? 'Sending…' : 'Send receivables now'}
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 cursor-pointer accent-primary"
+              checked={!!status?.receivablesEnabled}
+              onChange={toggleReceivables}
+              disabled={busy !== null}
+            />
+            <span className="text-sm">
+              <span className="font-medium">Send invoices and payments to cash management</span>
+              <span className="mt-0.5 block text-muted-foreground">
+                What clients owe, when each promise or PDC says it will land, and what was
+                actually received in which bank account. Changes are sent as they happen; the
+                whole set is re-sent each night.
+              </span>
+            </span>
+          </label>
+          {rrun ? (
+            <div className="space-y-2 border-t pt-3 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={rrun.errors.length ? 'destructive' : 'success'}>
+                  {rrun.errors.length ? 'finished with problems' : 'succeeded'}
+                </Badge>
+                <span className="text-muted-foreground">{formatDateTime(new Date(rrun.at))}</span>
+              </div>
+              <p>
+                {rrun.receivables} invoices · {rrun.collections} payments · {rrun.sent} rows sent
+                {rrun.pruned
+                  ? ` · removed ${rrun.pruned.receivables + rrun.pruned.collections} no longer in billing agent`
+                  : ''}
+              </p>
+              {rrun.errors.length > 0 && (
+                <ul className="list-disc pl-5 text-xs text-destructive">
+                  {rrun.errors.map((e, i) => (
+                    <li key={i}>{e}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <p className="border-t pt-3 text-sm text-muted-foreground">Nothing has been sent yet.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader>
           <CardTitle className="text-base">Failed syncs, last 7 days</CardTitle>
         </CardHeader>
@@ -216,8 +329,14 @@ export function CashSyncPanel() {
               {status.recentFailures.map((f, i) => (
                 <li key={i} className="flex flex-wrap justify-between gap-2 py-2">
                   <span>
-                    <span className="font-medium">{f.details?.customerNumber ?? f.entityId}</span>
-                    <span className="text-muted-foreground"> — {f.details?.error ?? 'unknown error'}</span>
+                    <span className="font-medium">
+                      {f.details?.feed === 'receivables'
+                        ? `${f.details.invoiceIds?.length ?? 1} invoice(s)`
+                        : f.details?.customerNumber ?? f.entityId}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {' '}— {f.details?.error ?? f.details?.errors?.[0] ?? 'unknown error'}
+                    </span>
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {formatDateTime(new Date(f.createdAt))}

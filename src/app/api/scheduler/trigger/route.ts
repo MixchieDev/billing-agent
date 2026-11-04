@@ -98,6 +98,24 @@ export async function GET(request: NextRequest) {
       cashSync = { error: syncError instanceof Error ? syncError.message : 'reconcile failed' };
     }
 
+    // Receivables feed: every open invoice and the last 13 months of payments,
+    // then a prune of what billing agent no longer has. Runs after the billing
+    // and collections phases so tonight's invoices and broken promises are in it.
+    let receivablesSync;
+    try {
+      const { receivablesFeedEnabled, reconcileReceivables } = await import('@/lib/receivables-feed');
+      if (await receivablesFeedEnabled()) {
+        const r = await reconcileReceivables();
+        receivablesSync = { receivables: r.receivables, collections: r.collections, sent: r.sent, pruned: r.pruned, errors: r.errors.length };
+        console.log('[Cron Trigger] Receivables feed:', receivablesSync);
+      } else {
+        receivablesSync = { skipped: 'receivables feed is off' };
+      }
+    } catch (syncError) {
+      console.error('[Cron Trigger] Receivables feed failed:', syncError);
+      receivablesSync = { error: syncError instanceof Error ? syncError.message : 'receivables feed failed' };
+    }
+
     return NextResponse.json({
       message: 'Billing job triggered successfully',
       source,
@@ -105,6 +123,7 @@ export async function GET(request: NextRequest) {
       collections,
       renewals,
       cashSync,
+      receivablesSync,
     });
   } catch (error) {
     console.error('[Cron Trigger] Error:', error);
@@ -185,6 +204,24 @@ export async function POST(request: NextRequest) {
       cashSync = { error: syncError instanceof Error ? syncError.message : 'reconcile failed' };
     }
 
+    // Receivables feed: every open invoice and the last 13 months of payments,
+    // then a prune of what billing agent no longer has. Runs after the billing
+    // and collections phases so tonight's invoices and broken promises are in it.
+    let receivablesSync;
+    try {
+      const { receivablesFeedEnabled, reconcileReceivables } = await import('@/lib/receivables-feed');
+      if (await receivablesFeedEnabled()) {
+        const r = await reconcileReceivables();
+        receivablesSync = { receivables: r.receivables, collections: r.collections, sent: r.sent, pruned: r.pruned, errors: r.errors.length };
+        console.log('[Cron Trigger] Receivables feed:', receivablesSync);
+      } else {
+        receivablesSync = { skipped: 'receivables feed is off' };
+      }
+    } catch (syncError) {
+      console.error('[Cron Trigger] Receivables feed failed:', syncError);
+      receivablesSync = { error: syncError instanceof Error ? syncError.message : 'receivables feed failed' };
+    }
+
     return NextResponse.json({
       message: 'Billing job triggered successfully',
       source: 'manual',
@@ -192,6 +229,7 @@ export async function POST(request: NextRequest) {
       collections,
       renewals,
       cashSync,
+      receivablesSync,
     });
   } catch (error) {
     console.error('[Cron Trigger] Error:', error);
