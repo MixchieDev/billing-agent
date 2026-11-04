@@ -31,6 +31,7 @@ import {
   BrushCleaning,
   CalendarSync,
   Lock,
+  ListTodo,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -65,6 +66,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: 'Getting paid',
     items: [
+      { name: 'Worklist', href: '/dashboard/worklist', icon: ListTodo },
       { name: 'Collections', href: '/dashboard/collections', icon: Wallet },
       { name: 'Follow-up Queue', href: '/dashboard/follow-ups', icon: MailWarning },
       { name: 'Promises to Pay', href: '/dashboard/promises', icon: CalendarClock },
