@@ -72,6 +72,7 @@ unique across entities.
 | `customerNumbers[]` | from the invoice's contracts; usually one |
 | `periodStart`, `statementDate`, `dueDate` | period falls back to the statement month when `periodStart` is empty (manual invoices) |
 | `netAmount`, `balanceDue` | cash terms, already net of withholding |
+| `vatAmount` | the invoice's VAT, counted in the quarter of `statementDate`, for the VAT payment line (Phase 2) |
 | `state` | `OPEN` (APPROVED, SENT), `PARTIAL`, `PAID`, `VOID` |
 | `expectedDate`, `expectedSource` | see below |
 | `promisedAmount` | when a promise sets the date |
@@ -148,6 +149,31 @@ Inflows become four buckets instead of one:
 "Drop everything before today" goes away. Past cash is either in a receivable
 (still owed) or a collection (already landed).
 
+### VAT payments (outflow)
+
+Today the projection leaves VAT out on both sides: collections are contract
+fees before VAT, and there is no VAT payment. Once collections become net
+cash (fee + VAT − withholding), the VAT inside them is money owed to the BIR,
+so the engine must also pay it out. **Both switch in the same release.**
+Switching collections alone overstates cash by about 12% of VAT sales.
+
+- One outflow per quarter, due on the 25th of the month after the quarter
+  ends (2550Q), per entity.
+- Amount: output VAT for the quarter minus input VAT. Output VAT comes from
+  the `vatAmount` billing agent sends on each receivable, plus VAT on contract
+  cycles not yet invoiced. **Output VAT is counted when we invoice** (confirmed
+  2026-11-05): an invoice's VAT falls in the quarter of its statement date,
+  whether or not the client has paid. Voided invoices drop out.
+- So VAT is paid out before some of it is collected: an invoice dated in
+  December carries VAT due on 25 January even if the client pays in March.
+  The projection must show that gap, not net it against collections.
+- Input VAT is not in billing agent. Phase 2 takes it as a manual figure per
+  quarter in the cash app's Settings; it can come from expense data later.
+- A quarter already filed is entered as the actual amount paid and stops being
+  estimated, the way the Q4 Cash Flow page handles the Q3 2550Q.
+- Withholding needs no outflow. The client withholds and remits it, so it is
+  simply never part of the cash collected (`netAmount` already excludes it).
+
 ### Starting cash
 
 The latest bank balance per account, **plus collections into that account dated
@@ -183,6 +209,9 @@ and largest first, with Log promise / Record PDC / Void actions. This is the
 cleanup tool. Before
 switching on, show leadership the new vs old forecast side by side. The at-risk
 line will be large and the near term lower than they are used to.
+
+Phase 2 also adds the **VAT payment line** (see "VAT payments" above) in
+the same release as the switch to net-cash collections, never after it.
 
 **Phase 3: actuals and working capital.** Account mapping, collections since
 the last balance, the actual-vs-forecast view, forecast snapshots and the
