@@ -72,7 +72,7 @@ unique across entities.
 | `customerNumbers[]` | from the invoice's contracts; usually one |
 | `periodStart`, `statementDate`, `dueDate` | period falls back to the statement month when `periodStart` is empty (manual invoices) |
 | `netAmount`, `balanceDue` | cash terms, already net of withholding |
-| `vatAmount` | the invoice's VAT, for the VAT payment line (Phase 2) |
+| `vatAmount` | the invoice's VAT, counted in the quarter of `statementDate`, for the VAT payment line (Phase 2) |
 | `state` | `OPEN` (APPROVED, SENT), `PARTIAL`, `PAID`, `VOID` |
 | `expectedDate`, `expectedSource` | see below |
 | `promisedAmount` | when a promise sets the date |
@@ -161,9 +161,12 @@ Switching collections alone overstates cash by about 12% of VAT sales.
   ends (2550Q), per entity.
 - Amount: output VAT for the quarter minus input VAT. Output VAT comes from
   the `vatAmount` billing agent sends on each receivable, plus VAT on contract
-  cycles not yet invoiced. Whether output VAT is counted on invoices issued or
-  on cash received in the quarter is set once per entity, following the
-  accountant's filing basis.
+  cycles not yet invoiced. **Output VAT is counted when we invoice** (confirmed
+  2026-11-05): an invoice's VAT falls in the quarter of its statement date,
+  whether or not the client has paid. Voided invoices drop out.
+- So VAT is paid out before some of it is collected: an invoice dated in
+  December carries VAT due on 25 January even if the client pays in March.
+  The projection must show that gap, not net it against collections.
 - Input VAT is not in billing agent. Phase 2 takes it as a manual figure per
   quarter in the cash app's Settings; it can come from expense data later.
 - A quarter already filed is entered as the actual amount paid and stops being
