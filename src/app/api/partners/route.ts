@@ -102,6 +102,7 @@ export async function POST(request: NextRequest) {
         // Legacy single-address field mirrors the first of the list.
         email: emails ? emails.split(',')[0].trim() : null,
         emailTemplateId: body.emailTemplateId || null,
+        followUpEnabled: body.followUpEnabled !== false,
       },
       include: {
         company: true,
@@ -116,7 +117,10 @@ export async function POST(request: NextRequest) {
           action: 'PARTNER_CREATED',
           entityType: 'Partner',
           entityId: partner.id,
-          details: { code: partner.code, name: partner.name, billingModel, entity: company.code },
+          details: {
+            code: partner.code, name: partner.name, billingModel, entity: company.code,
+            followUpEnabled: partner.followUpEnabled,
+          },
         },
       })
       .catch(() => {});

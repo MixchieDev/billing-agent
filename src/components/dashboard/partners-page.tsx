@@ -22,6 +22,7 @@ interface Partner {
   billingModel: string;
   companyId: string;
   emailTemplateId: string | null;
+  followUpEnabled: boolean;
   company: {
     id: string;
     code: string;
@@ -127,6 +128,7 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
       billingModel: 'DIRECT',
       companyId: companies[0].id,
       emailTemplateId: null,
+      followUpEnabled: true,
     });
   };
 
@@ -134,17 +136,38 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
     if (!editingPartner) return;
     const isNew = !editingPartner.id;
 
+    // Turning the switch means "from now on". Whether the clients already on
+    // this partner's books change too is the user's call, asked plainly.
+    let applyToExisting = false;
+    const before = partners.find((p) => p.id === editingPartner.id);
+    if (!isNew && before && before.followUpEnabled !== editingPartner.followUpEnabled) {
+      applyToExisting = window.confirm(
+        editingPartner.followUpEnabled
+          ? `Also switch automated follow-ups ON for ${before.code}'s existing contracts and open invoices?\n\n` +
+              `OK applies it to everything now. Cancel changes only what is created from here on.`
+          : `Also switch automated follow-ups OFF for ${before.code}'s existing contracts and open invoices?\n\n` +
+              `OK stops the ladder chasing them now. Cancel changes only what is created from here on.`
+      );
+    }
+
     try {
       setSaving(true);
       const res = await fetch(isNew ? '/api/partners' : `/api/partners/${editingPartner.id}`, {
         method: isNew ? 'POST' : 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingPartner),
+        body: JSON.stringify({ ...editingPartner, applyToExisting }),
       });
 
+      const data = await res.json();
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.error || 'Failed to save');
+      }
+
+      if (data.applied) {
+        alert(
+          `Updated ${data.applied.contracts} contract${data.applied.contracts === 1 ? '' : 's'} ` +
+            `and ${data.applied.invoices} open invoice${data.applied.invoices === 1 ? '' : 's'}.`
+        );
       }
 
       await fetchPartners();
@@ -220,6 +243,11 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
                   {partner.code}
                 </span>
                 <h3 className="mt-2 font-semibold text-foreground">{partner.name}</h3>
+                {!partner.followUpEnabled && (
+                  <span className="mt-1 inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                    followed up manually
+                  </span>
+                )}
               </div>
               <Button
                 variant="ghost"
@@ -420,6 +448,30 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
                   <option value="GLOBE_INNOVE">Globe Innove</option>
                   <option value="RCBC_CONSOLIDATED">RCBC Consolidated</option>
                 </select>
+              </div>
+
+              <div className="rounded-md border border-border p-3">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 cursor-pointer accent-primary"
+                    checked={editingPartner.followUpEnabled}
+                    onChange={(e) =>
+                      setEditingPartner({ ...editingPartner, followUpEnabled: e.target.checked })
+                    }
+                  />
+                  <span className="text-sm">
+                    <span className="font-medium text-foreground">
+                      Include this partner in automated follow-ups
+                    </span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Off means its bills are chased by hand, the way RCBC&apos;s consolidated
+                      bills are: new contracts under this partner start with follow-up off, and
+                      the reminder ladder leaves its consolidated bills alone. You can still send
+                      a reminder yourself from the Follow-up Queue.
+                    </span>
+                  </span>
+                </label>
               </div>
 
               <div>

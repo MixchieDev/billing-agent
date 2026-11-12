@@ -243,3 +243,29 @@ Rollback, if ever needed (drops worklist data only):
 ```sql
 DROP TABLE IF EXISTS "WorklistNote"; DROP TABLE IF EXISTS "WorklistItem"; DROP TYPE IF EXISTS "WorklistStatus";
 ```
+
+---
+
+# Migration 006 — per-partner follow-up switch
+
+Adds `Partner.followUpEnabled` (boolean, default `true`). A partner switched off
+means contracts created under it start with automated follow-up off, and its
+consolidated bills are never chased by the ladder — how RCBC works. Existing
+partners and contracts are untouched by the migration itself.
+
+**Run before deploying the code.** The Partners page and its API read the
+column; deploying first makes that page fail.
+
+```bash
+psql "$DIRECT_URL" -f prisma/migrations-manual/006-partner-followup-flag.sql
+DATABASE_URL="$DIRECT_URL" npx tsx prisma/migrations-manual/check-migration.ts
+```
+
+No psql? Paste the file into the Supabase SQL editor. No `prisma db push`
+needed — the SQL adds the column itself.
+
+Rollback:
+
+```sql
+ALTER TABLE "Partner" DROP COLUMN IF EXISTS "followUpEnabled";
+```

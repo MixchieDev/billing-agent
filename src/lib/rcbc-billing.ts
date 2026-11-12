@@ -196,9 +196,9 @@ export async function generateRcbcInvoice(monthStr: string, userId: string): Pro
       isConsolidated: true,
       // RCBC is chased through the bank's own process, not the reminder ladder:
       // a consolidated bill for dozens of end-clients must never trigger an
-      // automatic "your account will be set to read-only" letter. Someone can
-      // still send one by hand from the Follow-up Queue.
-      followUpEnabled: false,
+      // automatic "your account will be set to read-only" letter. The switch
+      // lives on the partner; someone can still send a reminder by hand.
+      followUpEnabled: rcbcPartner.followUpEnabled,
       remarks: `Consolidated billing for ${summary.totalClients} RCBC end-clients`,
       lineItems: {
         create: summary.clients.map((client, index) => ({

@@ -96,3 +96,28 @@ describe('POST /api/partners', () => {
     );
   });
 });
+
+describe('the per-partner follow-up switch', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (getServerSession as jest.Mock).mockResolvedValue(admin);
+    mockPrisma.company.findUnique.mockResolvedValue({ id: 'c1', code: 'YOWI' });
+    mockPrisma.partner.findUnique.mockResolvedValue(null);
+    mockPrisma.partner.create.mockImplementation(({ data }: { data: object }) => ({ id: 'p1', ...data }));
+    mockPrisma.auditLog.create.mockResolvedValue({});
+  });
+
+  it('defaults a new partner to being chased', async () => {
+    await post(valid);
+    expect(mockPrisma.partner.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ followUpEnabled: true }) })
+    );
+  });
+
+  it('can create a partner that is chased by hand, like RCBC', async () => {
+    await post({ ...valid, followUpEnabled: false });
+    expect(mockPrisma.partner.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ followUpEnabled: false }) })
+    );
+  });
+});

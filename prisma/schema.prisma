@@ -137,6 +137,9 @@ model Partner {
   updatedAt       DateTime       @updatedAt
   emailTemplateId String?
   emails          String?
+  /** Default for contracts created under this partner; off means its bills are
+      chased by hand, the way RCBC's consolidated bills are. */
+  followUpEnabled Boolean        @default(true)
   contracts       Contract[]
   invoices        Invoice[]
   company         Company        @relation(fields: [companyId], references: [id])
