@@ -194,6 +194,11 @@ export async function generateRcbcInvoice(monthStr: string, userId: string): Pro
       status: InvoiceStatus.PENDING,
       billingModel: BillingModel.RCBC_CONSOLIDATED,
       isConsolidated: true,
+      // RCBC is chased through the bank's own process, not the reminder ladder:
+      // a consolidated bill for dozens of end-clients must never trigger an
+      // automatic "your account will be set to read-only" letter. Someone can
+      // still send one by hand from the Follow-up Queue.
+      followUpEnabled: false,
       remarks: `Consolidated billing for ${summary.totalClients} RCBC end-clients`,
       lineItems: {
         create: summary.clients.map((client, index) => ({

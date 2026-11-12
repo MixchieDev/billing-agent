@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { RefreshCw, Edit, Building2, Mail, MapPin, User, FileText } from 'lucide-react';
+import { RefreshCw, Edit, Building2, Mail, MapPin, User, FileText, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface EmailTemplate {
@@ -30,6 +30,12 @@ interface Partner {
   emailTemplate?: EmailTemplate | null;
 }
 
+/** A partner being created has no id yet; everything else is the same form. */
+type PartnerDraft = Omit<Partner, 'id' | 'company' | 'emailTemplate'> & {
+  id?: string;
+  company?: Partner['company'];
+};
+
 interface Company {
   id: string;
   code: string;
@@ -52,7 +58,7 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
   const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>(initialData?.emailTemplates ?? []);
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
-  const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
+  const [editingPartner, setEditingPartner] = useState<PartnerDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const hasInitialData = useRef(!!initialData);
 
@@ -104,13 +110,34 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
     fetchEmailTemplates();
   }, []);
 
+  /** A draft with no id is a new partner; the same form serves both. */
+  const startNewPartner = () => {
+    if (!companies.length) {
+      alert('Add a billing entity first — a partner has to belong to one.');
+      return;
+    }
+    setEditingPartner({
+      code: '',
+      name: '',
+      invoiceTo: null,
+      attention: null,
+      address: null,
+      email: null,
+      emails: null,
+      billingModel: 'DIRECT',
+      companyId: companies[0].id,
+      emailTemplateId: null,
+    });
+  };
+
   const handleSave = async () => {
     if (!editingPartner) return;
+    const isNew = !editingPartner.id;
 
     try {
       setSaving(true);
-      const res = await fetch(`/api/partners/${editingPartner.id}`, {
-        method: 'PUT',
+      const res = await fetch(isNew ? '/api/partners' : `/api/partners/${editingPartner.id}`, {
+        method: isNew ? 'POST' : 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editingPartner),
       });
@@ -168,10 +195,16 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
             Manage billing partners and their contact information
           </p>
         </div>
-        <Button variant="outline" onClick={fetchPartners} disabled={loading}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={fetchPartners} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Button onClick={startNewPartner}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Partner
+          </Button>
+        </div>
       </div>
 
       {/* Partners Grid */}
@@ -244,15 +277,37 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
         ))}
       </div>
 
-      {/* Edit Modal */}
+      {/* Create / edit modal */}
       {editingPartner && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-lg rounded-lg bg-card p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-foreground">
-              Edit Partner: {editingPartner.code}
+              {editingPartner.id ? `Edit Partner: ${editingPartner.code}` : 'New Partner'}
             </h3>
 
-            <div className="mt-4 space-y-4">
+            <div className="mt-4 max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+              {/* The code is how contracts and CSV imports name this partner, so
+                  it is fixed once the partner exists. */}
+              {!editingPartner.id && (
+                <div>
+                  <label className="block text-sm font-medium text-foreground">
+                    Code
+                  </label>
+                  <input
+                    type="text"
+                    value={editingPartner.code}
+                    onChange={(e) =>
+                      setEditingPartner({ ...editingPartner, code: e.target.value })
+                    }
+                    placeholder="e.g. Maybank"
+                    className="mt-1 block w-full rounded-md border border-border px-3 py-2 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Short name used on contracts, imports and exports. It cannot be changed later.
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-foreground">
                   Name
@@ -400,7 +455,11 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
                 Cancel
               </Button>
               <Button onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving...' : 'Save Changes'}
+                {saving
+                  ? 'Saving...'
+                  : editingPartner.id
+                    ? 'Save Changes'
+                    : 'Create Partner'}
               </Button>
             </div>
           </div>
