@@ -59,6 +59,7 @@ interface ValidatedRow {
   errors: string[];
   warnings: string[];
   _partnerId?: string;
+  _partnerFollowUp?: boolean;
   _companyId?: string;
   _companyCode?: string;
   _companyContractPrefix?: string | null;
@@ -215,6 +216,7 @@ async function validateRows(rows: ContractCSVRow[], startRowNumber: number = 2) 
       errors,
       warnings,
       _partnerId: partner?.id,
+      _partnerFollowUp: partner?.followUpEnabled,
       _companyId: company?.id,
       _companyCode: company?.code,
       _companyContractPrefix: company?.contractPrefix,
@@ -236,7 +238,7 @@ function buildValidateResponse(validatedRows: ValidatedRow[], totalRows: number,
     warnings: validatedRows.filter(r => r.warnings.length > 0).length,
   };
 
-  const rows = validatedRows.map(({ _partnerId, _companyId, _companyCode, _companyContractPrefix, _existingContractId, _resolvedProductType, ...rest }) => rest);
+  const rows = validatedRows.map(({ _partnerId, _partnerFollowUp, _companyId, _companyCode, _companyContractPrefix, _existingContractId, _resolvedProductType, ...rest }) => rest);
 
   return NextResponse.json({ success: true, summary, rows, parseErrors });
 }
@@ -309,7 +311,11 @@ async function executeImport(
       importCounters.set(row._companyId!, currentNo + 1);
 
       transactionOps.push(
-        prisma.contract.create({ data: { ...contractData, customerNumber } })
+        // New contracts inherit the partner's follow-up default; an update
+        // leaves whatever was set on the contract alone.
+        prisma.contract.create({
+          data: { ...contractData, customerNumber, followUpEnabled: row._partnerFollowUp ?? true },
+        })
       );
       results.created++;
     }

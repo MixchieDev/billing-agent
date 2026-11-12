@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { RefreshCw, Edit, Building2, Mail, MapPin, User, FileText } from 'lucide-react';
+import { RefreshCw, Edit, Building2, Mail, MapPin, User, FileText, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface EmailTemplate {
@@ -22,6 +22,7 @@ interface Partner {
   billingModel: string;
   companyId: string;
   emailTemplateId: string | null;
+  followUpEnabled: boolean;
   company: {
     id: string;
     code: string;
@@ -29,6 +30,12 @@ interface Partner {
   };
   emailTemplate?: EmailTemplate | null;
 }
+
+/** A partner being created has no id yet; everything else is the same form. */
+type PartnerDraft = Omit<Partner, 'id' | 'company' | 'emailTemplate'> & {
+  id?: string;
+  company?: Partner['company'];
+};
 
 interface Company {
   id: string;
@@ -52,7 +59,7 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
   const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>(initialData?.emailTemplates ?? []);
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
-  const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
+  const [editingPartner, setEditingPartner] = useState<PartnerDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const hasInitialData = useRef(!!initialData);
 
@@ -104,20 +111,63 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
     fetchEmailTemplates();
   }, []);
 
+  /** A draft with no id is a new partner; the same form serves both. */
+  const startNewPartner = () => {
+    if (!companies.length) {
+      alert('Add a billing entity first — a partner has to belong to one.');
+      return;
+    }
+    setEditingPartner({
+      code: '',
+      name: '',
+      invoiceTo: null,
+      attention: null,
+      address: null,
+      email: null,
+      emails: null,
+      billingModel: 'DIRECT',
+      companyId: companies[0].id,
+      emailTemplateId: null,
+      followUpEnabled: true,
+    });
+  };
+
   const handleSave = async () => {
     if (!editingPartner) return;
+    const isNew = !editingPartner.id;
+
+    // Turning the switch means "from now on". Whether the clients already on
+    // this partner's books change too is the user's call, asked plainly.
+    let applyToExisting = false;
+    const before = partners.find((p) => p.id === editingPartner.id);
+    if (!isNew && before && before.followUpEnabled !== editingPartner.followUpEnabled) {
+      applyToExisting = window.confirm(
+        editingPartner.followUpEnabled
+          ? `Also switch automated follow-ups ON for ${before.code}'s existing contracts and open invoices?\n\n` +
+              `OK applies it to everything now. Cancel changes only what is created from here on.`
+          : `Also switch automated follow-ups OFF for ${before.code}'s existing contracts and open invoices?\n\n` +
+              `OK stops the ladder chasing them now. Cancel changes only what is created from here on.`
+      );
+    }
 
     try {
       setSaving(true);
-      const res = await fetch(`/api/partners/${editingPartner.id}`, {
-        method: 'PUT',
+      const res = await fetch(isNew ? '/api/partners' : `/api/partners/${editingPartner.id}`, {
+        method: isNew ? 'POST' : 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingPartner),
+        body: JSON.stringify({ ...editingPartner, applyToExisting }),
       });
 
+      const data = await res.json();
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.error || 'Failed to save');
+      }
+
+      if (data.applied) {
+        alert(
+          `Updated ${data.applied.contracts} contract${data.applied.contracts === 1 ? '' : 's'} ` +
+            `and ${data.applied.invoices} open invoice${data.applied.invoices === 1 ? '' : 's'}.`
+        );
       }
 
       await fetchPartners();
@@ -168,10 +218,16 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
             Manage billing partners and their contact information
           </p>
         </div>
-        <Button variant="outline" onClick={fetchPartners} disabled={loading}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={fetchPartners} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Button onClick={startNewPartner}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Partner
+          </Button>
+        </div>
       </div>
 
       {/* Partners Grid */}
@@ -187,6 +243,11 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
                   {partner.code}
                 </span>
                 <h3 className="mt-2 font-semibold text-foreground">{partner.name}</h3>
+                {!partner.followUpEnabled && (
+                  <span className="mt-1 inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                    followed up manually
+                  </span>
+                )}
               </div>
               <Button
                 variant="ghost"
@@ -244,15 +305,37 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
         ))}
       </div>
 
-      {/* Edit Modal */}
+      {/* Create / edit modal */}
       {editingPartner && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-lg rounded-lg bg-card p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-foreground">
-              Edit Partner: {editingPartner.code}
+              {editingPartner.id ? `Edit Partner: ${editingPartner.code}` : 'New Partner'}
             </h3>
 
-            <div className="mt-4 space-y-4">
+            <div className="mt-4 max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+              {/* The code is how contracts and CSV imports name this partner, so
+                  it is fixed once the partner exists. */}
+              {!editingPartner.id && (
+                <div>
+                  <label className="block text-sm font-medium text-foreground">
+                    Code
+                  </label>
+                  <input
+                    type="text"
+                    value={editingPartner.code}
+                    onChange={(e) =>
+                      setEditingPartner({ ...editingPartner, code: e.target.value })
+                    }
+                    placeholder="e.g. Maybank"
+                    className="mt-1 block w-full rounded-md border border-border px-3 py-2 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Short name used on contracts, imports and exports. It cannot be changed later.
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-foreground">
                   Name
@@ -367,6 +450,30 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
                 </select>
               </div>
 
+              <div className="rounded-md border border-border p-3">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 cursor-pointer accent-primary"
+                    checked={editingPartner.followUpEnabled}
+                    onChange={(e) =>
+                      setEditingPartner({ ...editingPartner, followUpEnabled: e.target.checked })
+                    }
+                  />
+                  <span className="text-sm">
+                    <span className="font-medium text-foreground">
+                      Include this partner in automated follow-ups
+                    </span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Off means its bills are chased by hand, the way RCBC&apos;s consolidated
+                      bills are: new contracts under this partner start with follow-up off, and
+                      the reminder ladder leaves its consolidated bills alone. You can still send
+                      a reminder yourself from the Follow-up Queue.
+                    </span>
+                  </span>
+                </label>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-foreground">
                   Email Template
@@ -400,7 +507,11 @@ export function PartnersPage({ initialData }: PartnersPageProps = {}) {
                 Cancel
               </Button>
               <Button onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving...' : 'Save Changes'}
+                {saving
+                  ? 'Saving...'
+                  : editingPartner.id
+                    ? 'Save Changes'
+                    : 'Create Partner'}
               </Button>
             </div>
           </div>

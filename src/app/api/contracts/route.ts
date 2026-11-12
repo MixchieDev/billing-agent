@@ -223,7 +223,9 @@ export async function POST(request: NextRequest) {
         paymentPlan: body.paymentPlan || null,
         contractStart: body.contractStart ? new Date(body.contractStart) : null,
         contractEndDate: body.contractEndDate ? new Date(body.contractEndDate) : null,
-        followUpEnabled: body.followUpEnabled ?? true,
+        // A partner switched off (RCBC, say) is chased by hand, so its new
+        // contracts start that way unless the form says otherwise.
+        followUpEnabled: body.followUpEnabled ?? partner.followUpEnabled,
         nextDueDate: body.nextDueDate ? new Date(body.nextDueDate) : null,
         status,
         vatType,

@@ -55,6 +55,7 @@ export async function PUT(
     const body = await request.json();
 
     const { name, invoiceTo, attention, address, email, emails, billingModel, companyId, emailTemplateId } = body;
+    const followUpEnabled = typeof body.followUpEnabled === 'boolean' ? body.followUpEnabled : undefined;
 
     const partner = await prisma.partner.update({
       where: { id },
@@ -68,6 +69,7 @@ export async function PUT(
         billingModel,
         companyId,
         emailTemplateId: emailTemplateId || null,
+        ...(followUpEnabled === undefined ? {} : { followUpEnabled }),
       },
       include: {
         company: true,
@@ -81,7 +83,36 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json(partner);
+    // The switch is a default for NEW contracts. Changing it for the clients
+    // already on the books is a separate, explicit choice — otherwise one
+    // click would silently stop chasing (or start chasing) a whole book.
+    let applied: { contracts: number; invoices: number } | undefined;
+    if (followUpEnabled !== undefined && body.applyToExisting === true) {
+      const contracts = await prisma.contract.updateMany({
+        where: { partnerId: id },
+        data: { followUpEnabled },
+      });
+      // Only invoices still open can be chased, so only those are touched.
+      const invoices = await prisma.invoice.updateMany({
+        where: { partnerId: id, status: { in: ['SENT', 'PARTIALLY_PAID'] } },
+        data: { followUpEnabled },
+      });
+      applied = { contracts: contracts.count, invoices: invoices.count };
+
+      await prisma.auditLog
+        .create({
+          data: {
+            userId: session.user.id,
+            action: followUpEnabled ? 'FOLLOW_UP_ENABLED_BULK' : 'FOLLOW_UP_DISABLED_BULK',
+            entityType: 'Partner',
+            entityId: id,
+            details: { partner: partner.code, followUpEnabled, ...applied },
+          },
+        })
+        .catch(() => {});
+    }
+
+    return NextResponse.json({ ...partner, applied });
   } catch (error) {
     console.error('Error updating partner:', error);
     return NextResponse.json(
