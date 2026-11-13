@@ -5,13 +5,9 @@ import { X, Loader2, Save } from 'lucide-react';
 import { MultiEmailInput } from '@/components/ui/multi-email-input';
 import { parseEmails, joinEmails } from '@/lib/utils';
 import { useProductTypes } from '@/lib/hooks/use-api';
+import { partnersForEntity, defaultPartnerFor, type PartnerOption } from '@/lib/partner-options';
 
-interface Partner {
-  id: string;
-  code: string;
-  name: string;
-  billingModel: string;
-}
+type Partner = PartnerOption;
 
 interface Company {
   id: string;
@@ -129,7 +125,7 @@ export function ContractFormModal({
         customerId: '',
         companyName: '',
         productType: 'ACCOUNTING',
-        partner: partners.find(p => p.code === 'Direct-YOWI')?.code || '',
+        partner: defaultPartnerFor('YOWI', partners),
         billingEntity: 'YOWI',
         monthlyFee: '',
         paymentPlan: 'Monthly',
@@ -198,14 +194,7 @@ export function ContractFormModal({
     }
   };
 
-  // Filter partners based on selected billing entity
-  const filteredPartners = partners.filter(p => {
-    if (formData.billingEntity === 'YOWI') {
-      return ['Direct-YOWI', 'Globe', 'RCBC'].includes(p.code);
-    } else {
-      return p.code === 'Direct-ABBA';
-    }
-  });
+  const filteredPartners = partnersForEntity(partners, formData.billingEntity);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto">
@@ -291,7 +280,7 @@ export function ContractFormModal({
                 onChange={(e) => {
                   handleChange(e);
                   // Reset partner when billing entity changes
-                  const defaultPartner = e.target.value === 'YOWI' ? 'Direct-YOWI' : 'Direct-ABBA';
+                  const defaultPartner = defaultPartnerFor(e.target.value, partners);
                   setFormData(prev => ({ ...prev, partner: defaultPartner }));
                 }}
                 className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"

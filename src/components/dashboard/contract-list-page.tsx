@@ -27,6 +27,8 @@ interface Partner {
   code: string;
   name: string;
   billingModel: string;
+  /** Which billing entity the partner belongs to — the form lists by this. */
+  entityCode?: string;
 }
 
 interface Company {
@@ -183,7 +185,12 @@ export function ContractListPage({ initialData }: ContractListPageProps = {}) {
 
       if (partnersRes.ok) {
         const partnersData = await partnersRes.json();
-        setPartners(partnersData);
+        setPartners(
+          partnersData.map((p: Partner & { company?: { code: string } }) => ({
+            ...p,
+            entityCode: p.entityCode ?? p.company?.code,
+          }))
+        );
       }
 
       if (companiesRes.ok) {

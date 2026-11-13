@@ -32,7 +32,7 @@ export default async function ContractsPage() {
     }),
     prisma.contract.count(),
     prisma.partner.findMany({
-      select: { id: true, code: true, name: true, billingModel: true },
+      select: { id: true, code: true, name: true, billingModel: true, company: { select: { code: true } } },
     }),
     prisma.company.findMany({
       select: { id: true, code: true, name: true },
@@ -80,6 +80,7 @@ export default async function ContractsPage() {
       code: p.code,
       name: p.name,
       billingModel: p.billingModel,
+      entityCode: p.company?.code,
     })),
     companies,
     productTypes,
