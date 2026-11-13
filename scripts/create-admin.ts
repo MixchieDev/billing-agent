@@ -3,8 +3,17 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+/** The first admin's password must be given, never a default in the repo. */
+function adminPassword(): string {
+  const pw = process.env.ADMIN_INITIAL_PASSWORD;
+  if (!pw || pw.length < 12) {
+    throw new Error('Set ADMIN_INITIAL_PASSWORD (12+ characters) to create the admin user');
+  }
+  return pw;
+}
+
 async function main() {
-  const hashedPassword = await bcrypt.hash('admin123', 10);
+  const hashedPassword = await bcrypt.hash(adminPassword(), 12);
 
   const user = await prisma.user.upsert({
     where: { email: 'admin@yahshua-abba.com' },
