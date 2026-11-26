@@ -19,7 +19,12 @@ const days = (n: number) => {
   return d;
 };
 
-const LOGIN = { email: 'admin@staging.test', password: 'staging1234' };
+// The staging login's password comes from .env.staging, never the repo.
+const STAGING_PASSWORD = process.env.STAGING_ADMIN_PASSWORD;
+if (!STAGING_PASSWORD || STAGING_PASSWORD.length < 12) {
+  throw new Error('Set STAGING_ADMIN_PASSWORD (12+ characters) in .env.staging');
+}
+const LOGIN = { email: 'admin@staging.test', password: STAGING_PASSWORD };
 
 async function main() {
   // Admin login
@@ -190,7 +195,7 @@ async function main() {
   });
 
   console.log('[seed-staging] done.');
-  console.log(`[seed-staging] login: ${LOGIN.email}  /  ${LOGIN.password}`);
+  console.log(`[seed-staging] login: ${LOGIN.email} (password from STAGING_ADMIN_PASSWORD)`);
   console.log('[seed-staging] 9 invoices across all aging buckets + partial + paid-this-week');
   console.log('[seed-staging] 1 open promise (pauses DEMO-0004), 1 broken; 2 follow-ups this week; 2 PDC checks');
 }
