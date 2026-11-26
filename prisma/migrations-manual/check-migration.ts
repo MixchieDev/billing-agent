@@ -5,6 +5,7 @@ const need = {
     'wht2307RequestCount','wht2307RequestedAt'],
   contractCols: ['renewalNoticeAt','followUpEnabled'],
   partnerCols: ['followUpEnabled'],
+  userCols: ['onboardingWalkthroughAt','onboardingCompletedAt'],
   paymentCols: ['receivedInBank','receivedInAccountNo'],
   tables: ['CollectionRun','InvoicePayment','PdcCheck','PromiseToPay','ContractRenewal',
     'WorklistItem','WorklistNote'],
@@ -20,6 +21,7 @@ const need = {
   const ccols = (await q(`SELECT column_name c FROM information_schema.columns WHERE table_name='Contract'`)).map(r=>r.c);
   const pcols = (await q(`SELECT column_name c FROM information_schema.columns WHERE table_name='InvoicePayment'`)).map(r=>r.c);
   const parcols = (await q(`SELECT column_name c FROM information_schema.columns WHERE table_name='Partner'`)).map(r=>r.c);
+  const ucols = (await q(`SELECT column_name c FROM information_schema.columns WHERE table_name='User'`)).map(r=>r.c);
   const tabs = (await q(`SELECT table_name t FROM information_schema.tables WHERE table_schema='public'`)).map(r=>r.t);
   const enums = (await q(`SELECT typname e FROM pg_type WHERE typtype='e'`)).map(r=>r.e);
   const values = (await q(`SELECT t.typname||'.'||e.enumlabel v FROM pg_enum e
@@ -29,6 +31,7 @@ const need = {
     contractColumns: need.contractCols.filter(c => !ccols.includes(c)),
     paymentColumns: need.paymentCols.filter(c => !pcols.includes(c)),
     partnerColumns: need.partnerCols.filter(c => !parcols.includes(c)),
+    userColumns: need.userCols.filter(c => !ucols.includes(c)),
     tables: need.tables.filter(t => !tabs.includes(t)),
     enums: need.enums.filter(e => !enums.includes(e)),
     enumValues: need.enumValues.filter(([t, v]) => !values.includes(`${t}.${v}`)),
@@ -40,6 +43,7 @@ const need = {
     if (miss.contractColumns.length) console.log('  missing Contract columns:', miss.contractColumns.join(', '));
     if (miss.paymentColumns.length)  console.log('  missing Payment columns :', miss.paymentColumns.join(', '));
     if (miss.partnerColumns.length)  console.log('  missing Partner columns :', miss.partnerColumns.join(', '));
+    if (miss.userColumns.length)     console.log('  missing User columns    :', miss.userColumns.join(', '));
     if (miss.tables.length)          console.log('  missing tables          :', miss.tables.join(', '));
     if (miss.enums.length)           console.log('  missing enum types      :', miss.enums.join(', '));
     if (miss.enumValues.length)      console.log('  missing enum values     :', miss.enumValues.map(([t,v])=>`${t}.${v}`).join(', '));
@@ -49,6 +53,9 @@ const need = {
       (b[0].filled < b[0].n ? '  <- run the backfill' : '  <- done'));
     const s = await q(`SELECT value FROM "Settings" WHERE key='collections.autoSendLevels'`);
     console.log(`  sweep: autoSendLevels = ${s.length ? JSON.stringify(s[0].value) : 'no row (defaults to dormant)'}`);
+    const o = await q(`SELECT count(*)::int n, count("onboardingCompletedAt")::int done FROM "User"`);
+    console.log(`  onboarding: ${o[0].done}/${o[0].n} users marked complete` +
+      (o[0].done < o[0].n ? '  <- the rest will land on Get started at next sign-in' : ''));
     const r = await q(`SELECT count(*)::int n, count("contractEndDate")::int dated
       FROM "Contract" WHERE status='ACTIVE'`);
     console.log(`  renewals: ${r[0].dated}/${r[0].n} active contracts have a renewal date` +

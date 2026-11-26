@@ -196,7 +196,21 @@ details, invoice prefix/next number, signatories, live preview), **Companies**, 
 rate + withholding presets), **Product Types**, **Scheduler**, **Email Templates**, **Follow‑up
 Emails** (3 levels + placeholder list).
 
-### 5.14 Shared modals
+### 5.14 Get started (`/get-started`) — the onboarding gate
+A new **APPROVER** or **VIEWER** sees only this page until they finish the course; every
+dashboard and settings page redirects here (checked in the dashboard layout, so no page can be
+reached around it). **ADMIN** is never gated. The page hosts the self‑contained course
+(`src/lib/onboarding/course.html.json`, served from `/get-started/course` to signed‑in users):
+a practice copy of the app on invented clients with eight guided tasks, the AR handbook, and a
+first‑two‑weeks checklist. Two things open the app: the course reports the walkthrough done
+(`POST /api/onboarding {event:'walkthrough'}`), and the user ticks that they have read the
+handbook, then **Finish onboarding** (`{event:'complete'}`; audit `ONBOARDING_COMPLETED`).
+On **Users**, each non‑admin shows *Not started / Walkthrough done / Complete (date)* with a
+**Send back to Get started** or **Waive the course** action (`POST /api/users/[id]/onboarding`,
+ADMIN; audit `ONBOARDING_RESET` / `ONBOARDING_WAIVED`). Users who existed before migration 007
+were backfilled as complete. Finished users can reopen the course from `/get-started`.
+
+### 5.15 Shared modals
 *Send Invoice* (recipient email(s), template, Send), *Mark Paid* (amount, method
 CASH/BANK_TRANSFER/CHECK, reference, paid date), *Invoice Edit* (recipient fields + line items,
 **Sync from Partner**), *Invoice Audit Log*, *Contract Form / Settings*, *CSV Import*
@@ -534,7 +548,8 @@ Enums: `UserRole`, `BillingModel`, `ContractStatus`, `VatType`, `BillingType`,
   in `src/lib/ai-chat.ts`.
 - **Attachments** are stored as **binary rows in Postgres** (≤5 files, ≤5 MB each) — fine at low
   volume; move to object storage if attachment use grows.
-- **No open sign‑up** — an ADMIN must create every user.
+- **No open sign‑up** — an ADMIN must create every user. New non‑admin users land on **Get
+  started** (§5.14) and see nothing else until they finish the course.
 
 ---
 
