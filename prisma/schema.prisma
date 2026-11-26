@@ -16,6 +16,10 @@ model User {
   password          String?
   image             String?
   role              UserRole           @default(VIEWER)
+  /// Get started course. Null = still to do; the dashboard stays closed to
+  /// non-admins until it is set. Existing users were backfilled by migration 007.
+  onboardingWalkthroughAt DateTime?
+  onboardingCompletedAt   DateTime?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   accounts          Account[]

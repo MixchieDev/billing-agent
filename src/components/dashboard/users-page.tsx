@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table';
 import { UserFormModal } from './user-form-modal';
 import { ChangePasswordModal } from './change-password-modal';
-import { RefreshCw, Plus, Edit, Trash2, Key, Loader2 } from 'lucide-react';
+import { RefreshCw, Plus, Edit, Trash2, Key, Loader2, GraduationCap, RotateCcw } from 'lucide-react';
 
 interface User {
   id: string;
@@ -23,6 +23,8 @@ interface User {
   email: string;
   role: 'ADMIN' | 'APPROVER' | 'VIEWER';
   createdAt: string;
+  onboardingWalkthroughAt: string | null;
+  onboardingCompletedAt: string | null;
 }
 
 export function UsersPage() {
@@ -100,6 +102,44 @@ export function UsersPage() {
     }
   };
 
+  /** Send a user back through the course, or waive it for them. */
+  const handleOnboarding = async (user: User, action: 'reset' | 'complete') => {
+    const who = user.name || user.email;
+    const prompt =
+      action === 'reset'
+        ? `Send ${who} back to Get started?\n\nThey will see only the course until they finish it again.`
+        : `Waive the Get started course for ${who}?\n\nThe app opens for them at their next page load.`;
+    if (!confirm(prompt)) return;
+    try {
+      const response = await fetch(`/api/users/${user.id}/onboarding`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to update onboarding');
+      }
+      await fetchUsers();
+    } catch (err) {
+      alert(`Error: ${err instanceof Error ? err.message : 'Failed to update onboarding'}`);
+    }
+  };
+
+  const getOnboardingBadge = (user: User) => {
+    if (user.role === 'ADMIN') return <span className="text-xs text-muted-foreground">not required</span>;
+    if (user.onboardingCompletedAt) {
+      return (
+        <span className="flex flex-col">
+          <Badge variant="success">Complete</Badge>
+          <span className="mt-0.5 text-xs text-muted-foreground">{formatDate(user.onboardingCompletedAt)}</span>
+        </span>
+      );
+    }
+    if (user.onboardingWalkthroughAt) return <Badge variant="warning">Walkthrough done</Badge>;
+    return <Badge variant="secondary">Not started</Badge>;
+  };
+
   const getRoleBadge = (role: string) => {
     const variants: Record<string, 'default' | 'success' | 'secondary'> = {
       ADMIN: 'default',
@@ -174,6 +214,7 @@ export function UsersPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Get started</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -181,7 +222,7 @@ export function UsersPage() {
             <TableBody>
               {users.length === 0 && !loading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                     No users found
                   </TableCell>
                 </TableRow>
@@ -196,6 +237,7 @@ export function UsersPage() {
                     </TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>{getRoleBadge(user.role)}</TableCell>
+                    <TableCell>{getOnboardingBadge(user)}</TableCell>
                     <TableCell>{formatDate(user.createdAt)}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-2">
@@ -215,6 +257,27 @@ export function UsersPage() {
                         >
                           <Key className="h-4 w-4" />
                         </Button>
+                        {user.role !== 'ADMIN' && (
+                          user.onboardingCompletedAt ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOnboarding(user, 'reset')}
+                              title="Send back to Get started"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOnboarding(user, 'complete')}
+                              title="Waive the Get started course"
+                            >
+                              <GraduationCap className="h-4 w-4" />
+                            </Button>
+                          )
+                        )}
                         {user.id !== session?.user?.id && (
                           <Button
                             variant="ghost"

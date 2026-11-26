@@ -269,3 +269,32 @@ Rollback:
 ```sql
 ALTER TABLE "Partner" DROP COLUMN IF EXISTS "followUpEnabled";
 ```
+
+
+---
+
+# Migration 007 — Get started (onboarding gate)
+
+Adds `User.onboardingWalkthroughAt` and `User.onboardingCompletedAt`. A user
+with no completion date is sent to `/get-started` instead of the dashboard
+until they finish the course (admins are never gated). The migration backfills
+both dates for every existing user, so nobody who already uses the system is
+sent to the course; only users created afterwards are.
+
+**Run before deploying the code.** The dashboard layout reads the column on
+every page load; deploying first breaks every dashboard page.
+
+```bash
+psql "$DIRECT_URL" -f prisma/migrations-manual/007-user-onboarding.sql
+DATABASE_URL="$DIRECT_URL" npx tsx prisma/migrations-manual/check-migration.ts
+```
+
+No psql? Paste the file into the Supabase SQL editor. No `prisma db push`
+needed.
+
+Rollback:
+
+```sql
+ALTER TABLE "User" DROP COLUMN IF EXISTS "onboardingWalkthroughAt";
+ALTER TABLE "User" DROP COLUMN IF EXISTS "onboardingCompletedAt";
+```
